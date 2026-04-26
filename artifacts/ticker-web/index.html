@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, viewport-fit=cover" />
+    <title>Ticker — Movie Social Platform</title>
+    <meta name="description" content="Share movie reviews, discover what your friends are watching, and build your movie watchlist on Ticker." />
+    <link rel="canonical" href="https://ticker-tickets.vercel.app/" />
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Ticker — Movie Social Platform" />
+    <meta property="og:description" content="Share movie reviews, discover what your friends are watching, and build your movie watchlist on Ticker." />
+    <meta property="og:url" content="https://ticker-tickets.vercel.app/" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Ticker — Movie Social Platform" />
+    <meta name="twitter:description" content="Share movie reviews, discover what your friends are watching, and build your movie watchlist on Ticker." />
+
+    <!-- Google Search Console verification -->
+    <meta name="google-site-verification" content="eRrNlnK3-oXxOmqJFMtLSgmQF0aSD__hFBmlk1XydhA" />
+
+    <!-- Theme: prevent flash before Tailwind CSS loads -->
+    <style>
+      html            { background-color: #ffffff; color: #121212; }
+      html.dark       { background-color: #000000; color: #ededed; }
+      body            { background-color: inherit; }
+    </style>
+    <script>
+      (function () {
+        try {
+          for (var i = 0; i < localStorage.length; i++) {
+            var k = localStorage.key(i);
+            if (k && k.startsWith('ticker_theme') && localStorage.getItem(k) === 'dark') {
+              document.documentElement.classList.add('dark');
+              break;
+            }
+          }
+        } catch (e) {}
+      })();
+    </script>
+
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
