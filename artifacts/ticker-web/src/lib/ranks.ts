@@ -2,11 +2,11 @@
 //  TICKER RANK SYSTEM  v8  (Complete rewrite)
 //
 //  TIER ใหม่ (ตรงตาม TMDB vote_average):
-//    [C]  Common      1.0 – 5.0
-//    [U]  Uncommon    5.1 – 6.5
-//    [R]  Rare        6.6 – 7.5
-//    [SR] Super Rare  7.6 – 8.2
-//    [UR] Ultra Rare  8.3 – 10.0
+//    [P]  Poor        1.0 – 5.0
+//    [A]  Average     5.1 – 6.5
+//    [G]  Good        6.6 – 7.5
+//    [EX] Excellent   7.6 – 8.2
+//    [MP] Masterpiece 8.3 – 10.0
 //
 //  EFFECT TAGS (1-2 tag บนการ์ด):
 //    N   = New       (0-1 ปี)
@@ -36,22 +36,22 @@ export type CardTier =
 
 // Abbreviated display label บนการ์ด
 export const TIER_ABBR: Record<CardTier, string> = {
-  common:       "C",
-  uncommon:     "U",
-  rare:         "R",
-  super_rare:   "SR",
-  ultra_rare:   "UR",
+  common:       "P",
+  uncommon:     "A",
+  rare:         "G",
+  super_rare:   "EX",
+  ultra_rare:   "MP",
   legendary:    "LEGENDARY",
   cult_classic: "CULT CLASSIC",
 };
 
 // Full name สำหรับคลิกแสดงคำอธิบาย
 export const TIER_FULL_NAME: Record<CardTier, string> = {
-  common:       "Common",
-  uncommon:     "Uncommon",
-  rare:         "Rare",
-  super_rare:   "Super Rare",
-  ultra_rare:   "Ultra Rare",
+  common:       "Poor",
+  uncommon:     "Average",
+  rare:         "Good",
+  super_rare:   "Excellent",
+  ultra_rare:   "Masterpiece",
   legendary:    "Legendary",
   cult_classic: "Cult Classic",
 };
@@ -146,10 +146,10 @@ export function computeCardTier(input: ScoreInput): CardTier {
   const age = getMovieAge(input.year);
   const isLegacyAge = age !== null && age >= 20;
 
-  // LEGENDARY: Ultra Rare + อายุ ≥ 20 ปี
+  // LEGENDARY: Masterpiece + อายุ ≥ 20 ปี
   if (baseTier === "ultra_rare" && isLegacyAge) return "legendary";
 
-  // CULT CLASSIC: Common + อายุ ≥ 20 ปี
+  // CULT CLASSIC: Poor + อายุ ≥ 20 ปี
   if (baseTier === "common" && isLegacyAge) return "cult_classic";
 
   return baseTier;
@@ -225,8 +225,8 @@ export function dbTierToCard(dbTier: DbTier, tmdbScore?: number): CardTier {
 //  VISUAL CONFIG — Single source of truth
 // ═══════════════════════════════════════════════════════════════
 export type TierVisual = {
-  abbr: string;        // C / U / R / SR / UR / LEGENDARY / CULT CLASSIC
-  fullName: string;    // Common / Uncommon / etc.
+  abbr: string;        // P / A / G / EX / MP / LEGENDARY / CULT CLASSIC
+  fullName: string;    // Poor / Average / etc.
   badge: string;       // Tailwind classes for rank badge
   cardBg: string;      // card background gradient class
   borderClass: string; // border color class
@@ -237,8 +237,8 @@ export type TierVisual = {
 
 export const TIER_VISUAL: Record<CardTier, TierVisual> = {
   common: {
-    abbr:        "C",
-    fullName:    "Common",
+    abbr:        "P",
+    fullName:    "Poor",
     badge:       "bg-zinc-800 text-zinc-400 border border-zinc-600",
     cardBg:      "card-bg-common",
     borderClass: "border-zinc-700",
@@ -247,8 +247,8 @@ export const TIER_VISUAL: Record<CardTier, TierVisual> = {
     shimmer:     "",
   },
   uncommon: {
-    abbr:        "U",
-    fullName:    "Uncommon",
+    abbr:        "A",
+    fullName:    "Average",
     badge:       "bg-slate-800 text-slate-300 border border-slate-500",
     cardBg:      "card-bg-uncommon",
     borderClass: "border-slate-500",
@@ -257,8 +257,8 @@ export const TIER_VISUAL: Record<CardTier, TierVisual> = {
     shimmer:     "",
   },
   rare: {
-    abbr:        "R",
-    fullName:    "Rare",
+    abbr:        "G",
+    fullName:    "Good",
     badge:       "bg-emerald-950 text-emerald-300 border border-emerald-600",
     cardBg:      "card-bg-rare",
     borderClass: "border-emerald-700",
@@ -267,8 +267,8 @@ export const TIER_VISUAL: Record<CardTier, TierVisual> = {
     shimmer:     "",
   },
   super_rare: {
-    abbr:        "SR",
-    fullName:    "Super Rare",
+    abbr:        "EX",
+    fullName:    "Excellent",
     badge:       "bg-blue-950 text-blue-300 border border-blue-500",
     cardBg:      "card-bg-super-rare",
     borderClass: "border-blue-600",
@@ -277,8 +277,8 @@ export const TIER_VISUAL: Record<CardTier, TierVisual> = {
     shimmer:     "",
   },
   ultra_rare: {
-    abbr:        "UR",
-    fullName:    "Ultra Rare",
+    abbr:        "MP",
+    fullName:    "Masterpiece",
     badge:       "bg-purple-950 text-violet-300 border border-purple-500",
     cardBg:      "card-bg-ultra-rare",
     borderClass: "border-purple-600",

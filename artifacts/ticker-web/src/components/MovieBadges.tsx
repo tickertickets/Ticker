@@ -4,13 +4,13 @@ import type { CardTier, EffectTag } from "@/lib/ranks";
 // ── Descriptions ──────────────────────────────────────────────────
 
 export const BADGE_DESC_TH: Record<string, string> = {
-  legendary:    "LEGENDARY\nUR + อายุ 20+ ปี\nระดับตำนาน ผ่านการพิสูจน์จากเวลา",
-  cult_classic: "CULT CLASSIC\nC + อายุ 20+ ปี\nโลกมองข้าม แต่คอหนังไม่มีวันลืม",
-  ultra_rare:   "Ultra Rare · 8.3–10.0\nหนังคุณภาพสูงสุด ได้รับการยอมรับอย่างล้นหลาม",
-  super_rare:   "Super Rare · 7.6–8.2\nหนังดีมาก เหนือค่าเฉลี่ยอย่างชัดเจน",
-  rare:         "Rare · 6.6–7.5\nหนังดี คุณภาพแน่นอน ดูแล้วไม่เสียดาย",
-  uncommon:     "Uncommon · 5.1–6.5\nหนังธรรมดา ไม่แย่ แต่ไม่โดดเด่น",
-  common:       "Common · 1.0–5.0\nหนังทั่วไป ต่ำกว่าค่าเฉลี่ย",
+  legendary:    "LEGENDARY\nMP + อายุ 20+ ปี\nระดับตำนาน ผ่านการพิสูจน์จากเวลา",
+  cult_classic: "CULT CLASSIC\nP + อายุ 20+ ปี\nโลกมองข้าม แต่คอหนังไม่มีวันลืม",
+  ultra_rare:   "Masterpiece · 8.3–10.0\nหนังคุณภาพสูงสุด ได้รับการยอมรับอย่างล้นหลาม",
+  super_rare:   "Excellent · 7.6–8.2\nหนังดีมาก เหนือค่าเฉลี่ยอย่างชัดเจน",
+  rare:         "Good · 6.6–7.5\nหนังดี คุณภาพแน่นอน ดูแล้วไม่เสียดาย",
+  uncommon:     "Average · 5.1–6.5\nหนังธรรมดา ไม่แย่ แต่ไม่โดดเด่น",
+  common:       "Poor · 1.0–5.0\nหนังทั่วไป ต่ำกว่าค่าเฉลี่ย",
   N:   "New · ออกใหม่ภายใน 1 ปี\nคะแนนยังอาจเปลี่ยนแปลงได้",
   FR:  "Franchise · ภาพยนตร์ในแฟรนไชส์ต่อเนื่อง",
   FS:  "Fan Service · ชีวประวัติ, หนังดนตรี\nหรือสารคดีสำหรับกลุ่มแฟนโดยเฉพาะ",
@@ -18,13 +18,13 @@ export const BADGE_DESC_TH: Record<string, string> = {
 };
 
 export const BADGE_DESC_EN: Record<string, string> = {
-  legendary:    "LEGENDARY\nUR + 20+ years old\nProven by time — a true legend",
-  cult_classic: "CULT CLASSIC\nC + 20+ years old\nOverlooked, but never forgotten",
-  ultra_rare:   "Ultra Rare · 8.3–10.0\nOutstanding film with exceptional acclaim",
-  super_rare:   "Super Rare · 7.6–8.2\nClearly above average — very strong",
-  rare:         "Rare · 6.6–7.5\nSolid film, well worth your time",
-  uncommon:     "Uncommon · 5.1–6.5\nAverage — nothing remarkable",
-  common:       "Common · 1.0–5.0\nBelow-average film",
+  legendary:    "LEGENDARY\nMP + 20+ years old\nProven by time — a true legend",
+  cult_classic: "CULT CLASSIC\nP + 20+ years old\nOverlooked, but never forgotten",
+  ultra_rare:   "Masterpiece · 8.3–10.0\nOutstanding film with exceptional acclaim",
+  super_rare:   "Excellent · 7.6–8.2\nClearly above average — very strong",
+  rare:         "Good · 6.6–7.5\nSolid film, well worth your time",
+  uncommon:     "Average · 5.1–6.5\nAverage — nothing remarkable",
+  common:       "Poor · 1.0–5.0\nBelow-average film",
   N:   "New · Released within the past year\nScore may still change",
   FR:  "Franchise · Part of a continuing franchise",
   FS:  "Fan Service · Biopics, music films,\nor niche documentaries",
