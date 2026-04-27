@@ -11,6 +11,16 @@
  *   // In any back button
  *   const [, navigate] = useLocation()
  *   <button onClick={() => navBack(navigate)} />
+ *
+ * WHY replace:true
+ * ────────────────
+ * ถ้าใช้ navigate(prev) ธรรมดา (pushState) จะเพิ่ม entry ใหม่ใน browser history
+ * เช่น  [/ → /movie/abc]  กด back → navigate("/")  → history กลายเป็น [/ → /movie/abc → /]
+ * แล้วกด device back อีกครั้งจะดีดกลับไป /movie/abc ซ้ำอีกที
+ *
+ * ใช้ navigate(prev, { replace: true }) (replaceState) จะแทนที่ entry ปัจจุบัน
+ * [/ → /movie/abc] → replaceState("/") → [/ → /]
+ * กด device back จาก "/" → ไปที่ "/" entry แรก ถูกต้อง ไม่ย้อนไปหน้าที่ออกมาแล้ว
  */
 
 const _stack: string[] = [];
@@ -35,12 +45,16 @@ export function navPush(path: string) {
 
 /**
  * กลับไปหน้าก่อนหน้า ไม่ต้อง window.history.back()
- * @param navigate  wouter navigate function
+ * ใช้ replace:true เพื่อไม่เพิ่ม history entry ใหม่ (ป้องกัน double-back bug)
+ * @param navigate  wouter navigate function (supports { replace?: boolean })
  * @param fallback  ถ้าไม่มีประวัติให้ไปที่ fallback (default "/")
  */
-export function navBack(navigate: (path: string) => void, fallback = "/") {
+export function navBack(
+  navigate: (path: string, opts?: { replace?: boolean }) => void,
+  fallback = "/",
+) {
   // Pop current page
   _stack.pop();
   const prev = _stack[_stack.length - 1] ?? fallback;
-  navigate(prev);
+  navigate(prev, { replace: true });
 }
