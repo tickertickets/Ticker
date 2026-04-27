@@ -13,3 +13,4 @@ export * from "./badges";
 export * from "./usernameChanges";
 export * from "./pushSubscriptions";
 export * from "./userSessions";
+export * from "./drafts";

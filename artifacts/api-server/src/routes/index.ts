@@ -22,6 +22,7 @@ import supporterRouter from "./supporter";
 import pageVerifyRouter from "./page-verification";
 import pushRouter from "./push";
 import adminRouter from "./admin";
+import draftsRouter from "./drafts";
 
 const router: IRouter = Router();
 
@@ -48,5 +49,6 @@ router.use("/supporter", supporterRouter);
 router.use("/page-verify", pageVerifyRouter);
 router.use("/push", pushRouter);
 router.use("/admin", adminRouter);
+router.use("/drafts", draftsRouter);
 
 export default router;

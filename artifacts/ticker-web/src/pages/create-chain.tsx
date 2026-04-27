@@ -67,12 +67,24 @@ function readChainDrafts(key: string): ChainDraft[] {
     return parsed.filter(isValidChainDraft);
   } catch { return []; }
 }
-function writeChainDraft(key: string, d: ChainDraft) {
+function writeChainDraft(key: string, d: ChainDraft, userId?: string) {
   const rest = readChainDrafts(key).filter(x => x.draftId !== d.draftId);
   localStorage.setItem(key, JSON.stringify([d, ...rest]));
+  if (userId) {
+    fetch("/api/drafts", {
+      method: "PUT", credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "chain", key: d.draftId, data: d }),
+    }).catch(() => {});
+  }
 }
-function eraseChainDraft(key: string, draftId: string) {
+function eraseChainDraft(key: string, draftId: string, userId?: string) {
   localStorage.setItem(key, JSON.stringify(readChainDrafts(key).filter(x => x.draftId !== draftId)));
+  if (userId) {
+    fetch(`/api/drafts?type=chain&key=${encodeURIComponent(draftId)}`, {
+      method: "DELETE", credentials: "include",
+    }).catch(() => {});
+  }
 }
 
 
@@ -157,6 +169,7 @@ const TIMER_UNITS = [
 ] as const;
 
 function SortableMovieItem({ movie, idx, dragLabel }: { movie: ChainMovie; idx: number; dragLabel: string }) {
+  const { lang } = useLang();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: movie.imdbId });
   return (
     <div
@@ -238,6 +251,30 @@ export default function CreateChain() {
   }, [showDraftDialog]);
 
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const userIdRef = useRef<string | undefined>(user?.id);
+  useEffect(() => { userIdRef.current = user?.id; }, [user?.id]);
+
+  // On mount (for logged-in users): fetch server drafts and merge with localStorage
+  useEffect(() => {
+    if (!user?.id) return;
+    fetch("/api/drafts?type=chain", { credentials: "include" })
+      .then(r => r.ok ? r.json() : { drafts: [] })
+      .then(({ drafts: serverDrafts }: { drafts: unknown[] }) => {
+        if (!Array.isArray(serverDrafts)) return;
+        const validServer = serverDrafts.filter(isValidChainDraft);
+        if (validServer.length === 0) return;
+        const localDrafts = readChainDrafts(chainDraftKey);
+        const merged: ChainDraft[] = [...validServer];
+        for (const ld of localDrafts) {
+          if (!merged.find(sd => sd.draftId === ld.draftId)) merged.push(ld);
+        }
+        localStorage.setItem(chainDraftKey, JSON.stringify(merged));
+        setDrafts(merged);
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
   // Navigation guard refs
   const hasFormChangesRef = useRef(false);
   const hasDraftsRef = useRef(false);
@@ -341,7 +378,7 @@ export default function CreateChain() {
         draftId: activeDraftId,
         title, description, descriptionAlign, movies, communityOn, challengeOn, timerAmount, timerUnitIdx,
         savedAt: Date.now(),
-      });
+      }, userIdRef.current);
       setDrafts(readChainDrafts(chainDraftKey));
     }, 600);
     return () => {
@@ -390,14 +427,14 @@ export default function CreateChain() {
       draftId: activeDraftId,
       title, description, descriptionAlign, movies, communityOn, challengeOn, timerAmount, timerUnitIdx,
       savedAt: Date.now(),
-    });
+    }, user?.id);
     setDrafts(readChainDrafts(chainDraftKey));
     setShowDraftDialog(false);
     performNavBack();
   };
 
   const handleDiscardAndBack = () => {
-    eraseChainDraft(chainDraftKey, activeDraftId);
+    eraseChainDraft(chainDraftKey, activeDraftId, user?.id);
     setDrafts(readChainDrafts(chainDraftKey));
     setShowDraftDialog(false);
     performNavBack();
@@ -405,7 +442,7 @@ export default function CreateChain() {
 
   const handleDeleteDraft = (draftId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    eraseChainDraft(chainDraftKey, draftId);
+    eraseChainDraft(chainDraftKey, draftId, user?.id);
     setDrafts(readChainDrafts(chainDraftKey));
   };
 
@@ -449,7 +486,7 @@ export default function CreateChain() {
       if (!res.ok) throw new Error("failed");
       const data = await res.json();
       // Erase draft on successful submit
-      eraseChainDraft(chainDraftKey, activeDraftId);
+      eraseChainDraft(chainDraftKey, activeDraftId, user?.id);
       qc.invalidateQueries({ queryKey: ["/api/chains"] });
       qc.invalidateQueries({ queryKey: ["chains-recent"] });
       qc.invalidateQueries({ queryKey: ["chains-hot"] });

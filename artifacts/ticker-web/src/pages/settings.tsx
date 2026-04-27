@@ -865,16 +865,44 @@ function BadgeSection({
         </div>
       </div>
 
-      {/* ── Pagination indicator — single centered pill, color only ── */}
+      {/* ── Pagination indicator ── */}
       <div className="flex justify-center pt-1">
-        <div
-          className="rounded-full transition-colors duration-300"
-          style={{
-            width: 28,
-            height: 4,
-            background: activeDot === 5 ? "#ef4444" : (BADGE_COLORS[activeDot + 1] ?? "#6B7280"),
-          }}
-        />
+        {/* Desktop: prev/next buttons + dot */}
+        <div className="hidden md:flex items-center gap-3">
+          <button
+            onClick={() => setActiveDot(prev => Math.max(0, prev - 1))}
+            disabled={activeDot === 0}
+            className="w-7 h-7 rounded-full flex items-center justify-center transition-all disabled:opacity-30 hover:bg-secondary active:scale-95"
+          >
+            <ChevronLeft className="w-4 h-4 text-foreground" />
+          </button>
+          <div
+            className="rounded-full transition-colors duration-300"
+            style={{
+              width: 28,
+              height: 4,
+              background: activeDot === 5 ? "#ef4444" : (BADGE_COLORS[activeDot + 1] ?? "#6B7280"),
+            }}
+          />
+          <button
+            onClick={() => setActiveDot(prev => Math.min(MAX_DOT, prev + 1))}
+            disabled={activeDot === MAX_DOT}
+            className="w-7 h-7 rounded-full flex items-center justify-center transition-all disabled:opacity-30 hover:bg-secondary active:scale-95"
+          >
+            <ChevronRight className="w-4 h-4 text-foreground" />
+          </button>
+        </div>
+        {/* Mobile: dot only */}
+        <div className="md:hidden">
+          <div
+            className="rounded-full transition-colors duration-300"
+            style={{
+              width: 28,
+              height: 4,
+              background: activeDot === 5 ? "#ef4444" : (BADGE_COLORS[activeDot + 1] ?? "#6B7280"),
+            }}
+          />
+        </div>
       </div>
     </div>
   );

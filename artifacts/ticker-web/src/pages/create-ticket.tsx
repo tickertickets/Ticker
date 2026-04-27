@@ -117,12 +117,24 @@ interface Draft {
 function readDrafts(key: string): Draft[] {
   try { return JSON.parse(localStorage.getItem(key) ?? "[]"); } catch { return []; }
 }
-function writeDraft(key: string, d: Draft) {
+function writeDraft(key: string, d: Draft, userId?: string) {
   const rest = readDrafts(key).filter(x => x.movieId !== d.movieId);
   localStorage.setItem(key, JSON.stringify([d, ...rest]));
+  if (userId) {
+    fetch("/api/drafts", {
+      method: "PUT", credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "ticket", key: d.movieId, data: d }),
+    }).catch(() => {});
+  }
 }
-function eraseDraft(key: string, movieId: string) {
+function eraseDraft(key: string, movieId: string, userId?: string) {
   localStorage.setItem(key, JSON.stringify(readDrafts(key).filter(x => x.movieId !== movieId)));
+  if (userId) {
+    fetch(`/api/drafts?type=ticket&key=${encodeURIComponent(movieId)}`, {
+      method: "DELETE", credentials: "include",
+    }).catch(() => {});
+  }
 }
 
 
@@ -283,6 +295,29 @@ export default function CreateTicket() {
   const [showDraftDialog, setShowDraftDialog] = useState(false);
   const [drafts, setDrafts] = useState<Draft[]>(() => readDrafts(getDraftKey(user?.id)));
 
+  // On mount (for logged-in users): fetch server drafts and merge with localStorage
+  useEffect(() => {
+    if (!user?.id) return;
+    fetch("/api/drafts?type=ticket", { credentials: "include" })
+      .then(r => r.ok ? r.json() : { drafts: [] })
+      .then(({ drafts: serverDrafts }: { drafts: unknown[] }) => {
+        if (!Array.isArray(serverDrafts)) return;
+        const validServer = serverDrafts.filter((d): d is Draft =>
+          !!d && typeof d === "object" && typeof (d as Draft).movieId === "string"
+        );
+        if (validServer.length === 0) return;
+        const localDrafts = readDrafts(draftKey);
+        const merged: Draft[] = [...validServer];
+        for (const ld of localDrafts) {
+          if (!merged.find(sd => sd.movieId === ld.movieId)) merged.push(ld);
+        }
+        localStorage.setItem(draftKey, JSON.stringify(merged));
+        setDrafts(merged);
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
   // Lock body scroll when draft dialog is open
   useEffect(() => {
     if (showDraftDialog) {
@@ -296,6 +331,8 @@ export default function CreateTicket() {
   // Refs for auto-save (unmount + debounce)
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoSaveDraftDataRef = useRef<Draft | null>(null);
+  const userIdRef = useRef<string | undefined>(user?.id);
+  useEffect(() => { userIdRef.current = user?.id; }, [user?.id]);
 
 
 
@@ -444,7 +481,7 @@ export default function CreateTicket() {
     if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
     autosaveTimerRef.current = setTimeout(() => {
       if (autoSaveDraftDataRef.current) {
-        writeDraft(draftKey, autoSaveDraftDataRef.current);
+        writeDraft(draftKey, autoSaveDraftDataRef.current, user?.id);
         setDrafts(readDrafts(draftKey));
       }
     }, 600);
@@ -459,7 +496,7 @@ export default function CreateTicket() {
     return () => {
       if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
       if (autoSaveDraftDataRef.current) {
-        writeDraft(draftKey, autoSaveDraftDataRef.current);
+        writeDraft(draftKey, autoSaveDraftDataRef.current, userIdRef.current);
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -543,7 +580,7 @@ export default function CreateTicket() {
       watchDate, watchLocation, cardTheme, selectedBackdropUrl,
       cardOffsetX, isPrivate, isPrivateMemory, partyMode, partySize, partySeatNumber,
     };
-    writeDraft(draftKey, d);
+    writeDraft(draftKey, d, user?.id);
     const updated = readDrafts(draftKey);
     setDrafts(updated);
     setShowDraftDialog(false);
@@ -552,7 +589,7 @@ export default function CreateTicket() {
   };
 
   const handleDiscardAndBack = () => {
-    if (selectedMovieId) eraseDraft(draftKey, selectedMovieId);
+    if (selectedMovieId) eraseDraft(draftKey, selectedMovieId, user?.id);
     setDrafts(readDrafts(draftKey));
     setShowDraftDialog(false);
     resetFormState();
@@ -561,7 +598,7 @@ export default function CreateTicket() {
 
   const handleDeleteDraft = (movieId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    eraseDraft(draftKey, movieId);
+    eraseDraft(draftKey, movieId, user?.id);
     setDrafts(readDrafts(draftKey));
   };
 
@@ -699,7 +736,7 @@ export default function CreateTicket() {
       queryClient.invalidateQueries({ queryKey: ["home-mixed-feed"] });
 
       // Erase draft for this movie since it was successfully posted
-      eraseDraft(draftKey, selectedMovieId);
+      eraseDraft(draftKey, selectedMovieId, user?.id);
       autoSaveDraftDataRef.current = null;
 
       // Navigate to following feed at top — same as Instagram post flow

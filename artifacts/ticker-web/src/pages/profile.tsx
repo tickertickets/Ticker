@@ -33,6 +33,7 @@ import type { Ticket } from "@workspace/api-client-react";
 import { ReportSheet } from "@/components/ReportSheet";
 import { VerifiedBadge, isVerified } from "@/components/VerifiedBadge";
 import { BadgeIcon } from "@/components/BadgeIcon";
+import { useToast } from "@/hooks/use-toast";
 
 function formatRunDuration(ms: number): string {
   const totalSec = Math.floor(ms / 1000);
@@ -694,6 +695,9 @@ function ProfileChainCard({
   const [likeCount, setLikeCount] = useState(chain.likeCount ?? 0);
   const [commentCount, setCommentCount] = useState(chain.commentCount ?? 0);
   const qc = useQueryClient();
+  const { user: me } = useAuth();
+  const { t } = useLang();
+  const { toast } = useToast();
   const [commentOpen, setCommentOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -706,6 +710,7 @@ function ProfileChainCard({
 
   const handleLike = async (e: React.MouseEvent) => {
     e.preventDefault(); e.stopPropagation();
+    if (!me) { toast({ title: t.signInToLike, duration: 1500 }); return; }
     const next = !liked;
     setLiked(next);
     setLikeCount(c => next ? c + 1 : Math.max(0, c - 1));
@@ -808,7 +813,7 @@ function ProfileChainCard({
             <Heart className={cn("w-3.5 h-3.5 transition-colors", liked ? "fill-foreground text-foreground" : "text-muted-foreground")} />
             {likeCount > 0 && !chain.hideLikes && <span className={cn("text-[9px] tabular-nums leading-none", liked ? "text-foreground" : "text-muted-foreground")}>{fmtCount(likeCount)}</span>}
           </button>
-          <button onClick={e => { e.preventDefault(); e.stopPropagation(); setCommentOpen(true); }} className="flex items-center gap-1 p-1 active:opacity-50" type="button">
+          <button onClick={e => { e.preventDefault(); e.stopPropagation(); if (!me) { toast({ title: t.signInToLike, duration: 1500 }); return; } setCommentOpen(true); }} className="flex items-center gap-1 p-1 active:opacity-50" type="button">
             <MessageCircle className="w-3.5 h-3.5 text-muted-foreground" />
             {commentCount > 0 && <span className="text-[9px] text-muted-foreground tabular-nums leading-none">{fmtCount(commentCount)}</span>}
           </button>
@@ -1055,9 +1060,11 @@ export default function Profile() {
     })
     .filter(Boolean);
 
+  const { toast } = useToast();
+
   const handleFollow = async () => {
     if (!profile) return;
-    if (!me) { navigate("/login"); return; }
+    if (!me) { toast({ title: t.signInToLike, duration: 1500 }); return; }
     try {
       // Handle: following → unfollow, pending request → cancel, not following → follow/request
       const isPending = (profile as unknown as Record<string,unknown>).followRequestPending;
@@ -1089,6 +1096,7 @@ export default function Profile() {
 
   const handleMessage = async () => {
     if (!profile) return;
+    if (!me) { toast({ title: t.signInToLike, duration: 1500 }); return; }
     setMessagingError("");
     try {
       const res = await fetch("/api/chat/start", {
@@ -1149,7 +1157,7 @@ export default function Profile() {
           <span className="font-display font-bold text-white text-xl tracking-tight">Ticker</span>
           {isOwn ? (
             <Link href="/settings"><button className="w-9 h-9 flex items-center justify-center"><Settings className="w-6 h-6 text-white" /></button></Link>
-          ) : me ? (
+          ) : me && !isVerified(profile.username) ? (
             <button onClick={() => setReportUserOpen(true)} className="w-9 h-9 flex items-center justify-center">
               <Flag className="w-6 h-6 text-white/70" />
             </button>
