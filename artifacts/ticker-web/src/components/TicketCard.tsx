@@ -1187,7 +1187,7 @@ function FeedCard({ ticket, onLongPress }: { ticket: Ticket; onLongPress?: (t: T
               ? <span className="w-3.5 h-3.5 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin block" />
               : <Trash2 className={cn("w-3.5 h-3.5", confirmDelete && "text-foreground")} />}
           </button>
-        ) : (
+        ) : isVerified(ticket.user?.username) ? null : (
           <ReportButton ticketId={ticket.id} className="ml-auto" />
         )}
       </div>

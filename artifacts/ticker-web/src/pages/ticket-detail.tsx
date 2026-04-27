@@ -343,7 +343,7 @@ export default function TicketDetail() {
           >
             {deleteTicket.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
           </button>
-        ) : user ? (
+        ) : user && !isVerified(ticket.user?.username) ? (
           <button
             onClick={() => setReportTicketOpen(true)}
             className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"

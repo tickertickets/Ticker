@@ -781,9 +781,9 @@ export function ChainCard({ chain }: { chain: ChainItem }) {
                 ? <span className="w-3.5 h-3.5 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin block" />
                 : <Trash2 className="w-3.5 h-3.5" />}
             </button>
-          ) : (
+          ) : !isVerified(chain.user?.username) ? (
             <ChainReportButton chainId={chain.id} className="ml-auto" />
-          )}
+          ) : null}
         </div>
 
         {/* Poster collage — centered 160px wide, 2:3 ratio (same as TCG card) */}

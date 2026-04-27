@@ -817,7 +817,7 @@ function ProfileChainCard({
             <MessageCircle className="w-3.5 h-3.5 text-muted-foreground" />
             {commentCount > 0 && <span className="text-[9px] text-muted-foreground tabular-nums leading-none">{fmtCount(commentCount)}</span>}
           </button>
-          <button onClick={e => { e.preventDefault(); e.stopPropagation(); setShareOpen(true); }} className="p-1 active:opacity-50" type="button">
+          <button onClick={e => { e.preventDefault(); e.stopPropagation(); if (!me) { toast({ title: t.signInToLike, duration: 1500 }); return; } setShareOpen(true); }} className="p-1 active:opacity-50" type="button">
             <Send className="w-3.5 h-3.5 text-muted-foreground" />
           </button>
         </div>

@@ -12,6 +12,8 @@ import { cn, fmtCount } from "@/lib/utils";
 import { scrollStore } from "@/lib/scroll-store";
 import { useLang, displayYear } from "@/lib/i18n";
 import { localizeGenreIds } from "@/lib/tmdb-genres";
+import { useAuth } from "@/hooks/use-auth";
+import { useToast } from "@/hooks/use-toast";
 
 type WatchProvider = { name: string; logoUrl: string; providerId: number };
 type WatchProviders = {
@@ -108,6 +110,8 @@ let _lastMovieId = "";
 
 export default function MovieDetail() {
   const { t, lang } = useLang();
+  const { user } = useAuth();
+  const { toast } = useToast();
   const [, params] = useRoute("/movie/:movieId");
   const routeMovieId = params?.movieId ? decodeURIComponent(params.movieId) : "";
   // Update module variable synchronously during render (safe: idempotent write)
@@ -462,7 +466,7 @@ export default function MovieDetail() {
 
         {/* Bookmark button */}
         <button
-          onClick={() => bookmarkMutation.mutate()}
+          onClick={() => { if (!user) { toast({ title: t.signInToLike, duration: 1500 }); return; } bookmarkMutation.mutate(); }}
           disabled={bookmarkLoading || bookmarkMutation.isPending}
           className="absolute right-4 w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center border border-white/20"
           style={{ top: "max(1rem, env(safe-area-inset-top, 0px))" }}
