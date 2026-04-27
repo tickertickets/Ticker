@@ -1013,11 +1013,6 @@ export default function CreateTicket() {
                       <RatingBadge rating={rating} ratingType={isDyingStar ? "blackhole" : "star"} size={16} />
                     </div>
                   )}
-                  {partyMode && (
-                    <div className="absolute top-2.5 left-2.5 w-7 h-7 rounded-full bg-black/75 border border-white/25 flex items-center justify-center">
-                      <span className="text-white text-[10px] font-black">#{partySeatNumber}</span>
-                    </div>
-                  )}
                 </div>
                 )}
                 {/* Back — matches actual CardBackFace layout */}
@@ -1033,6 +1028,14 @@ export default function CreateTicket() {
                     boxShadow: cardTheme === "poster" ? "var(--ticket-shadow-back-poster)" : "var(--ticket-shadow)",
                   }}
                 >
+                  {partyMode && (
+                    <div
+                      className="absolute top-2 right-2 z-10 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black"
+                      style={{ background: "rgba(0,0,0,0.7)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff" }}
+                    >
+                      {partySeatNumber}
+                    </div>
+                  )}
                   {isPrivateMemory && !memoryNote ? (
                     <div className="flex-1 flex flex-col items-center justify-center gap-1">
                       <Lock style={{ width: 14, height: 14, color: cardTheme === "poster" ? "rgba(28,28,28,0.4)" : "var(--card-back-text-faint)" }} />
