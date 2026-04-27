@@ -103,7 +103,7 @@ function ChainMovieRow({ movie, already, onAdd, addedLabel }: {
   const { visual, tier, effects } = getRankVisual(movie, detail);
   return (
     <div className="w-full flex items-center gap-3 px-3 py-2.5 border-b border-border/40 last:border-0">
-      <div className={cn("w-9 h-12 rounded-lg overflow-hidden bg-zinc-900 shrink-0 border border-border relative shimmer-no-border", rankReady ? visual.shimmer : "")}>
+      <div className="w-9 h-12 rounded-lg overflow-hidden bg-zinc-900 shrink-0 border border-border relative shimmer-no-border">
         {movie.posterUrl
           ? <img src={movie.posterUrl} alt={movie.title} className="w-full h-full object-cover" />
           : <Film className="w-4 h-4 text-muted-foreground m-auto mt-4" />}

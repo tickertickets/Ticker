@@ -10,7 +10,6 @@ import { saveAs } from "file-saver";
 import html2canvas from "html2canvas";
 import { ShareStoryModal } from "./ShareStoryModal";
 import { cn, fmtCount } from "@/lib/utils";
-import { ShimmerOverlay } from "@/lib/shimmer-context";
 import {
   POSTER_BG,
   POSTER_DARK,
@@ -615,7 +614,6 @@ function CompactCard({ ticket, onLongPress, viewHref }: { ticket: Ticket; onLong
             {isCompactPoster ? (
               <PosterCardFront
                 ticket={ticket}
-                className={compactRatingStyle.shimmer}
                 borderColorHex={compactRatingStyle.borderColorHex}
               />
             ) : (
@@ -1241,7 +1239,7 @@ function FeedCard({ ticket, onLongPress }: { ticket: Ticket; onLongPress?: (t: T
               >
                 <div style={{ position: "absolute", top: 0, left: 0, width: CARD_SEED_W, height: CARD_SEED_H, transformOrigin: "top left", transform: `scale(${FEED_SCALE})` }}>
                   {isPoster ? (
-                    <PosterCardFront ticket={ticket} className={ratingStyle.shimmer} borderColorHex={ratingStyle.borderColorHex} />
+                    <PosterCardFront ticket={ticket} borderColorHex={ratingStyle.borderColorHex} />
                   ) : (
                     <ClassicCardFront ticket={ticket} imageSrc={feedImageSrc} />
                   )}

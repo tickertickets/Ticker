@@ -10,7 +10,6 @@ import { computeCardTier, TIER_VISUAL, computeEffectTags, type ScoreInput } from
 import { MovieBadges } from "@/components/MovieBadges";
 import { useEnsureMovieCores } from "@/lib/use-movie-cores";
 import { RatingBadge, CARD_USERNAME_STYLE, getRatingCardStyle } from "@/components/CardFaceComponents";
-import { ShimmerOverlay } from "@/lib/shimmer-context";
 import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
@@ -65,7 +64,7 @@ function TicketMovieRow({ movie, onSelect, ariaLabel }: { movie: TicketMovieItem
   const { visual, tier, effects } = getTicketRankVisual(movie, detail);
   return (
     <div className="w-full flex items-center gap-3 p-3 rounded-2xl border border-border bg-background active:bg-secondary transition-colors">
-      <div className={cn("relative w-12 h-[68px] rounded-xl overflow-hidden bg-secondary flex-shrink-0 border border-border shimmer-no-border", rankReady ? visual.shimmer : "")}>
+      <div className="relative w-12 h-[68px] rounded-xl overflow-hidden bg-secondary flex-shrink-0 border border-border shimmer-no-border">
         {movie.posterUrl ? (
           <img src={movie.posterUrl} alt={movie.title} className="w-full h-full object-cover" />
         ) : (
@@ -855,7 +854,7 @@ export default function CreateTicket() {
           {/* ── Card Preview (flippable) ── */}
           <div className="flex flex-col items-center pt-7 pb-5 gap-2">
             <div
-              className={cn("cursor-pointer", rating >= 5 && !isDyingStar ? "shimmer-active" : "")}
+              className="cursor-pointer"
               style={{ width: 190, height: 285, perspective: "800px", userSelect: "none", WebkitUserSelect: "none" }}
               onClick={(e) => {
                 if (!previewFlipped) {

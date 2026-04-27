@@ -279,7 +279,6 @@ export function ShareStoryModal({ ticket, onClose, onOpenChat }: ShareStoryModal
   }, [ticket.id]);
 
   const ratingStyle = getRatingCardStyle(ticket.rating, ratingType);
-  const shimmer     = ratingStyle.shimmer;
   const frontBorder: React.CSSProperties =
     ratingStyle.borderColorHex && ratingStyle.borderColorHex !== "transparent"
       ? { borderColor: ratingStyle.borderColorHex }
@@ -348,7 +347,7 @@ export function ShareStoryModal({ ticket, onClose, onOpenChat }: ShareStoryModal
               {/* Card previews — real React components */}
               <div className="flex items-start justify-center gap-4">
                 <div
-                  className={cn("relative", isPoster ? "" : "border", !isPoster ? shimmer : "")}
+                  className={cn("relative", isPoster ? "" : "border")}
                   style={{
                     width: PREV_W, height: PREV_H,
                     borderRadius: isPoster ? 0 : 12,
@@ -365,7 +364,7 @@ export function ShareStoryModal({ ticket, onClose, onOpenChat }: ShareStoryModal
                   }}>
                     {isPoster ? (
                       <PosterCardFront ticket={ticket} imageSrc={imageSrc}
-                        className={shimmer} borderColorHex={ratingStyle.borderColorHex} />
+                        borderColorHex={ratingStyle.borderColorHex} />
                     ) : (
                       <ClassicCardFront ticket={ticket} imageSrc={imageSrc} />
                     )}

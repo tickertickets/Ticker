@@ -73,7 +73,7 @@ export default defineConfig({
       injectManifest: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
       },
-      includeAssets: ["favicon.svg", "icon.svg"],
+      includeAssets: ["favicon.svg", "icon.svg", "notification-badge.svg"],
       manifest: {
         name: "Ticker — Movie Social Platform",
         short_name: "Ticker",

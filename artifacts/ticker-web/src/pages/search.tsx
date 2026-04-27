@@ -8,7 +8,6 @@
  * - lazy mount: เรนเดอร์เฉพาะหมวดที่เคยเข้าชมแล้วเท่านั้น
  */
 import { useState, useRef, useEffect, useCallback } from "react";
-import { ShimmerOverlay } from "@/lib/shimmer-context";
 import { scrollStore } from "@/lib/scroll-store";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useSearchMovies } from "@workspace/api-client-react";
@@ -104,7 +103,7 @@ function MovieCard({ movie, grid, srclang }: { movie: TrendingMovie; grid?: bool
           </div>
         )}
         <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/80" />
-        {visual.shimmer && <ShimmerOverlay className={visual.shimmer} extraClass="animate-in fade-in duration-700" />}
+
         <div className="absolute" style={{ top: 6, right: 6 }}>
           <MovieBadges tier={tier} effects={effects} size="xs" layout="col" />
         </div>
@@ -287,7 +286,7 @@ function SearchResultRow({ movie, srclang }: { movie: SearchMovieItem; srclang: 
           {movie.posterUrl
             ? <img src={movie.posterUrl} alt={movie.title} className="w-full h-full object-cover" />
             : <div className="w-full h-full flex items-center justify-center"><Film className="w-4 h-4 text-muted-foreground" /></div>}
-          {visual.shimmer && <ShimmerOverlay className={visual.shimmer} extraClass="animate-in fade-in duration-700" />}
+  
         </div>
         <div className="flex-1 min-w-0">
           <h3 className="font-display font-bold text-sm text-foreground leading-tight line-clamp-2">{movie.title}</h3>

@@ -1,5 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { ShimmerContext } from "@/lib/shimmer-context";
+import { useEffect, useState, type ReactNode } from "react";
 import { LangProvider } from "@/lib/i18n";
 import { Switch, Route, Router as WouterRouter, useLocation, Redirect } from "wouter";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -98,9 +97,8 @@ function isTabPath(path: string) {
   return TAB_PATHS.includes(path);
 }
 
-// ── Single persistent tab — handles shimmer activation on visibility ──────
+// ── Single persistent tab (shimmer effect removed) ────────────────────────
 function PersistentTab({
-  path,
   Component,
   isActive,
 }: {
@@ -108,63 +106,23 @@ function PersistentTab({
   Component: React.ComponentType;
   isActive: boolean;
 }) {
-  const divRef = useRef<HTMLDivElement>(null);
-  const [shimmerStartTime, setShimmerStartTime] = useState<number | null>(null);
-
-  useEffect(() => {
-    const el = divRef.current;
-    if (!el) return;
-    if (isActive) {
-      const timer = setTimeout(() => {
-        el.classList.add("shimmer-active");
-        setShimmerStartTime(performance.now());
-      }, 500);
-      return () => clearTimeout(timer);
-    } else {
-      el.classList.remove("shimmer-active");
-      setShimmerStartTime(null);
-    }
-  }, [isActive]);
-
   return (
-    <ShimmerContext.Provider value={shimmerStartTime}>
-      <div
-        ref={divRef}
-        className="absolute inset-0"
-        style={{
-          transform: isActive ? "translateX(0)" : "translateX(-100%)",
-          pointerEvents: isActive ? "auto" : "none",
-        }}
-        aria-hidden={!isActive}
-      >
-        <Component />
-      </div>
-    </ShimmerContext.Provider>
+    <div
+      className="absolute inset-0"
+      style={{
+        transform: isActive ? "translateX(0)" : "translateX(-100%)",
+        pointerEvents: isActive ? "auto" : "none",
+      }}
+      aria-hidden={!isActive}
+    >
+      <Component />
+    </div>
   );
 }
 
-// ── ShimmerActiveWrapper — adds shimmer-active to any overlay (sub-pages, movie detail) ──
+// ── Plain wrapper (legacy name kept; just renders children) ───────────────
 function ShimmerActiveWrapper({ children, className }: { children: ReactNode; className?: string }) {
-  const divRef = useRef<HTMLDivElement>(null);
-  const [shimmerStartTime, setShimmerStartTime] = useState<number | null>(null);
-
-  useLayoutEffect(() => {
-    const el = divRef.current;
-    if (!el) return;
-    const timer = setTimeout(() => {
-      el.classList.add("shimmer-active");
-      setShimmerStartTime(performance.now());
-    }, 500);
-    return () => clearTimeout(timer);
-  }, []);
-
-  return (
-    <ShimmerContext.Provider value={shimmerStartTime}>
-      <div ref={divRef} className={className}>
-        {children}
-      </div>
-    </ShimmerContext.Provider>
-  );
+  return <div className={className}>{children}</div>;
 }
 
 // ── Always-mounted guest tab shells ──────────────────────────────────────

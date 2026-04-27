@@ -19,7 +19,7 @@ precacheAndRoute(self.__WB_MANIFEST);
 const navHandler = createHandlerBoundToURL("index.html");
 registerRoute(
   new NavigationRoute(navHandler, {
-    denylist: [/^\/api\//],
+    denylist: [/^\/api\//, /^\/sitemap\.xml$/, /^\/robots\.txt$/],
   }),
 );
 
@@ -144,7 +144,7 @@ self.addEventListener("push", (event: PushEvent) => {
     self.registration.showNotification(title, {
       body,
       icon,
-      badge: "/favicon.svg",
+      badge: "/notification-badge.svg",
       tag,
       data: { url },
       requireInteraction: true,

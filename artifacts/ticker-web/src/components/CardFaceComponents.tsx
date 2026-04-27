@@ -7,7 +7,6 @@
  * Layout-only classes (flex, inset-0, w-full, etc.) are fine.
  */
 import { cn } from "@/lib/utils";
-import { ShimmerOverlay } from "@/lib/shimmer-context";
 import { Star, Lock, CalendarDays, MapPin } from "lucide-react";
 import type { Ticket } from "@workspace/api-client-react";
 import { useLang, displayYear, displayDate } from "@/lib/i18n";
@@ -69,14 +68,6 @@ export function getRatingCardStyle(rating?: number | null, ratingType?: string):
   // Dying star (blackhole) — never gets shimmer regardless of star count
   if (ratingType === "blackhole") {
     return { borderClass: "", borderColorHex: "transparent", shimmer: "", glow: { boxShadow: BASE_SHADOW } };
-  }
-  if (rating != null && rating >= 5) {
-    return {
-      borderClass: "",
-      borderColorHex: "transparent",
-      shimmer: "ticket-shimmer-holo",
-      glow: { boxShadow: BASE_SHADOW },
-    };
   }
   return { borderClass: "", borderColorHex: "transparent", shimmer: "", glow: { boxShadow: BASE_SHADOW } };
 }
@@ -414,7 +405,6 @@ export function ClassicCardFront({
           @{ticket.user.username}
         </p>
       )}
-      {!specialColorCfg && ratingStyle.shimmer && <ShimmerOverlay className={ratingStyle.shimmer} />}
     </div>
   );
 }
