@@ -164,6 +164,32 @@ export async function disablePushNotifications(): Promise<void> {
   } catch { /* ignore */ }
 }
 
+/**
+ * Called right after a successful login. Asks the server to remove any push
+ * subscription rows for THIS browser's endpoint that belong to a different
+ * user — typically an account that was previously logged in on this device.
+ *
+ * Without this, the previous user's push events would keep arriving on this
+ * browser even after the new user signs in (because the OS-level
+ * PushSubscription endpoint persists across logout / account switches).
+ */
+export async function releasePushFromOtherUsers(): Promise<void> {
+  if (!isPushSupported()) return;
+  const sub = await getCurrentSubscription();
+  const endpoint = sub?.endpoint;
+  if (!endpoint) return;
+  try {
+    await fetch("/api/push/release-others", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint }),
+    });
+  } catch {
+    /* ignore — best-effort cleanup */
+  }
+}
+
 export async function getPushStatus(): Promise<{ enabled: boolean }> {
   if (!isPushSupported()) return { enabled: false };
   if (Notification.permission !== "granted") return { enabled: false };

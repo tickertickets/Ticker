@@ -5,6 +5,7 @@ import { useLocation } from "wouter";
 import { scrollStore } from "@/lib/scroll-store";
 import { clearAccountState } from "@/lib/query-client";
 import { applyThemeForUser, resetTheme } from "@/lib/theme";
+import { disablePushNotifications, releasePushFromOtherUsers } from "@/lib/push";
 
 const USER_CACHE_KEY = "_usr";
 
@@ -85,6 +86,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setCachedUser(serverUser);
       // Apply this user's theme preference immediately
       applyThemeForUser(serverUser.id);
+
+      // Release this browser's push endpoint from any *other* user's
+      // subscription rows. Prevents a previously-signed-in account from
+      // continuing to receive notifications on this device after a switch.
+      // Best-effort and fire-and-forget — never blocks the UI.
+      void releasePushFromOtherUsers();
     } else if (!isLoading) {
       const status = (error as { status?: number } | null)?.status;
       if (status === 401 || status === 403) {
@@ -156,13 +163,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearAccountState();
     resetTheme();
 
-    // NOTE: do NOT tear down the push subscription on logout. On Android
-    // Chrome a browser tab and an installed PWA share the same Service
-    // Worker registration / PushSubscription endpoint, so unsubscribing
-    // from the browser would kill the PWA's notifications too. Logging
-    // out is an auth-session concern; the push subscription stays bound
-    // to whoever last enabled notifications until they explicitly turn
-    // them off in Settings.
+    // Tell the server to drop THIS user's push-subscription row for THIS
+    // device's endpoint, so push events for the account we're logging out of
+    // stop arriving on this browser. We deliberately do NOT call the
+    // browser-side `subscription.unsubscribe()`: on Android Chrome an
+    // installed PWA shares its Service Worker registration with the browser
+    // tab, so killing the OS-level subscription here would also kill the
+    // PWA's notifications. Removing only the server-side row is enough to
+    // stop Ticker from sending — and the browser's PushSubscription stays
+    // intact so the next user can cleanly bind to it on login.
+    //
+    // Must run while the session cookie is still valid, i.e. BEFORE the
+    // /api/auth/logout request below.
+    try {
+      await disablePushNotifications();
+    } catch { /* ignore — best-effort */ }
+
     try {
       if ("serviceWorker" in navigator) {
         const reg = await navigator.serviceWorker.ready;

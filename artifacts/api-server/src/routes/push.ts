@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { nanoid } from "nanoid";
 import { db } from "@workspace/db";
 import { pushSubscriptionsTable } from "@workspace/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { getVapidPublicKey, sendPushToUser } from "../services/push.service";
 
 const router: IRouter = Router();
@@ -130,6 +130,28 @@ router.get("/status", async (req, res) => {
   const subs = await db.select().from(pushSubscriptionsTable)
     .where(and(eq(pushSubscriptionsTable.userId, userId), eq(pushSubscriptionsTable.enabled, true)));
   res.json({ enabled: subs.length > 0, count: subs.length });
+});
+
+// Called right after a successful login. Removes any push subscription rows
+// for the SAME endpoint that belong to a *different* user — i.e. an account
+// previously logged in on this same browser/device. Without this, the prior
+// user's push events would keep landing on this device until they explicitly
+// unsubscribed in their own settings.
+router.post("/release-others", async (req, res) => {
+  const userId = req.session?.userId;
+  if (!userId) { res.status(401).json({ error: "unauthorized" }); return; }
+  const { endpoint } = req.body ?? {};
+  if (!endpoint || typeof endpoint !== "string") {
+    res.status(400).json({ error: "invalid_endpoint" });
+    return;
+  }
+  await db.delete(pushSubscriptionsTable).where(
+    and(
+      eq(pushSubscriptionsTable.endpoint, endpoint),
+      ne(pushSubscriptionsTable.userId, userId),
+    ),
+  );
+  res.json({ ok: true });
 });
 
 // Send a test notification to the current user — handy for verifying setup.
