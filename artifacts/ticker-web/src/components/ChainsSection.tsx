@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useKeyboardHeight } from "@/hooks/use-keyboard-height";
 import { useQuery } from "@tanstack/react-query";
 import { useLang } from "@/lib/i18n";
 import { Link, useLocation } from "wouter";
-import { Loader2, Link2, Heart, MessagesSquare, Share2, X, Trash2, Users, Search, Bookmark, Flag, Send, MessageCircle } from "lucide-react";
+import { Loader2, Link2, Heart, MessagesSquare, Share2, X, Trash2, Users, Search, Bookmark, Flag, Send, MessageCircle, Check } from "lucide-react";
+import { useModalBackButton } from "@/hooks/use-modal-back-button";
 import { cn, fmtCount } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { useQueryClient } from "@tanstack/react-query";
@@ -55,6 +56,8 @@ export function ChainCommentSheet({ chainId, onClose, commentCount: initialComme
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const keyboardHeight = useKeyboardHeight();
+
+  useModalBackButton(onClose);
 
   const { data, refetch, isLoading: commentsLoading } = useQuery<{ comments: ChainComment[] }>({
     queryKey: [`chain-comments-${chainId}`],
@@ -323,6 +326,26 @@ export function ChainShareModal({ chain, onClose }: { chain: ChainItem; onClose:
   const [search, setSearch] = useState("");
   const [sending, setSending] = useState<string | null>(null);
   const [sent, setSent] = useState<string | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  useModalBackButton(onClose);
+
+  const handleCopyLink = useCallback(async () => {
+    const link = `${window.location.origin}/chain/${chain.id}`;
+    try {
+      await navigator.clipboard.writeText(link);
+    } catch {
+      const el = document.createElement("textarea");
+      el.value = link;
+      el.style.cssText = "position:fixed;top:-9999px;left:-9999px;";
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand("copy");
+      document.body.removeChild(el);
+    }
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2_500);
+  }, [chain.id]);
 
   useEffect(() => {
     const html = document.documentElement;
@@ -529,6 +552,17 @@ export function ChainShareModal({ chain, onClose }: { chain: ChainItem; onClose:
           {search.trim() && filtered.length === 0 && searchResults.length === 0 && (
             <p className="px-4 py-6 text-sm text-muted-foreground text-center">{t.noUsersFoundShort}</p>
           )}
+        </div>
+
+        <div className="px-4 pt-3 pb-1 border-t border-border flex-shrink-0">
+          <button
+            onClick={handleCopyLink}
+            className="w-full flex items-center justify-center gap-2 border border-border text-foreground text-sm font-medium px-5 py-3 rounded-2xl active:scale-95 hover:bg-secondary transition-all"
+          >
+            {linkCopied
+              ? <><Check className="w-4 h-4 text-green-500" />{t.copiedLabel}</>
+              : <><Link2 className="w-4 h-4" />{t.copyLinkBtn}</>}
+          </button>
         </div>
       </div>
     </>,

@@ -3,6 +3,7 @@ import { useLang, displayYear } from "@/lib/i18n";
 import { ExpandableText } from "./ExpandableText";
 import { createPortal } from "react-dom";
 import { useKeyboardHeight } from "@/hooks/use-keyboard-height";
+import { useModalBackButton } from "@/hooks/use-modal-back-button";
 import { Link, useLocation } from "wouter";
 import { Bookmark, Star, MapPin, CalendarDays, ArrowRight, Lock, Unlock, Users, Flag, Send, Search, X, MessageCircle, Trash2, MoreVertical, Loader2, Ticket as TicketIcon, MessagesSquare, Share2, Pencil, Pin, PinOff } from "lucide-react";
 import { ReactionButton } from "./ReactionButton";
@@ -213,6 +214,8 @@ function ShareToChatModal({ ticket, onClose }: { ticket: Ticket; onClose: () => 
   const [search, setSearch] = useState("");
   const [sending, setSending] = useState<string | null>(null);
   const [sent, setSent] = useState<string | null>(null);
+
+  useModalBackButton(onClose);
 
   useEffect(() => {
     const html = document.documentElement;
@@ -781,6 +784,8 @@ function CommentModal({ ticket, onClose }: { ticket: Ticket; onClose: () => void
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const keyboardHeight = useKeyboardHeight();
+
+  useModalBackButton(onClose);
 
   const { data, refetch, isLoading: commentsLoading } = useQuery<{ comments: Array<{ id: string; userId: string; user: { displayName: string | null; username: string; avatarUrl: string | null }; content: string; createdAt: string }> }>({
     queryKey: [`/api/tickets/${ticket.id}/comments`],
@@ -1501,6 +1506,8 @@ export function CardContextMenu({ ticket, onClose }: CardMenuProps) {
   const [pinning, setPinning] = useState(false);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isOwner = !!me && me.id === ticket.userId;
+
+  useModalBackButton(onClose);
   const isPinned = pinnedIds != null && pinnedIds.includes(ticket.id);
   // Profile cover renders 3 tiles (1 row × 3 cols, one image per pinned post).
   // Newest pin goes to the front (left); pinning a 4th pushes the oldest out.

@@ -5,6 +5,7 @@ import html2canvas from "html2canvas";
 import { X, MessageCircle, Loader2, Link2, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLang, LangProvider } from "@/lib/i18n";
+import { useModalBackButton } from "@/hooks/use-modal-back-button";
 import type { Ticket } from "@workspace/api-client-react";
 import {
   getRatingCardStyle,
@@ -178,6 +179,8 @@ export function ShareStoryModal({ ticket, onClose, onOpenChat }: ShareStoryModal
   const [pressing,   setPressing]   = useState(false);
   const [error,      setError]      = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
+
+  useModalBackButton(onClose);
 
   const dataUrlRef = useRef<string | null>(null);
   useEffect(() => { dataUrlRef.current = dataUrl; }, [dataUrl]);
