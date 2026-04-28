@@ -70,7 +70,7 @@ export default function PageVerificationRequest() {
     if (!file) return;
     setUploading(true);
     try {
-      const compressed = await compressImage(file, 1200, 0.85);
+      const compressed = await compressImage(file, { maxWidth: 1200, quality: 0.85 });
       const preview = URL.createObjectURL(compressed);
       setProofPreview(preview);
       const res = await fetch("/api/storage/uploads/proxy", {

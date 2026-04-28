@@ -30,12 +30,14 @@ export function ReactionButton({
   const breakdownCount = reactionBreakdown?.["heart"] ?? 0;
 
   useEffect(() => {
+    let cleanup: (() => void) | undefined;
     if (isHearted && !wasHearted.current) {
       setPopped(true);
       const t = setTimeout(() => setPopped(false), 400);
-      return () => clearTimeout(t);
+      cleanup = () => clearTimeout(t);
     }
     wasHearted.current = isHearted;
+    return cleanup;
   }, [isHearted]);
 
   const toggle = useCallback(() => {

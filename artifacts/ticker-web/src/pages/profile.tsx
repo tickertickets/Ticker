@@ -50,6 +50,7 @@ type ChainProfile = {
   id: string;
   title: string;
   description?: string | null;
+  descriptionAlign?: "left" | "center" | "right" | null;
   movieCount: number;
   chainCount: number;
   mode?: string | null;

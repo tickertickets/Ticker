@@ -235,6 +235,8 @@ type BadgeData = {
   atMaxLevel: boolean;
   claimed: boolean;
   badgeHidden: boolean;
+  pageBadgeHidden?: boolean;
+  isPageVerified?: boolean;
   displayLevel: number | null;
   meta: { name: string; nameTH: string; color: string; gradient: string } | null;
   rules: {
@@ -1132,6 +1134,7 @@ export default function Settings() {
         claimed: boolean;
         badgeHidden: boolean;
         pageBadgeHidden: boolean;
+        isPageVerified: boolean;
         displayLevel: number | null;
         meta: { name: string; nameTH: string; color: string; gradient: string } | null;
         rules: {

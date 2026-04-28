@@ -817,15 +817,15 @@ export default function MovieDetail() {
 
                     <StarRow value={ticket.rating} type={ticket.ratingType} />
 
-                    {(ticket as unknown as Record<string, unknown>)["episodeLabel"] && (
+                    {!!((ticket as Record<string, unknown>)["episodeLabel"]) && (
                       <p className="text-xs font-semibold text-primary/80 tracking-wide">
-                        {(ticket as unknown as Record<string, unknown>)["episodeLabel"] as string}
+                        {String((ticket as Record<string, unknown>)["episodeLabel"])}
                       </p>
                     )}
 
-                    {(ticket as unknown as Record<string, unknown>)["caption"] && (
+                    {!!((ticket as Record<string, unknown>)["caption"]) && (
                       <p className="text-sm text-foreground leading-relaxed bg-secondary rounded-xl px-3 py-2.5 line-clamp-2 break-words" style={{ overflowWrap: "break-word", wordBreak: "break-word" }}>
-                        {(ticket as unknown as Record<string, unknown>)["caption"] as string}
+                        {String((ticket as Record<string, unknown>)["caption"])}
                       </p>
                     )}
 

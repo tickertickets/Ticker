@@ -53,7 +53,7 @@ const SPECIAL_COLOR_CONFIG: Record<string, { color: string; glow: string; label:
   diamond: { color: "#b9f2ff", glow: "0 0 20px 6px rgba(185,242,255,0.75)", label: "Diamond"},
 };
 
-export function getSpecialColorCfg(_specialColor?: string | null) {
+export function getSpecialColorCfg(_specialColor?: string | null): { glow: string; color: string } | null {
   return null;
 }
 

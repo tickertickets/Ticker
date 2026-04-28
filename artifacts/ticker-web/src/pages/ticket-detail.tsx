@@ -51,10 +51,12 @@ export default function TicketDetail() {
   const deleteSheetCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    let cleanup: (() => void) | undefined;
     if (deleteSheetOpen) {
       const id = requestAnimationFrame(() => setDeleteSheetVisible(true));
-      return () => cancelAnimationFrame(id);
+      cleanup = () => cancelAnimationFrame(id);
     }
+    return cleanup;
   }, [deleteSheetOpen]);
 
   const closeDeleteSheet = () => {
@@ -290,10 +292,10 @@ export default function TicketDetail() {
     if (ticketLoading) return null;
     return (
       <div className="flex flex-col items-center justify-center py-32 gap-3 px-6 text-center">
-        <p className="font-display font-bold text-foreground">{t.ticketNotFound}</p>
+        <p className="font-display font-bold text-foreground">{t.cardNotFound}</p>
         <Link href="/">
           <div className="px-5 py-2.5 bg-foreground text-background rounded-2xl text-sm font-semibold">
-            {t.backToHome}
+            {t.backHome}
           </div>
         </Link>
       </div>
@@ -445,7 +447,7 @@ export default function TicketDetail() {
         {/* Tag rating */}
         {isTagged && (
           <div className="mx-4 mt-5 p-3 rounded-2xl bg-secondary/50">
-            <p className="text-xs font-semibold text-muted-foreground mb-2">{t.yourScore}</p>
+            <p className="text-xs font-semibold text-muted-foreground mb-2">{t.yourRating}</p>
             <div className="flex items-center gap-2">
               {[1, 2, 3, 4, 5].map((n) => (
                 <button
@@ -481,7 +483,7 @@ export default function TicketDetail() {
               ))}
               {tagRating && (
                 <span className="text-xs text-muted-foreground ml-1">
-                  {tagRating >= 4.5 ? t.tagRatingLabels[4] : tagRating >= 3.5 ? t.tagRatingLabels[3] : tagRating >= 2.5 ? t.tagRatingLabels[2] : tagRating >= 1.5 ? t.tagRatingLabels[1] : t.tagRatingLabels[0]}
+                  {tagRating >= 4.5 ? t.ratingExcellent : tagRating >= 3.5 ? t.ratingVeryGood : tagRating >= 2.5 ? t.ratingGood : tagRating >= 1.5 ? t.ratingOkay : t.ratingBad}
                 </span>
               )}
             </div>
@@ -529,7 +531,7 @@ export default function TicketDetail() {
           <div className="flex items-center gap-2 px-4 py-3">
             <MessageCircle className="w-4 h-4 text-muted-foreground" />
             <h3 className="font-display font-bold text-sm text-foreground">
-              {t.comments}{commentCount > 0 && ` (${fmtCount(commentCount)})`}
+              {t.commentsLabel}{commentCount > 0 && ` (${fmtCount(commentCount)})`}
             </h3>
           </div>
 
@@ -538,8 +540,8 @@ export default function TicketDetail() {
             {commentCount === 0 ? (
               <div className="pt-6 pb-12 text-center">
                 <MessageCircle className="w-8 h-8 text-muted-foreground/30 mx-auto mb-3" />
-                <p className="text-sm text-muted-foreground">{t.noComments}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">{t.beFirstComment}</p>
+                <p className="text-sm text-muted-foreground">{t.noCommentsYet}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{t.beFirstToComment}</p>
               </div>
             ) : (
               <div className="overflow-y-auto max-h-[360px] space-y-4 mt-1 pb-4">

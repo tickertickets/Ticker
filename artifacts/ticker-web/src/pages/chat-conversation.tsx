@@ -61,7 +61,7 @@ function SharedTicketPreview({ ticket, ticketId }: { ticket: SharedTicket; ticke
         <div className="w-10 h-14 bg-background rounded-lg flex-shrink-0 flex items-center justify-center">
           <Star className="w-4 h-4 text-muted-foreground opacity-40" />
         </div>
-        <p className="text-xs text-muted-foreground">{t.ticketCardDeleted}</p>
+        <p className="text-xs text-muted-foreground">{t.deletedCard}</p>
       </div>
     );
   }
@@ -108,7 +108,7 @@ function SharedChainPreview({ chain, chainId }: { chain: SharedChain; chainId?: 
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-semibold text-muted-foreground tracking-wider mb-0.5">Chains</p>
-          <p className="text-xs text-muted-foreground">{t.deleted}</p>
+          <p className="text-xs text-muted-foreground">{t.deletedMsg}</p>
         </div>
       </div>
     );
@@ -252,13 +252,13 @@ function MessageContextMenu({ msg, isMine, onClose, onDeleted }: {
                 onClick={handleDelete}
                 disabled={deleting}
                 className="flex-1 h-11 rounded-2xl bg-foreground text-sm font-bold text-background active:bg-foreground/80 disabled:opacity-60"
-              >{deleting ? t.deleting : t.confirmBtn}</button>
+              >{deleting ? t.deletingLabel : t.confirmBtn}</button>
             </div>
           </>
         ) : (
           <>
             <div className="flex items-center justify-between px-5 pt-2 pb-1">
-              <p className="font-display font-bold text-sm text-foreground">{t.manageMessage}</p>
+              <p className="font-display font-bold text-sm text-foreground">{t.messageOptions}</p>
               <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-secondary">
                 <X className="w-4 h-4 text-muted-foreground" />
               </button>
@@ -451,7 +451,7 @@ export default function ChatConversation() {
         setPendingImage(null);
       } catch (err) {
         console.error("Image upload failed", err);
-        setUploadError(t.uploadImageFailed);
+        setUploadError(t.uploadImageError);
       } finally {
         setUploadingImage(false);
       }
@@ -472,7 +472,7 @@ export default function ChatConversation() {
       setPendingImage({ file: compressed, previewUrl });
       setUploadError("");
     } catch {
-      setUploadError(t.loadImageFailed);
+      setUploadError(t.imageLoadError);
     }
   };
 
@@ -667,7 +667,7 @@ export default function ChatConversation() {
                 handleSend();
               }
             }}
-            placeholder={t.typeMessagePlaceholder}
+            placeholder={t.typePlaceholder}
             rows={1}
             className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none resize-none max-h-32 leading-relaxed"
             style={{ minHeight: "20px" }}
