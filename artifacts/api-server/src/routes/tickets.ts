@@ -566,6 +566,7 @@ router.post(
               eq(ticketsTable.userId, inviteeId),
               eq(ticketsTable.imdbId, imdbId),
               isNull(ticketsTable.deletedAt),
+              eq(ticketsTable.isPrivateMemory, false),
             ),
           )
           .limit(1);

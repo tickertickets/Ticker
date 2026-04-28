@@ -294,10 +294,12 @@ export default function CreateTicket() {
   const draftKey = getDraftKey(user?.id);
   const [showDraftDialog, setShowDraftDialog] = useState(false);
   const [drafts, setDrafts] = useState<Draft[]>(() => readDrafts(getDraftKey(user?.id)));
+  const [draftsFetching, setDraftsFetching] = useState<boolean>(false);
 
   // On mount (for logged-in users): fetch server drafts and merge with localStorage
   useEffect(() => {
     if (!user?.id) return;
+    setDraftsFetching(true);
     fetch("/api/drafts?type=ticket", { credentials: "include" })
       .then(r => r.ok ? r.json() : { drafts: [] })
       .then(({ drafts: serverDrafts }: { drafts: unknown[] }) => {
@@ -305,16 +307,18 @@ export default function CreateTicket() {
         const validServer = serverDrafts.filter((d): d is Draft =>
           !!d && typeof d === "object" && typeof (d as Draft).movieId === "string"
         );
-        if (validServer.length === 0) return;
         const localDrafts = readDrafts(draftKey);
         const merged: Draft[] = [...validServer];
         for (const ld of localDrafts) {
           if (!merged.find(sd => sd.movieId === ld.movieId)) merged.push(ld);
         }
-        localStorage.setItem(draftKey, JSON.stringify(merged));
-        setDrafts(merged);
+        if (merged.length > 0) {
+          localStorage.setItem(draftKey, JSON.stringify(merged));
+          setDrafts(merged);
+        }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setDraftsFetching(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
@@ -809,7 +813,15 @@ export default function CreateTicket() {
           )}
 
           {/* ── ดราฟที่บันทึกไว้ ── */}
-          {drafts.length > 0 && !debouncedQuery && !searchLoading && (
+          {draftsFetching && !debouncedQuery && !searchLoading && (
+            <div className="mb-4">
+              <p className="text-xs font-semibold text-muted-foreground tracking-widest mb-2">{t.savedDraftsLabel}</p>
+              <div className="flex items-center gap-2 py-2">
+                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+              </div>
+            </div>
+          )}
+          {drafts.length > 0 && !draftsFetching && !debouncedQuery && !searchLoading && (
             <div className="mb-4">
               <p className="text-xs font-semibold text-muted-foreground tracking-widest mb-2">{t.savedDraftsLabel}</p>
               <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">

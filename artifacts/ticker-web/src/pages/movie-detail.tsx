@@ -291,8 +291,8 @@ export default function MovieDetail() {
     ? (langMovie?.title ?? srctitle ?? movie?.title ?? "")
     : ((srctitle || movie?.title) ?? "");
   const displayPlot = userToggled
-    ? (langMovie?.plot ?? movie?.plot ?? null)
-    : (movie?.plot ?? null);
+    ? (langMovie?.plot || movie?.plot || null)
+    : (movie?.plot || null);
 
   const { data: communityData } = useQuery<{ tickets: CommunityTicket[] }>({
     queryKey: ["/api/movies", movieId, "community"],

@@ -163,6 +163,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Show loader while session is being verified
       setIsAuthenticating(true);
       const result = await refetch?.();
+      // Immediately seed the cache so components that read cachedUser don't
+      // see a null window between navigate and the next query cycle.
+      if (result?.data) {
+        setCachedUser(result.data);
+        localStorage.setItem(USER_CACHE_KEY, JSON.stringify(result.data));
+      }
       // Apply the new user's saved theme as soon as we know their ID
       if (result?.data?.id) applyThemeForUser(result.data.id);
       setLocation("/");

@@ -9,6 +9,11 @@ import { ObjectStorageService } from "../lib/objectStorage";
 
 const router: IRouter = Router();
 
+const RESERVED_USERNAMES = new Set([
+  "tickerofficial", "ticker", "admin", "administrator", "support", "help",
+  "system", "root", "moderator", "mod", "staff", "official", "verified",
+]);
+
 router.get("/check-username", async (req, res) => {
   const { username } = req.query;
   if (!username || typeof username !== "string") {
@@ -19,7 +24,11 @@ router.get("/check-username", async (req, res) => {
     res.json({ available: false, username });
     return;
   }
-  const existing = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.username, username)).limit(1);
+  if (RESERVED_USERNAMES.has(username.toLowerCase())) {
+    res.json({ available: false, username });
+    return;
+  }
+  const existing = await db.select({ id: usersTable.id }).from(usersTable).where(ilike(usersTable.username, username)).limit(1);
   res.json({ available: existing.length === 0, username });
 });
 
