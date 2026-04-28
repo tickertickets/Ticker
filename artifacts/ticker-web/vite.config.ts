@@ -174,10 +174,30 @@ export default defineConfig({
       strict: true,
       deny: ["**/.*"],
     },
+    proxy: {
+      "/api": {
+        target:
+          process.env.API_PROXY_TARGET ||
+          "https://ticker-api-server.onrender.com",
+        changeOrigin: true,
+        secure: true,
+        ws: true,
+      },
+    },
   },
   preview: {
     port,
     host: "0.0.0.0",
     allowedHosts: true,
+    proxy: {
+      "/api": {
+        target:
+          process.env.API_PROXY_TARGET ||
+          "https://ticker-api-server.onrender.com",
+        changeOrigin: true,
+        secure: true,
+        ws: true,
+      },
+    },
   },
 });
