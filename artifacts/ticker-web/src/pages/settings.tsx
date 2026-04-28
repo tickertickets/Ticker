@@ -488,7 +488,7 @@ function BadgeSection({
                     style={{
                       transform: "rotate(-14deg)",
                       filter: openTicketLevel === lvl
-                        ? `drop-shadow(0 0 14px ${col}cc)`
+                        ? `drop-shadow(0 0 8px ${col}80)`
                         : "none",
                       opacity: isLocked ? 0.55 : 1,
                       transition: "filter 0.3s, opacity 0.3s",
@@ -784,7 +784,7 @@ function BadgeSection({
                   <div
                     style={{
                       transform: "rotate(28deg)",
-                      filter: popcornOpen ? `drop-shadow(0 0 14px ${col}cc)` : "none",
+                      filter: popcornOpen ? `drop-shadow(0 0 8px ${col}80)` : "none",
                       opacity: isActive ? 1 : 0.6,
                       transition: "filter 0.3s, opacity 0.3s",
                     }}

@@ -1140,10 +1140,20 @@ function FeedCard({ ticket, onLongPress }: { ticket: Ticket; onLongPress?: (t: T
         imageTimeout: 15000,
         logging: false,
       });
-      canvas.toBlob((blob) => {
+      canvas.toBlob(async (blob) => {
         if (!blob) return;
         const filename = `ticket-${ticket.movieTitle?.replace(/\s+/g, '-') || 'card'}-${Date.now()}.png`;
-        saveAs(blob, filename);
+        const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        if (isIOS && typeof navigator.share === 'function') {
+          try {
+            const file = new File([blob], filename, { type: 'image/png' });
+            await navigator.share({ files: [file], title: filename });
+          } catch {
+            saveAs(blob, filename);
+          }
+        } else {
+          saveAs(blob, filename);
+        }
         setExporting(false);
       });
     } catch (err) {
