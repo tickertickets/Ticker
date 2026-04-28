@@ -81,6 +81,8 @@ export interface Strings {
   restore: string;
   purge: string;
   moviesCount: (n: number) => string;
+  chainTimes: string;
+  movieCount: string;
   episodeRatings: string;
   purgeTitle: string;
   purgeDesc: string;
@@ -584,6 +586,8 @@ const TH: Strings = {
   restore: "กู้คืน",
   purge: "ลบถาวร",
   moviesCount: (n) => `${n} เรื่อง`,
+  chainTimes: "ครั้ง",
+  movieCount: "เรื่อง",
   episodeRatings: "คะแนนรายตอน",
   purgeTitle: "ลบถาวร",
   purgeDesc: "ไม่สามารถกู้คืนได้หลังจากลบ",
@@ -1123,6 +1127,8 @@ const EN: Strings = {
   restore: "Restore",
   purge: "Delete Forever",
   moviesCount: (n) => `${n} ${n === 1 ? "Movie" : "Movies"}`,
+  chainTimes: "runs",
+  movieCount: "movies",
   episodeRatings: "Episode Ratings",
   purgeTitle: "Delete Forever",
   purgeDesc: "Cannot be recovered after deletion",

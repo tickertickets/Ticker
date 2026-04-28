@@ -341,7 +341,7 @@ function ShareToChatModal({ ticket, onClose }: { ticket: Ticket; onClose: () => 
             <Search className="w-4 h-4 text-muted-foreground flex-shrink-0" />
             <input
               type="text"
-              placeholder={t.searchPlaceholder}
+              placeholder={t.searchShortPlaceholder}
               value={search}
               onChange={e => setSearch(e.target.value)}
               autoFocus
@@ -355,7 +355,7 @@ function ShareToChatModal({ ticket, onClose }: { ticket: Ticket; onClose: () => 
           {/* Show user search results if searching */}
           {search.trim() && searchResults.length > 0 && (
             <>
-              <p className="px-4 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{t.users}</p>
+              <p className="px-4 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{t.usersLabel}</p>
               {searchResults.map((u: ConvParticipant) => (
                 <button
                   key={u.id}
@@ -386,7 +386,7 @@ function ShareToChatModal({ ticket, onClose }: { ticket: Ticket; onClose: () => 
           {filtered.length > 0 && (
             <>
               {search.trim() && searchResults.length > 0 && <div className="h-px bg-border mx-4" />}
-              <p className="px-4 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{t.recentChats}</p>
+              <p className="px-4 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{t.recentChatsLabel}</p>
               {filtered.map(conv => {
                 const other = conv.participants.find(p => p.id !== user?.id) ?? conv.participants[0]!;
                 const isSent = sent === conv.id;
@@ -419,7 +419,7 @@ function ShareToChatModal({ ticket, onClose }: { ticket: Ticket; onClose: () => 
 
           {!search.trim() && filtered.length === 0 && (
             <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-              {t.searchFriendToSend}
+              {t.noChats}
             </div>
           )}
         </div>

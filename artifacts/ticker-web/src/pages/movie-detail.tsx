@@ -438,7 +438,7 @@ export default function MovieDetail() {
     <div ref={scrollRef} className="h-full overflow-y-auto overscroll-y-none">
 
       {/* ── Hero poster — full 2:3 ratio ── */}
-      <div className="relative w-full">
+      <div className="relative w-full overflow-hidden">
         {(srcposter || movie.posterUrl) ? (
           <img
             src={srcposter || movie.posterUrl!}
