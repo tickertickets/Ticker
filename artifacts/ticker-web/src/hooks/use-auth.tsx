@@ -5,7 +5,7 @@ import { useLocation } from "wouter";
 import { scrollStore } from "@/lib/scroll-store";
 import { clearAccountState } from "@/lib/query-client";
 import { applyThemeForUser, resetTheme } from "@/lib/theme";
-import { disablePushNotifications, releasePushFromOtherUsers } from "@/lib/push";
+import { disablePushNotifications, rebindPushSubscriptionToCurrentUser } from "@/lib/push";
 
 const USER_CACHE_KEY = "_usr";
 
@@ -87,11 +87,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Apply this user's theme preference immediately
       applyThemeForUser(serverUser.id);
 
-      // Release this browser's push endpoint from any *other* user's
-      // subscription rows. Prevents a previously-signed-in account from
-      // continuing to receive notifications on this device after a switch.
+      // Re-bind this browser's existing PushSubscription to the now-current
+      // user. Two effects in one call:
+      //   1. Transfers ownership away from any previous account that was
+      //      logged in on this device — so they stop receiving notifications
+      //      on this browser.
+      //   2. Restores notifications for THIS user without making them
+      //      manually re-toggle "Enable notifications" in Settings (their
+      //      previous logout removed the server-side row, so without this
+      //      step pushes would silently stop working).
       // Best-effort and fire-and-forget — never blocks the UI.
-      void releasePushFromOtherUsers();
+      void rebindPushSubscriptionToCurrentUser();
     } else if (!isLoading) {
       const status = (error as { status?: number } | null)?.status;
       if (status === 401 || status === 403) {

@@ -165,28 +165,44 @@ export async function disablePushNotifications(): Promise<void> {
 }
 
 /**
- * Called right after a successful login. Asks the server to remove any push
- * subscription rows for THIS browser's endpoint that belong to a different
- * user — typically an account that was previously logged in on this device.
+ * Called right after a successful login. If this browser already has an
+ * active PushSubscription (kept from a previous session — the OS-level
+ * subscription persists across logout / account switches as long as the
+ * Service Worker stays registered), re-binds it to the currently logged-in
+ * user on the server.
  *
- * Without this, the previous user's push events would keep arriving on this
- * browser even after the new user signs in (because the OS-level
- * PushSubscription endpoint persists across logout / account switches).
+ * This both:
+ *   1. Transfers ownership away from any previous account that was logged
+ *      in on this device (the server's `subscribe` endpoint upserts by
+ *      endpoint, so the existing row's userId gets overwritten), and
+ *   2. Ensures the newly-logged-in user starts receiving notifications
+ *      immediately, without having to manually toggle "Enable notifications"
+ *      again in Settings — which is what users naturally expect.
+ *
+ * Silent and best-effort: never prompts for permission, never throws.
  */
-export async function releasePushFromOtherUsers(): Promise<void> {
+export async function rebindPushSubscriptionToCurrentUser(): Promise<void> {
   if (!isPushSupported()) return;
+  if (Notification.permission !== "granted") return;
   const sub = await getCurrentSubscription();
-  const endpoint = sub?.endpoint;
-  if (!endpoint) return;
+  if (!sub) return;
+  const json = sub.toJSON();
+  const endpoint = json.endpoint;
+  const p256dh = json.keys?.p256dh;
+  const auth = json.keys?.auth;
+  if (!endpoint || !p256dh || !auth) return;
   try {
-    await fetch("/api/push/release-others", {
+    await fetch("/api/push/subscribe", {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ endpoint }),
+      body: JSON.stringify({
+        endpoint,
+        keys: { p256dh, auth },
+      }),
     });
   } catch {
-    /* ignore — best-effort cleanup */
+    /* ignore — best-effort */
   }
 }
 
