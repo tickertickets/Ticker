@@ -614,7 +614,7 @@ export default function MovieDetail() {
               style={{ aspectRatio: "16/9" }}
             >
               <iframe
-                src={`https://www.youtube-nocookie.com/embed/${videosData.trailerKey}?rel=0&modestbranding=1`}
+                src={`https://www.youtube-nocookie.com/embed/${videosData.trailerKey}?rel=0&modestbranding=1&hl=${lang}`}
                 title={videosData.trailerName ?? "Trailer"}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
