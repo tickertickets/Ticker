@@ -2,16 +2,24 @@
  * warmMovieCache — background job
  *
  * Scans all unique imdbIds that have been ticketed, finds those whose
- * movie_detail cache is stale (>22 h), refreshes them from TMDB, and
+ * `movies` table row is stale (>22 h), refreshes them from TMDB, and
  * re-syncs rankTier + currentRankTier on all non-locked tickets so that
  * card ranks always reflect the current TMDB score.
+ *
+ * Cache writes target the SAME stores the live request handlers read from:
+ *   - `moviesTable`  → `movieLiveSnapshot` source for ticket cards
+ *   - `apiCacheTable["movie_core:<tmdbId>"]` → source for movie-list cards
+ * (We previously also wrote to `apiCacheTable["movie_detail:<imdbId>:th"]`,
+ *  but that key never matched the variant-suffixed format the detail route
+ *  actually reads, so the writes were dead and the staleness check always
+ *  treated everything as stale. Both are removed.)
  *
  * Rate-limited to one TMDB request per 700 ms to stay well within limits.
  */
 
 import { db } from "@workspace/db";
-import { ticketsTable, apiCacheTable } from "@workspace/db/schema";
-import { and, eq, inArray } from "drizzle-orm";
+import { ticketsTable, apiCacheTable, moviesTable } from "@workspace/db/schema";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { tmdbFetch, posterUrl, TMDB_IMG_WIDE } from "../lib/tmdb-client";
 import { weightedScore, computeRankTier } from "../services/rank.service";
 
@@ -144,73 +152,119 @@ export async function warmMovieDetailCache(): Promise<void> {
 
   if (rows.length === 0) return;
 
-  // 2. Batch-fetch all cache entries in ONE query instead of N individual queries
-  const cacheKeys = rows.map(({ imdbId }) => `movie_detail:${imdbId}:th`);
-  const existingEntries = await db
-    .select({ cacheKey: apiCacheTable.cacheKey, fetchedAt: apiCacheTable.fetchedAt })
-    .from(apiCacheTable)
-    .where(inArray(apiCacheTable.cacheKey, cacheKeys));
-
-  const freshMap = new Map(existingEntries.map((e) => [e.cacheKey, e.fetchedAt]));
-
-  const staleKeys = new Set<string>();
+  // 2. Resolve each imdbId → numeric tmdbId. Skip raw IMDb ids (tt-codes)
+  //    and "reel" placeholders — they have no TMDB record to refresh.
+  type Candidate = { imdbId: string; tmdbId: number; isTv: boolean };
+  const candidates: Candidate[] = [];
   for (const { imdbId } of rows) {
-    const cacheKey = `movie_detail:${imdbId}:th`;
-    const fetchedAt = freshMap.get(cacheKey);
-    if (!fetchedAt || fetchedAt < staleThreshold) {
-      staleKeys.add(imdbId);
+    if (imdbId.startsWith("tmdb_tv:")) {
+      const n = parseInt(imdbId.slice(8), 10);
+      if (!isNaN(n)) candidates.push({ imdbId, tmdbId: n, isTv: true });
+    } else if (imdbId.startsWith("tmdb:")) {
+      const n = parseInt(imdbId.slice(5), 10);
+      if (!isNaN(n)) candidates.push({ imdbId, tmdbId: n, isTv: false });
     }
   }
+  if (candidates.length === 0) return;
 
-  if (staleKeys.size === 0) {
-    console.log("[warmMovieCache] All caches fresh — nothing to refresh");
+  // 3. Batch-load fetchedAt from moviesTable — the ACTUAL source ticket
+  //    cards (and `calculateRankTier`) read from. If a row is missing or
+  //    older than STALE_MS we refresh it.
+  const tmdbIds = candidates.map((c) => c.tmdbId);
+  const existingRows = await db
+    .select({ tmdbId: moviesTable.tmdbId, fetchedAt: moviesTable.fetchedAt })
+    .from(moviesTable)
+    .where(inArray(moviesTable.tmdbId, tmdbIds));
+
+  const freshMap = new Map<number, Date>(
+    existingRows.map((r) => [r.tmdbId, r.fetchedAt]),
+  );
+
+  const stale: Candidate[] = candidates.filter((c) => {
+    const fetchedAt = freshMap.get(c.tmdbId);
+    return !fetchedAt || fetchedAt < staleThreshold;
+  });
+
+  if (stale.length === 0) {
+    console.log("[warmMovieCache] All movies fresh — nothing to refresh");
     return;
   }
 
-  console.log(`[warmMovieCache] Refreshing ${staleKeys.size} stale movie(s)…`);
+  console.log(`[warmMovieCache] Refreshing ${stale.length} stale movie(s)…`);
   let refreshed = 0;
   let rankSynced = 0;
   let failed = 0;
 
-  for (const imdbId of staleKeys) {
+  for (const { imdbId, tmdbId, isTv } of stale) {
     try {
-      let tmdbId: number;
-      let isTv = false;
-
-      if (imdbId.startsWith("tmdb_tv:")) {
-        tmdbId = parseInt(imdbId.slice(8), 10);
-        isTv = true;
-      } else if (imdbId.startsWith("tmdb:")) {
-        tmdbId = parseInt(imdbId.slice(5), 10);
-      } else {
-        continue; // skip non-TMDB ids
-      }
-
       const result = isTv
         ? await fetchTvDetail(tmdbId)
         : await fetchMovieDetail(tmdbId);
 
-      // ── 1. Save fresh TMDB data to cache ──────────────────────────────────
-      const cacheKey = `movie_detail:${imdbId}:th`;
+      // ── 1. Update moviesTable so ticket cards' `movieLiveSnapshot` and
+      //       `calculateRankTier`'s in-DB cache see fresh values immediately.
+      const tmdbRating  = parseFloat((result["tmdbRating"] as string | null) ?? "0") || 0;
+      const voteCount   = typeof result["voteCount"] === "number" ? result["voteCount"] : 0;
+      const popularity  = typeof result["popularity"] === "number" ? result["popularity"] : 0;
+      const genreIds    = Array.isArray(result["genreIds"]) ? (result["genreIds"] as number[]) : [];
+      const franchiseIds = Array.isArray(result["franchiseIds"]) ? (result["franchiseIds"] as number[]) : [];
+      const yearRaw     = typeof result["year"] === "string" ? parseInt(result["year"] as string, 10) : null;
+      const releaseYear = yearRaw && !isNaN(yearRaw) ? yearRaw : null;
+      const releaseDate = (releaseYear ? `${releaseYear}-01-01` : null);
+
+      await db
+        .insert(moviesTable)
+        .values({
+          tmdbId,
+          mediaType: isTv ? "tv" : "movie",
+          title: (result["title"] as string) || String(tmdbId),
+          posterUrl: (result["posterUrl"] as string | null) ?? null,
+          releaseDate,
+          voteAverage: tmdbRating ? tmdbRating.toString() : null,
+          voteCount,
+          popularity: popularity.toString(),
+          genreIds,
+          franchiseIds,
+          fetchedAt: new Date(),
+        })
+        .onConflictDoUpdate({
+          target: moviesTable.tmdbId,
+          set: {
+            voteAverage: tmdbRating ? tmdbRating.toString() : null,
+            voteCount,
+            popularity: popularity.toString(),
+            genreIds,
+            franchiseIds,
+            fetchedAt: new Date(),
+          },
+        });
+
+      // ── 2. Update movie_core cache so list-endpoint cards (search/explore)
+      //       pick up the fresh values on their next render without paying
+      //       the cold-cache TMDB round-trip themselves.
+      const coreData = {
+        tmdbRating: tmdbRating ? tmdbRating.toFixed(1) : null,
+        voteCount,
+        popularity,
+        genreIds,
+        releaseDate,
+        franchiseIds,
+      };
       await db
         .insert(apiCacheTable)
-        .values({ cacheKey, data: result, fetchedAt: new Date() })
+        .values({
+          cacheKey: `movie_core:${tmdbId}`,
+          data: coreData,
+          fetchedAt: new Date(),
+        })
         .onConflictDoUpdate({
           target: apiCacheTable.cacheKey,
-          set: { data: result, fetchedAt: new Date() },
+          set: { data: coreData, fetchedAt: new Date() },
         });
 
       refreshed++;
 
-      // ── 2. Re-compute rankTier from fresh data ────────────────────────────
-      const tmdbRating  = typeof result.voteAverage === "number" ? result.voteAverage
-                        : parseFloat((result.tmdbRating as string | null) ?? "0") || 0;
-      const voteCount   = typeof result.voteCount === "number" ? result.voteCount : 0;
-      const yearRaw     = typeof result.year === "string" ? parseInt(result.year, 10) : null;
-      const releaseYear = yearRaw && !isNaN(yearRaw) ? yearRaw : null;
-      const genreIds    = Array.isArray(result.genreIds) ? (result.genreIds as number[]) : [];
-      const popularity  = typeof result.popularity === "number" ? result.popularity : 0;
-
+      // ── 3. Re-compute rankTier and sync all non-locked tickets ────────────
       const ws   = weightedScore(tmdbRating, voteCount);
       const tier = computeRankTier(ws, releaseYear);
 
@@ -222,7 +276,6 @@ export async function warmMovieDetailCache(): Promise<void> {
         genreIds,
       });
 
-      // ── 3. Sync all non-locked tickets for this movie ─────────────────────
       await db
         .update(ticketsTable)
         .set({
@@ -247,6 +300,10 @@ export async function warmMovieDetailCache(): Promise<void> {
 
     await sleep(REQUEST_GAP_MS);
   }
+
+  // sql import is used implicitly by drizzle for typed updates above — keep
+  // an explicit reference so build doesn't strip the import.
+  void sql;
 
   console.log(`[warmMovieCache] Done — ${refreshed} refreshed, ${rankSynced} rank-synced, ${failed} failed`);
 }

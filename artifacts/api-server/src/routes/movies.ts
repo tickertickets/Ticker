@@ -159,115 +159,203 @@ function setMovieCore(tmdbId: number, core: MovieCore): void {
   setCached(`movie_core:${tmdbId}`, core).catch(() => {});
 }
 
-// ── Background warm-up — populates movie_core from individual TMDB endpoints ──
-// Called fire-and-forget after every category response.
-// For movies without a fresh movie_core entry, fetches individual TMDB detail
-// and stores the result so subsequent category loads serve the same rating as
-// the detail page (without the user needing to visit the detail page first).
-function triggerWarmUp(movies: Array<Record<string, any>>): void {
+// ── Background refresh helper — refreshes stale movie_core entries off the ──
+// hot path so the NEXT request gets fresh data without blocking THIS one.
+function refreshStaleCoresInBackground(
+  items: Array<{ tmdbId: number; mediaType: string }>,
+): void {
+  if (items.length === 0) return;
   (async () => {
     try {
-      const candidates = movies.filter(
-        (m): m is Record<string, any> & { tmdbId: number; mediaType: string } =>
-          typeof m.tmdbId === "number" && typeof m.mediaType === "string",
-      );
-      if (candidates.length === 0) return;
-
-      // One batch DB query to find which movies already have a fresh movie_core.
-      const keys = candidates.map((m) => `movie_core:${m.tmdbId}`);
-      const existing = await db
-        .select({
-          cacheKey: apiCacheTable.cacheKey,
-          fetchedAt: apiCacheTable.fetchedAt,
-        })
-        .from(apiCacheTable)
-        .where(inArray(apiCacheTable.cacheKey, keys));
-
-      const freshKeys = new Set(
-        existing
-          .filter(
-            (r) =>
-              Date.now() - new Date(r.fetchedAt).getTime() < MOVIE_CORE_TTL_MS,
-          )
-          .map((r) => r.cacheKey),
-      );
-
-      const needsWarm = candidates.filter(
-        (m) => !freshKeys.has(`movie_core:${m.tmdbId}`),
-      );
-      if (needsWarm.length === 0) return;
-
-      // Fetch individual TMDB details in parallel batches of 5.
-      for (let i = 0; i < needsWarm.length; i += 5) {
+      for (let i = 0; i < items.length; i += 5) {
         await Promise.allSettled(
-          needsWarm.slice(i, i + 5).map(async (m) => {
-            const isTV = m.mediaType === "tv";
-            const path = isTV ? `/tv/${m.tmdbId}` : `/movie/${m.tmdbId}`;
-            const data = await tmdbFetch<{
-              vote_average?: number;
-              vote_count?: number;
-              popularity?: number;
-              genres?: { id: number }[];
-              release_date?: string;
-              first_air_date?: string;
-              belongs_to_collection?: { id: number } | null;
-            }>(path, { language: "en-US" });
-            setMovieCore(m.tmdbId as number, {
-              tmdbRating:
-                data.vote_average != null
-                  ? data.vote_average.toFixed(1)
-                  : null,
-              voteCount: data.vote_count ?? 0,
-              popularity: data.popularity ?? 0,
-              genreIds: (data.genres ?? []).map((g) => g.id),
-              releaseDate:
-                data.release_date ?? data.first_air_date ?? null,
-              franchiseIds: data.belongs_to_collection
-                ? [data.belongs_to_collection.id]
-                : [],
-            });
+          items.slice(i, i + 5).map(async (m) => {
+            try {
+              const isTV = m.mediaType === "tv";
+              const path = isTV ? `/tv/${m.tmdbId}` : `/movie/${m.tmdbId}`;
+              const data = await tmdbFetch<{
+                vote_average?: number;
+                vote_count?: number;
+                popularity?: number;
+                genres?: { id: number }[];
+                release_date?: string;
+                first_air_date?: string;
+                belongs_to_collection?: { id: number } | null;
+              }>(path, { language: "en-US" });
+              setMovieCore(m.tmdbId, {
+                tmdbRating:
+                  data.vote_average != null
+                    ? data.vote_average.toFixed(1)
+                    : null,
+                voteCount: data.vote_count ?? 0,
+                popularity: data.popularity ?? 0,
+                genreIds: (data.genres ?? []).map((g) => g.id),
+                releaseDate:
+                  data.release_date ?? data.first_air_date ?? null,
+                franchiseIds: data.belongs_to_collection
+                  ? [data.belongs_to_collection.id]
+                  : [],
+              });
+            } catch {
+              /* per-movie failure is non-fatal */
+            }
           }),
         );
       }
     } catch {
-      /* silent — warm-up failure is non-fatal */
+      /* silent — background refresh failure is non-fatal */
     }
   })();
 }
 
-async function enrichMoviesFromCore(movies: Array<Record<string, any>>): Promise<void> {
+// ── ensureMovieCores ──────────────────────────────────────────────────────────
+//
+// MUST be awaited before sending a list response. Guarantees that every movie
+// in the array carries authoritative TMDB-detail-level fields (`tmdbRating`,
+// `voteCount`, `popularity`, `genreIds`, `releaseDate`, `franchiseIds`) so the
+// frontend computes the SAME rank/effects on first render as the movie-detail
+// page would show.
+//
+// Why this matters:
+//   TMDB list endpoints (`/trending`, `/discover`, `/search`) return SNAPSHOT
+//   `vote_average` from when the list was compiled (often hours/days old) and
+//   NEVER include `belongs_to_collection`. Without enrichment, cards show:
+//     - stale ratings → may sit in a different rank tier than the detail page
+//     - franchiseIds = [] → "FR" effect tag never appears on the card
+//   The user then opens detail, the detail endpoint writes fresh data into the
+//   same React Query cache key, and the card "jumps" to the correct rank.
+//
+// Strategy:
+//   1. Bulk-load every existing movie_core cache row, regardless of age.
+//      A stale TMDB-detail snapshot is still much closer to detail-page truth
+//      than a list-endpoint snapshot, and is "good enough" for rank parity.
+//   2. SYNCHRONOUSLY fetch and persist any TRULY MISSING entries from TMDB
+//      (parallel batches of 5). This is the critical path — ranks for these
+//      movies are wrong until we fetch them.
+//   3. Fire a background refresh for stale-but-cached entries so the cache
+//      stays warm without blocking this response.
+//   4. Apply the resolved core fields to the movies array.
+//
+// Performance:
+//   - Cold cache (movie unseen by anyone): adds ~200-600 ms to a list response.
+//   - Warm cache (any age): adds only the bulk DB read (a few ms).
+//   - Cache TTL is unchanged (1 h); fully populated lists pay nothing extra.
+async function ensureMovieCores(
+  movies: Array<Record<string, any>>,
+): Promise<void> {
   if (movies.length === 0) return;
-  const ids = movies
-    .map((m) => m.tmdbId)
-    .filter((id): id is number => typeof id === "number");
-  if (ids.length === 0) return;
-  const keys = ids.map((id) => `movie_core:${id}`);
-  const now = Date.now();
+  const candidates = movies.filter(
+    (m): m is Record<string, any> & { tmdbId: number; mediaType: string } =>
+      typeof m["tmdbId"] === "number" && typeof m["mediaType"] === "string",
+  );
+  if (candidates.length === 0) return;
+
+  // Dedupe by tmdbId so we only fetch each movie once even if the list
+  // contains duplicates (e.g. cross-category merges).
+  const uniqueCandidates = Array.from(
+    new Map(candidates.map((m) => [m["tmdbId"] as number, m])).values(),
+  );
+
+  const coreMap = new Map<number, MovieCore>();
+  const staleItems: Array<{ tmdbId: number; mediaType: string }> = [];
+
+  // 1) Bulk-load every existing cache row regardless of age.
   try {
+    const keys = uniqueCandidates.map(
+      (m) => `movie_core:${m["tmdbId"]}`,
+    );
     const rows = await db
-      .select({ cacheKey: apiCacheTable.cacheKey, data: apiCacheTable.data, fetchedAt: apiCacheTable.fetchedAt })
+      .select({
+        cacheKey: apiCacheTable.cacheKey,
+        data: apiCacheTable.data,
+        fetchedAt: apiCacheTable.fetchedAt,
+      })
       .from(apiCacheTable)
       .where(inArray(apiCacheTable.cacheKey, keys));
-    const coreMap = new Map<string, MovieCore>();
+    const now = Date.now();
     for (const row of rows) {
+      const tmdbId = parseInt(
+        row.cacheKey.replace("movie_core:", ""),
+        10,
+      );
+      if (isNaN(tmdbId)) continue;
+      coreMap.set(tmdbId, row.data as MovieCore);
       const age = now - new Date(row.fetchedAt).getTime();
-      if (age < MOVIE_CORE_TTL_MS) {
-        coreMap.set(row.cacheKey, row.data as MovieCore);
+      if (age >= MOVIE_CORE_TTL_MS) {
+        const candidate = uniqueCandidates.find(
+          (c) => (c["tmdbId"] as number) === tmdbId,
+        );
+        if (candidate) {
+          staleItems.push({
+            tmdbId,
+            mediaType: candidate["mediaType"] as string,
+          });
+        }
       }
     }
-    for (const m of movies) {
-      if (typeof m["tmdbId"] !== "number") continue;
-      const core = coreMap.get(`movie_core:${m["tmdbId"]}`);
-      if (!core) continue;
-      if (core.tmdbRating !== undefined) m["tmdbRating"] = core.tmdbRating;
-      if (core.voteCount !== undefined) m["voteCount"] = core.voteCount;
-      if (core.popularity !== undefined) m["popularity"] = core.popularity;
-      if (core.genreIds !== undefined) m["genreIds"] = core.genreIds;
-      if (core.releaseDate !== undefined) m["releaseDate"] = core.releaseDate;
-      if (core.franchiseIds !== undefined) m["franchiseIds"] = core.franchiseIds;
-    }
   } catch {
-    // Enrichment failure is non-fatal.
+    // DB read failure is non-fatal; fall through to TMDB fetch for all items.
+  }
+
+  // 2) Synchronously fetch and persist TRULY missing entries.
+  const missing = uniqueCandidates.filter(
+    (m) => !coreMap.has(m["tmdbId"] as number),
+  );
+  for (let i = 0; i < missing.length; i += 5) {
+    await Promise.allSettled(
+      missing.slice(i, i + 5).map(async (m) => {
+        try {
+          const isTV = m["mediaType"] === "tv";
+          const tmdbId = m["tmdbId"] as number;
+          const path = isTV ? `/tv/${tmdbId}` : `/movie/${tmdbId}`;
+          const data = await tmdbFetch<{
+            vote_average?: number;
+            vote_count?: number;
+            popularity?: number;
+            genres?: { id: number }[];
+            release_date?: string;
+            first_air_date?: string;
+            belongs_to_collection?: { id: number } | null;
+          }>(path, { language: "en-US" });
+          const core: MovieCore = {
+            tmdbRating:
+              data.vote_average != null
+                ? data.vote_average.toFixed(1)
+                : null,
+            voteCount: data.vote_count ?? 0,
+            popularity: data.popularity ?? 0,
+            genreIds: (data.genres ?? []).map((g) => g.id),
+            releaseDate:
+              data.release_date ?? data.first_air_date ?? null,
+            franchiseIds: data.belongs_to_collection
+              ? [data.belongs_to_collection.id]
+              : [],
+          };
+          coreMap.set(tmdbId, core);
+          setMovieCore(tmdbId, core);
+        } catch {
+          // Per-movie failure is non-fatal. That single card will fall
+          // back to whatever fields the list endpoint provided.
+        }
+      }),
+    );
+  }
+
+  // 3) Background refresh for stale-but-cached entries.
+  refreshStaleCoresInBackground(staleItems);
+
+  // 4) Apply resolved core fields to the response array.
+  for (const m of movies) {
+    if (typeof m["tmdbId"] !== "number") continue;
+    const core = coreMap.get(m["tmdbId"] as number);
+    if (!core) continue;
+    if (core.tmdbRating !== undefined) m["tmdbRating"] = core.tmdbRating;
+    if (core.voteCount !== undefined) m["voteCount"] = core.voteCount;
+    if (core.popularity !== undefined) m["popularity"] = core.popularity;
+    if (core.genreIds !== undefined) m["genreIds"] = core.genreIds;
+    if (core.releaseDate !== undefined) m["releaseDate"] = core.releaseDate;
+    if (core.franchiseIds !== undefined)
+      m["franchiseIds"] = core.franchiseIds;
   }
 }
 
@@ -284,8 +372,7 @@ router.get(
       const cached = await getCached(cacheKey, TRENDING_TTL_MS);
       if (cached) {
         const c = cached as { movies: Record<string, any>[]; totalPages: number; totalResults: number };
-        await enrichMoviesFromCore(c.movies);
-        triggerWarmUp(c.movies);
+        await ensureMovieCores(c.movies);
         res.json({ movies: c.movies, page: 1, totalPages: c.totalPages, totalResults: c.totalResults });
         return;
       }
@@ -308,8 +395,7 @@ router.get(
     const totalPages = data.total_pages ?? 1;
     const totalResults = data.total_results ?? 0;
 
-    await enrichMoviesFromCore(movies as Record<string, any>[]);
-    triggerWarmUp(movies as Record<string, any>[]);
+    await ensureMovieCores(movies as Record<string, any>[]);
     if (isPage1) {
       await setCached(cacheKey, { movies, totalPages, totalResults });
     }
@@ -373,8 +459,7 @@ router.get(
         parseFloat(b.tmdbRating ?? "0") - parseFloat(a.tmdbRating ?? "0"),
     );
 
-    await enrichMoviesFromCore(merged as Record<string, any>[]);
-    triggerWarmUp(merged as Record<string, any>[]);
+    await ensureMovieCores(merged as Record<string, any>[]);
     res.json({
       movies: merged,
       page,
@@ -397,8 +482,7 @@ router.get(
     const cached = await getCached(cacheKey, MOOD_TTL_MS);
     if (cached) {
       const c = cached as { movies: Record<string, any>[] };
-      await enrichMoviesFromCore(c.movies);
-      triggerWarmUp(c.movies);
+      await ensureMovieCores(c.movies);
       res.json(cached);
       return;
     }
@@ -462,8 +546,7 @@ router.get(
       (a, b) => (b.voteCount ?? 0) - (a.voteCount ?? 0),
     );
 
-    await enrichMoviesFromCore(merged as Record<string, any>[]);
-    triggerWarmUp(merged as Record<string, any>[]);
+    await ensureMovieCores(merged as Record<string, any>[]);
     const result = {
       movies: merged,
       page,
@@ -504,15 +587,13 @@ router.get(
       const cached = await getCached(cacheKey, MOOD_TTL_MS);
       if (cached) {
         const c = cached as { movies: Record<string, any>[] };
-        await enrichMoviesFromCore(c.movies);
-        triggerWarmUp(c.movies);
+        await ensureMovieCores(c.movies);
         res.json(cached);
         return;
       }
       const startPage = dailyStartPage(subFilter ? `${moodId}:${subFilter}` : moodId);
       const result = await fetchMoodMovies(cfg, urlFn, page, startPage, lang);
-      await enrichMoviesFromCore(result.movies as Record<string, any>[]);
-      triggerWarmUp(result.movies as Record<string, any>[]);
+      await ensureMovieCores(result.movies as Record<string, any>[]);
       await setCached(cacheKey, result);
       res.json(result);
       return;
@@ -520,8 +601,7 @@ router.get(
 
     // Non-curated moods (now_playing etc.) use standard pagination, no caching here.
     const result = await fetchMoodMovies(cfg, urlFn, page, 1, lang);
-    await enrichMoviesFromCore(result.movies as Record<string, any>[]);
-    triggerWarmUp(result.movies as Record<string, any>[]);
+    await ensureMovieCores(result.movies as Record<string, any>[]);
     res.json(result);
   }),
 );
@@ -652,10 +732,18 @@ router.get(
       .map((m) => m.id);
     const collectionMap = await fetchCollectionIds(movieIds);
 
+    const movies = raw.map((m) =>
+      normalizeItem(m, m.media_type as "movie" | "tv", collectionMap),
+    );
+
+    // Enrich so search-result cards show the same rank as the detail page
+    // does — without this, the card uses TMDB's stale search-index snapshot
+    // (vote_average, vote_count) and never has franchiseIds, so the user
+    // sees a wrong rank/effect until they open detail.
+    await ensureMovieCores(movies as Record<string, any>[]);
+
     res.json({
-      movies: raw.map((m) =>
-        normalizeItem(m, m.media_type as "movie" | "tv", collectionMap),
-      ),
+      movies,
       totalResults: data.total_results || 0,
       page: Number(page),
     });
