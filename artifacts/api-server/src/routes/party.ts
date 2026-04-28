@@ -37,6 +37,19 @@ router.get("/invite/:inviteId", async (req, res) => {
     return;
   }
 
+  // Get inviter ticket — but fetch ALL rows (incl. soft-deleted) so we can
+  // detect the "original poster deleted their card" case and synthesise an
+  // expired status for the invite.  We do not run an ALTER TYPE migration
+  // for the partyInviteStatus enum (would require a Render redeploy with
+  // a DB migration); instead we compute "expired" on the fly from the
+  // inviterTicket's deletedAt.
+  const [inviterTicket] = await db.select().from(ticketsTable)
+    .where(eq(ticketsTable.id, invite.inviterTicketId))
+    .limit(1);
+
+  const isExpired =
+    invite.status === "pending" && (!inviterTicket || inviterTicket.deletedAt !== null);
+
   // Get taken seats for this party group
   const partyTickets = await db.select({
     seatNumber: ticketsTable.partySeatNumber,
@@ -62,11 +75,6 @@ router.get("/invite/:inviteId", async (req, res) => {
     }
   }
 
-  // Get inviter ticket info
-  const [inviterTicket] = await db.select().from(ticketsTable)
-    .where(eq(ticketsTable.id, invite.inviterTicketId))
-    .limit(1);
-
   const [inviterUser] = await db.select().from(usersTable)
     .where(eq(usersTable.id, invite.inviterUserId))
     .limit(1);
@@ -75,7 +83,8 @@ router.get("/invite/:inviteId", async (req, res) => {
     invite: {
       id: invite.id,
       partyGroupId: invite.partyGroupId,
-      status: invite.status,
+      // Synthesise "expired" client-side when the original card is gone.
+      status: isExpired ? "expired" : invite.status,
       assignedSeat: invite.assignedSeat,
     },
     movie: inviterTicket ? {
@@ -135,13 +144,16 @@ router.post("/invite/:inviteId/accept", async (req, res) => {
     return;
   }
 
-  // Get the inviter's ticket to copy movie details
+  // Get the inviter's ticket to copy movie details + card design.
+  // If the original poster has soft-deleted their ticket BEFORE this invitee
+  // accepted, the party request is considered expired — the friend cannot
+  // accept any more, exactly as if the invite never happened.
   const [inviterTicket] = await db.select().from(ticketsTable)
     .where(and(eq(ticketsTable.id, invite.inviterTicketId), isNull(ticketsTable.deletedAt)))
     .limit(1);
 
   if (!inviterTicket) {
-    res.status(404).json({ error: "not_found", message: "การ์ดต้นฉบับถูกลบไปแล้ว" });
+    res.status(410).json({ error: "expired", message: "การ์ดต้นฉบับถูกลบไปแล้ว คำเชิญหมดอายุ" });
     return;
   }
 
@@ -190,6 +202,9 @@ router.post("/invite/:inviteId/accept", async (req, res) => {
   const cleanNote = memoryNote ? sanitize(String(memoryNote).trim()) : null;
   const cleanLocation = location ? sanitize(String(location).trim()) : null;
 
+  // Mirror the original poster's card 1-for-1 — same look, same metadata.
+  // The friend only personalises: their seat, their rating, and (optionally)
+  // their own memoryNote / watchedAt / location / privacy toggles.
   await db.insert(ticketsTable).values({
     id: newTicketId,
     userId: currentUserId,
@@ -199,6 +214,7 @@ router.post("/invite/:inviteId/accept", async (req, res) => {
     posterUrl: inviterTicket.posterUrl,
     genre: inviterTicket.genre,
     template: inviterTicket.template,
+    // Personal fields — friend enters their own values
     memoryNote: cleanNote,
     watchedAt: watchedAt || null,
     location: cleanLocation,
@@ -207,14 +223,29 @@ router.post("/invite/:inviteId/accept", async (req, res) => {
     hideLocation: hideLocation ?? false,
     rating: ratingNum != null ? String(ratingNum) : null,
     ratingType: resolvedRatingType,
+    isSpoiler: inviterTicket.isSpoiler,
+    // Rank / popularity copied from origin
     rankTier: inviterTicket.rankTier,
     currentRankTier: inviterTicket.currentRankTier,
     popularityScore: inviterTicket.popularityScore,
     tmdbSnapshot: inviterTicket.tmdbSnapshot,
+    // Party identity
     partyGroupId,
     partySeatNumber: seatNum,
     partySize,
     specialColor: null,
+    // Visual / card-design fields — copied so the friend's card looks identical
+    captionAlign: inviterTicket.captionAlign,
+    cardTheme: inviterTicket.cardTheme,
+    cardBackdropUrl: inviterTicket.cardBackdropUrl,
+    cardBackdropOffsetX: inviterTicket.cardBackdropOffsetX,
+    cardRuntime: inviterTicket.cardRuntime,
+    cardDirector: inviterTicket.cardDirector,
+    cardProducer: inviterTicket.cardProducer,
+    cardActors: inviterTicket.cardActors,
+    clipUrl: inviterTicket.clipUrl,
+    episodeLabel: inviterTicket.episodeLabel,
+    cardData: inviterTicket.cardData,
   });
 
   // Update the invite record

@@ -57,10 +57,16 @@ export default function AuthSignup() {
         setError(localized ?? tr("เกิดข้อผิดพลาด", "Something went wrong"));
         return;
       }
-      // Wait for /api/auth/me to confirm the new session BEFORE navigating —
-      // otherwise onboarding renders in guest mode and bounces back to /login.
-      await refreshUser();
-      navigate("/onboarding");
+      // 1) Confirm the new session and seed localStorage cache.
+      const fresh = await refreshUser();
+      if (!fresh) {
+        setError(tr("สมัครสมาชิกไม่สำเร็จ กรุณาลองใหม่", "Sign-up failed, please try again"));
+        return;
+      }
+      // 2) Hard-reload — guarantees the app boots in logged-in mode regardless
+      //    of any React state race conditions (see auth-login.tsx for details).
+      window.location.replace(`${BASE}onboarding`);
+      return;
     } catch {
       setError(tr("Server กำลังตื่นนอน กรุณารอสักครู่แล้วลองใหม่", "Server is waking up, please try again in a moment"));
     } finally {

@@ -1,7 +1,13 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { notificationsTable, usersTable, followRequestsTable, ticketsTable, partyInvitesTable } from "@workspace/db/schema";
-import { eq, desc, count, and, inArray } from "drizzle-orm";
+import { eq, desc, count, and, inArray, isNotNull } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
+
+// Self-join alias: lets us read the inviter's ORIGINAL ticket via
+// partyInvitesTable.inviterTicketId, separately from notificationsTable.ticketId
+// (which for an "accepted" notification points to the friend's new card).
+const inviterTicketAlias = alias(ticketsTable, "inviter_ticket");
 
 const router: IRouter = Router();
 
@@ -18,11 +24,16 @@ router.get("/", async (req, res) => {
       fromUser: usersTable,
       ticketPosterUrl: ticketsTable.posterUrl,
       partyInviteStatus: partyInvitesTable.status,
+      // True when the original poster's ticket has been soft-deleted.
+      // We surface this so the inbox can render an "expired" pill instead of
+      // an Accept button on a request that can no longer be honoured.
+      inviterTicketDeleted: isNotNull(inviterTicketAlias.deletedAt),
     })
     .from(notificationsTable)
     .innerJoin(usersTable, eq(notificationsTable.fromUserId, usersTable.id))
     .leftJoin(ticketsTable, eq(notificationsTable.ticketId, ticketsTable.id))
     .leftJoin(partyInvitesTable, eq(notificationsTable.partyInviteId, partyInvitesTable.id))
+    .leftJoin(inviterTicketAlias, eq(partyInvitesTable.inviterTicketId, inviterTicketAlias.id))
     .where(eq(notificationsTable.userId, currentUserId))
     .orderBy(desc(notificationsTable.createdAt))
     .limit(limit + 1);
@@ -69,7 +80,12 @@ router.get("/", async (req, res) => {
       ticketPosterUrl: n.ticketPosterUrl ?? null,
       chainId: n.notif.chainId ?? null,
       partyInviteId: n.notif.partyInviteId,
-      partyInviteStatus: n.partyInviteStatus ?? null,
+      // Synthesise "expired" when the original card was soft-deleted before
+      // this invitee accepted.  Mirrors the GET /party/invite/:id response.
+      partyInviteStatus:
+        n.partyInviteStatus === "pending" && n.inviterTicketDeleted
+          ? "expired"
+          : (n.partyInviteStatus ?? null),
       partyGroupId: n.notif.partyGroupId,
       followRequestId: (n.notif.type === "follow_request" && latestFollowReqNotifByUser[n.notif.fromUserId] === n.notif.id)
         ? (followRequestMap[n.notif.fromUserId] ?? null)

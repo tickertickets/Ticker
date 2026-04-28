@@ -140,6 +140,10 @@ export interface Strings {
   errGeneric: string;
   errChooseSeat: string;
   errGiveRating: string;
+  // ── Party invite — expired (origin card deleted before friend accepted) ─
+  expiredLabel: string;
+  partyExpiredTitle: string;
+  partyExpiredDesc: string;
   // ── Home ─────────────────────────────────────────────────────────
   noTicketsFeed: string;
   noUserFound: string;
@@ -693,6 +697,9 @@ const TH: Strings = {
   errGeneric: "เกิดข้อผิดพลาด กรุณาลองใหม่",
   errChooseSeat: "กรุณาเลือกที่นั่ง",
   errGiveRating: "กรุณาให้คะแนน",
+  expiredLabel: "หมดอายุ",
+  partyExpiredTitle: "คำเชิญหมดอายุ",
+  partyExpiredDesc: "เจ้าของโพสต์ปาร์ตี้ลบการ์ดต้นฉบับไปแล้ว คำเชิญนี้จึงหมดอายุและไม่สามารถตอบรับได้",
   // Home
   noTicketsFeed: "ยังไม่มีโพสต์ Tickets",
   noUserFound: "ไม่พบผู้ใช้ที่ค้นหา",
@@ -1214,6 +1221,9 @@ const EN: Strings = {
   errGeneric: "Something went wrong, please try again",
   errChooseSeat: "Please choose a seat",
   errGiveRating: "Please give a rating",
+  expiredLabel: "Expired",
+  partyExpiredTitle: "Invite expired",
+  partyExpiredDesc: "The original poster deleted the party card, so this invite has expired and can no longer be accepted.",
   // Home
   noTicketsFeed: "No Tickets posted yet",
   noUserFound: "No users found",

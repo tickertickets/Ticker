@@ -74,11 +74,27 @@ export default function AuthLogin() {
         setError(localized ?? tr("อีเมลหรือรหัสผ่านไม่ถูกต้อง", "Incorrect email or password"));
         return;
       }
-      // Wait until /api/auth/me confirms the new session BEFORE navigating —
-      // otherwise the home page renders in guest mode (no feed, no chains)
-      // until the next auth-context tick.
+      // 1) Confirm the new session and seed localStorage cache.
+      //    refreshUser() fetches /api/auth/me, writes the user to localStorage,
+      //    and resolves with the fresh user (or null if the cookie was somehow
+      //    not accepted by the API).
       const fresh = await refreshUser();
-      navigate(fresh && !fresh.isOnboarded ? "/onboarding" : "/");
+      if (!fresh) {
+        setError(tr("เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่", "Sign-in failed, please try again"));
+        return;
+      }
+      // 2) Hard-reload the app instead of doing a soft navigate.  This is the
+      //    only 100%-reliable way to guarantee the home page renders in the
+      //    logged-in tree on every browser/device — soft-navigate has a known
+      //    React-state race where AuthProvider's useGetMe observer can keep
+      //    its previous "401 / no-user" state for one extra render, leaving
+      //    the home in guest mode until the user manually refreshes.
+      //    The login response cookie is already set; on the next page load
+      //    AuthProvider boots with cachedUser = fresh (from localStorage
+      //    seeded above), so there is no guest-flash.
+      const target = fresh.isOnboarded ? `${BASE}` : `${BASE}onboarding`;
+      window.location.replace(target);
+      return;
     } catch {
       setError(tr("Server กำลังตื่นนอน กรุณารอสักครู่แล้วลองใหม่", "Server is waking up, please try again in a moment"));
     } finally {

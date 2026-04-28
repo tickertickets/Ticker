@@ -62,6 +62,7 @@ function PartyAcceptModal({
     onError: (err: Record<string, string>) => {
       if (err.error === "seat_taken") setError(t.errSeatTaken);
       else if (err.error === "duplicate_movie") setError(t.errDuplicateMovie);
+      else if (err.error === "expired") setError(t.partyExpiredDesc);
       else setError(t.errGeneric);
     },
   });
@@ -85,6 +86,7 @@ function PartyAcceptModal({
   };
 
   const alreadyAccepted = info?.invite.status === "accepted";
+  const isExpired       = info?.invite.status === "expired";
 
   const modal = (
     <div className="fixed inset-0 z-[9999] flex items-end justify-center" onClick={onClose}>
@@ -98,7 +100,23 @@ function PartyAcceptModal({
           <div className="w-10 h-1 rounded-full bg-border" />
         </div>
 
-        {!isLoading && (
+        {!isLoading && isExpired && (
+          <div className="px-5 pb-10 pt-4 text-center space-y-3">
+            <div className="w-14 h-14 mx-auto rounded-2xl bg-secondary flex items-center justify-center">
+              <X className="w-7 h-7 text-muted-foreground" />
+            </div>
+            <p className="font-display font-black text-lg text-foreground">{t.partyExpiredTitle}</p>
+            <p className="text-sm text-muted-foreground leading-relaxed">{t.partyExpiredDesc}</p>
+            <button
+              onClick={onClose}
+              className="mt-4 w-full h-12 rounded-2xl font-bold text-sm bg-foreground text-background"
+            >
+              {t.closeBtn}
+            </button>
+          </div>
+        )}
+
+        {!isLoading && !isExpired && (
           <div className="px-5 space-y-5" style={{ paddingBottom: "3rem" }}>
             <div className="flex items-center gap-3">
               {info?.movie?.posterUrl && (
@@ -492,6 +510,8 @@ export default function Notifications() {
                         <p className="text-xs text-muted-foreground">{t.alreadyAccepted}</p>
                       ) : partyInviteStatus === "declined" ? (
                         <p className="text-xs text-muted-foreground">{t.declinedLabel}</p>
+                      ) : partyInviteStatus === "expired" ? (
+                        <p className="text-xs text-muted-foreground">{t.expiredLabel}</p>
                       ) : (
                         <button
                           onClick={e => { e.stopPropagation(); setActiveInviteId(partyInviteId); }}
