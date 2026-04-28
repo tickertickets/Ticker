@@ -279,13 +279,52 @@ router.get("/", async (req, res) => {
       )
       .limit(limit + 1);
   } else {
-    // Explore: filter both chain-level privacy AND owner account privacy
-    const rows = await db.select({ chain: chainsTable }).from(chainsTable)
+    // Explore: filter both chain-level privacy AND owner account privacy,
+    // then rank with hotScore so popular chains surface above stale ones.
+    const POOL = limit * 4;
+    const rawRows = await db.select({ chain: chainsTable }).from(chainsTable)
       .innerJoin(usersTable, and(eq(chainsTable.userId, usersTable.id), eq(usersTable.isPrivate, false)))
       .where(and(isNull(chainsTable.deletedAt), eq(chainsTable.isPrivate, false)))
-      .orderBy(desc(chainsTable.updatedAt))
-      .limit(limit + 1);
-    chains = rows.map(r => r.chain);
+      .orderBy(desc(sql`GREATEST(
+        ${chainsTable.createdAt},
+        COALESCE((SELECT MAX(created_at) FROM chain_likes WHERE chain_id = ${chainsTable.id}), ${chainsTable.createdAt}),
+        COALESCE((SELECT MAX(created_at) FROM chain_comments WHERE chain_id = ${chainsTable.id}), ${chainsTable.createdAt}),
+        COALESCE((SELECT MAX(started_at) FROM chain_runs WHERE chain_id = ${chainsTable.id}), ${chainsTable.createdAt})
+      )`))
+      .limit(POOL);
+    const poolChains = rawRows.map(r => r.chain);
+
+    if (poolChains.length > 0) {
+      const poolIds = poolChains.map(c => c.id);
+      const [likeRows, commentRows, runRows] = await Promise.all([
+        db.select({ chainId: chainLikesTable.chainId, n: count(), lastAt: max(chainLikesTable.createdAt) })
+          .from(chainLikesTable).where(inArray(chainLikesTable.chainId, poolIds)).groupBy(chainLikesTable.chainId),
+        db.select({ chainId: chainCommentsTable.chainId, n: count(), lastAt: max(chainCommentsTable.createdAt) })
+          .from(chainCommentsTable).where(inArray(chainCommentsTable.chainId, poolIds)).groupBy(chainCommentsTable.chainId),
+        db.select({ chainId: chainRunsTable.chainId, n: count(), lastAt: max(chainRunsTable.startedAt) })
+          .from(chainRunsTable).where(inArray(chainRunsTable.chainId, poolIds)).groupBy(chainRunsTable.chainId),
+      ]);
+      const likeMap    = new Map(likeRows.map(r => [r.chainId, Number(r.n)]));
+      const commentMap = new Map(commentRows.map(r => [r.chainId, Number(r.n)]));
+      const runMap     = new Map(runRows.map(r => [r.chainId, Number(r.n)]));
+      const likeLastAt = new Map(likeRows.map(r => [r.chainId, r.lastAt ? new Date(r.lastAt) : null]));
+      const cmtLastAt  = new Map(commentRows.map(r => [r.chainId, r.lastAt ? new Date(r.lastAt) : null]));
+      const runLastAt  = new Map(runRows.map(r => [r.chainId, r.lastAt ? new Date(r.lastAt) : null]));
+
+      const scored = poolChains.map(c => {
+        const lastActivityAt = [c.createdAt, likeLastAt.get(c.id), cmtLastAt.get(c.id), runLastAt.get(c.id)]
+          .filter((d): d is Date => d instanceof Date)
+          .reduce((a, b) => (a > b ? a : b), c.createdAt);
+        return {
+          chain: c,
+          score: hotScore({ likes: likeMap.get(c.id) ?? 0, comments: commentMap.get(c.id) ?? 0, bonus: runMap.get(c.id) ?? c.chainCount, lastActivityAt }),
+        };
+      });
+      scored.sort((a, b) => b.score - a.score);
+      chains = scored.slice(0, limit + 1).map(s => s.chain);
+    } else {
+      chains = [];
+    }
   }
 
   const hasMore = chains.length > limit;
@@ -452,7 +491,12 @@ router.get("/hot", async (req, res) => {
   const rawRows = await db.select({ chain: chainsTable }).from(chainsTable)
     .innerJoin(usersTable, and(eq(chainsTable.userId, usersTable.id), eq(usersTable.isPrivate, false)))
     .where(and(isNull(chainsTable.deletedAt), eq(chainsTable.isPrivate, false)))
-    .orderBy(desc(chainsTable.createdAt))
+    .orderBy(desc(sql`GREATEST(
+      ${chainsTable.createdAt},
+      COALESCE((SELECT MAX(created_at) FROM chain_likes WHERE chain_id = ${chainsTable.id}), ${chainsTable.createdAt}),
+      COALESCE((SELECT MAX(created_at) FROM chain_comments WHERE chain_id = ${chainsTable.id}), ${chainsTable.createdAt}),
+      COALESCE((SELECT MAX(started_at) FROM chain_runs WHERE chain_id = ${chainsTable.id}), ${chainsTable.createdAt})
+    )`))
     .limit(POOL);
   const rawChains = rawRows.map(r => r.chain);
 

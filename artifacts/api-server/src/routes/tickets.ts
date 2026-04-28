@@ -27,7 +27,6 @@ import {
   followsTable,
   likesTable,
   commentsTable,
-  ticketReactionsTable,
 } from "@workspace/db/schema";
 import {
   eq,
@@ -41,6 +40,7 @@ import {
   isNotNull,
   ne,
   or,
+  sql,
 } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { sanitize } from "../lib/sanitize";
@@ -110,55 +110,64 @@ router.get(
 
     type RawTicket = typeof ticketsTable.$inferSelect;
 
+    // ── Fresh-post boost (industry-standard "velocity" signal) ────────────────
+    // Posts < 30 min old from the current user (all modes) or from followed
+    // users (home/following mode) receive a decaying multiplier: 15× at t=0,
+    // dropping linearly to 1× at t=1 (30 min). After expiry they compete
+    // purely on hotScore × affinity — matching Instagram/Reddit behaviour.
+    const FRESH_WINDOW_MS = 30 * 60 * 1000;
+    const makeFreshBoost = (followedSet?: Set<string>) =>
+      (userId: string, createdAt: Date): number => {
+        const isOwnPost = currentUserId && userId === currentUserId;
+        const isFollowedPost = followedSet ? followedSet.has(userId) : false;
+        if (!isOwnPost && !isFollowedPost) return 1.0;
+        const ageMs = Date.now() - createdAt.getTime();
+        if (ageMs >= FRESH_WINDOW_MS) return 1.0;
+        const t = ageMs / FRESH_WINDOW_MS;
+        return 1.0 + 14.0 * (1 - t); // 15× at t=0, 1× at t=1
+      };
+
     // ── Shared helper: bulk-score a list of tickets ────────────────────────────
+    // Uses likesTable (heart likes) — the single engagement currency.
+    // Consistent with the unified feed scoring in /api/feed.
     const bulkScore = async (
       rows: RawTicket[],
       affinityFn?: (userId: string) => number,
+      freshBoostFn?: (userId: string, createdAt: Date) => number,
     ): Promise<Array<{ t: RawTicket; score: number }>> => {
       if (rows.length === 0) return [];
       const ids = rows.map((t) => t.id);
-      const REACTION_PTS: Record<string, number> = { heart: 1, fire: 2, lightning: 3, sparkle: 4, popcorn: 5 };
-      const [reactionRows, commentRows] = await Promise.all([
+      const [likeRows, commentRows] = await Promise.all([
         db
-          .select({
-            ticketId: ticketReactionsTable.ticketId,
-            reactionType: ticketReactionsTable.reactionType,
-            cnt: ticketReactionsTable.count,
-            lastAt: ticketReactionsTable.updatedAt,
-          })
-          .from(ticketReactionsTable)
-          .where(inArray(ticketReactionsTable.ticketId, ids)),
+          .select({ ticketId: likesTable.ticketId, n: count(), lastAt: max(likesTable.createdAt) })
+          .from(likesTable)
+          .where(inArray(likesTable.ticketId, ids))
+          .groupBy(likesTable.ticketId),
         db
           .select({ ticketId: commentsTable.ticketId, n: count(), lastAt: max(commentsTable.createdAt) })
           .from(commentsTable)
           .where(inArray(commentsTable.ticketId, ids))
           .groupBy(commentsTable.ticketId),
       ]);
-      const reactionScoreMap = new Map<string, number>();
-      const reactionLastAtMap = new Map<string, Date | null>();
-      for (const r of reactionRows) {
-        const pts = r.cnt * (REACTION_PTS[r.reactionType] ?? 1);
-        reactionScoreMap.set(r.ticketId, (reactionScoreMap.get(r.ticketId) ?? 0) + pts);
-        const d = r.lastAt ? new Date(r.lastAt) : null;
-        const cur = reactionLastAtMap.get(r.ticketId) ?? null;
-        if (d && (!cur || d > cur)) reactionLastAtMap.set(r.ticketId, d);
-      }
-      const commentMap   = new Map(commentRows.map((r) => [r.ticketId, Number(r.n)]));
-      const cmtLastAt    = new Map(commentRows.map((r) => [r.ticketId, r.lastAt ? new Date(r.lastAt) : null]));
+      const likeMap    = new Map(likeRows.map((r) => [r.ticketId, Number(r.n)]));
+      const likeLastAt = new Map(likeRows.map((r) => [r.ticketId, r.lastAt ? new Date(r.lastAt) : null]));
+      const commentMap = new Map(commentRows.map((r) => [r.ticketId, Number(r.n)]));
+      const cmtLastAt  = new Map(commentRows.map((r) => [r.ticketId, r.lastAt ? new Date(r.lastAt) : null]));
 
       return rows.map((t) => {
-        const la = reactionLastAtMap.get(t.id) ?? null;
-        const ca = cmtLastAt.get(t.id);
+        const la = likeLastAt.get(t.id) ?? null;
+        const ca = cmtLastAt.get(t.id) ?? null;
         const lastActivityAt = [t.createdAt, la, ca]
           .filter((d): d is Date => d instanceof Date)
           .reduce((a, b) => (a > b ? a : b), t.createdAt);
         const base = hotScore({
-          likes: reactionScoreMap.get(t.id) ?? 0,
+          likes: likeMap.get(t.id) ?? 0,
           comments: commentMap.get(t.id) ?? 0,
           lastActivityAt,
         });
         const affinity = affinityFn ? affinityFn(t.userId) : 1.0;
-        return { t, score: base * affinity };
+        const boost    = freshBoostFn ? freshBoostFn(t.userId, t.createdAt) : 1.0;
+        return { t, score: base * affinity * boost };
       });
     };
 
@@ -202,7 +211,11 @@ router.get(
         .select()
         .from(ticketsTable)
         .where(tierAWhere)
-        .orderBy(desc(ticketsTable.createdAt))
+        .orderBy(desc(sql`GREATEST(
+          ${ticketsTable.createdAt},
+          COALESCE((SELECT MAX(created_at) FROM likes WHERE ticket_id = ${ticketsTable.id}), ${ticketsTable.createdAt}),
+          COALESCE((SELECT MAX(created_at) FROM comments WHERE ticket_id = ${ticketsTable.id}), ${ticketsTable.createdAt})
+        )`))
         .limit(POOL);
 
       // exclude other users' private tickets (keep own private tickets)
@@ -229,15 +242,20 @@ router.get(
                 ? notInArray(ticketsTable.id, tierA.map((t) => t.id))
                 : undefined,
             ))
-            .orderBy(desc(ticketsTable.createdAt))
+            .orderBy(desc(sql`GREATEST(
+              ${ticketsTable.createdAt},
+              COALESCE((SELECT MAX(created_at) FROM likes WHERE ticket_id = ${ticketsTable.id}), ${ticketsTable.createdAt}),
+              COALESCE((SELECT MAX(created_at) FROM comments WHERE ticket_id = ${ticketsTable.id}), ${ticketsTable.createdAt})
+            )`))
             .limit(POOL)
         : [];
 
       // 3. Score both tiers and merge
       const affinityFn = (uid: string) => followedSet.has(uid) ? AFFINITY_FOLLOWED : AFFINITY_DISCOVERY;
+      const freshBoostFn = makeFreshBoost(followedSet);
       const [scoredA, scoredB] = await Promise.all([
-        bulkScore(tierA, affinityFn),
-        bulkScore(tierBRaw, affinityFn),
+        bulkScore(tierA, affinityFn, freshBoostFn),
+        bulkScore(tierBRaw, affinityFn, freshBoostFn),
       ]);
 
       const merged = [...scoredA, ...scoredB];
@@ -271,12 +289,18 @@ router.get(
             typeFilter,
             // own posts shown regardless of privacy; others' only if non-private
           ))
-          .orderBy(desc(ticketsTable.createdAt))
+          .orderBy(desc(sql`GREATEST(
+            ${ticketsTable.createdAt},
+            COALESCE((SELECT MAX(created_at) FROM likes WHERE ticket_id = ${ticketsTable.id}), ${ticketsTable.createdAt}),
+            COALESCE((SELECT MAX(created_at) FROM comments WHERE ticket_id = ${ticketsTable.id}), ${ticketsTable.createdAt})
+          )`))
           .limit(POOL);
 
         // filter: keep own private posts, exclude others' private tickets
         const filtered = raw.filter((t) => t.userId === currentUserId || !t.isPrivate);
-        const scored = await bulkScore(filtered);
+        const followedSet = new Set(feedUserIds);
+        const freshBoostFn = makeFreshBoost(followedSet);
+        const scored = await bulkScore(filtered, undefined, freshBoostFn);
         scored.sort((a, b) => b.score - a.score);
         tickets = scored.slice(0, limit + 1).map((s) => s.t);
       }
@@ -306,11 +330,17 @@ router.get(
               typeFilter,
               inArray(ticketsTable.userId, publicUserIds),
             ))
-            .orderBy(desc(ticketsTable.createdAt))
+            .orderBy(desc(sql`GREATEST(
+              ${ticketsTable.createdAt},
+              COALESCE((SELECT MAX(created_at) FROM likes WHERE ticket_id = ${ticketsTable.id}), ${ticketsTable.createdAt}),
+              COALESCE((SELECT MAX(created_at) FROM comments WHERE ticket_id = ${ticketsTable.id}), ${ticketsTable.createdAt})
+            )`))
             .limit(DISC_POOL)
         : [];
 
-      const scored = await bulkScore(discRaw);
+      // In discovery mode only own posts get freshBoost (no social graph context)
+      const freshBoostFn = makeFreshBoost();
+      const scored = await bulkScore(discRaw, undefined, freshBoostFn);
       scored.sort((a, b) => b.score - a.score);
       tickets = scored.slice(0, limit + 1).map((s) => s.t);
     }

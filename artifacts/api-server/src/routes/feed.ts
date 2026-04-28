@@ -11,7 +11,7 @@ import {
   likesTable,
   commentsTable,
 } from "@workspace/db/schema";
-import { eq, and, desc, isNull, count, max, inArray, ne, or } from "drizzle-orm";
+import { eq, and, desc, isNull, count, max, inArray, ne, or, sql } from "drizzle-orm";
 import { hotScore } from "../lib/hot-score";
 import { buildChain } from "./chains";
 import { buildTicketBatch } from "../services/tickets.service";
@@ -102,7 +102,11 @@ router.get("/", async (req, res) => {
             inArray(ticketsTable.userId, feedUserIds),
           ),
         )
-        .orderBy(desc(ticketsTable.createdAt))
+        .orderBy(desc(sql`GREATEST(
+          ${ticketsTable.createdAt},
+          COALESCE((SELECT MAX(created_at) FROM likes WHERE ticket_id = ${ticketsTable.id}), ${ticketsTable.createdAt}),
+          COALESCE((SELECT MAX(created_at) FROM comments WHERE ticket_id = ${ticketsTable.id}), ${ticketsTable.createdAt})
+        )`))
         .limit(POOL);
       // Keep own posts; exclude private posts and posts from private accounts
       ticketPool = raw.filter(
@@ -128,7 +132,11 @@ router.get("/", async (req, res) => {
             inArray(ticketsTable.userId, publicUserIds),
           ),
         )
-        .orderBy(desc(ticketsTable.createdAt))
+        .orderBy(desc(sql`GREATEST(
+          ${ticketsTable.createdAt},
+          COALESCE((SELECT MAX(created_at) FROM likes WHERE ticket_id = ${ticketsTable.id}), ${ticketsTable.createdAt}),
+          COALESCE((SELECT MAX(created_at) FROM comments WHERE ticket_id = ${ticketsTable.id}), ${ticketsTable.createdAt})
+        )`))
         .limit(POOL);
     }
   }
@@ -148,7 +156,12 @@ router.get("/", async (req, res) => {
             inArray(chainsTable.userId, feedUserIds),
           ),
         )
-        .orderBy(desc(chainsTable.createdAt))
+        .orderBy(desc(sql`GREATEST(
+          ${chainsTable.createdAt},
+          COALESCE((SELECT MAX(created_at) FROM chain_likes WHERE chain_id = ${chainsTable.id}), ${chainsTable.createdAt}),
+          COALESCE((SELECT MAX(created_at) FROM chain_comments WHERE chain_id = ${chainsTable.id}), ${chainsTable.createdAt}),
+          COALESCE((SELECT MAX(started_at) FROM chain_runs WHERE chain_id = ${chainsTable.id}), ${chainsTable.createdAt})
+        )`))
         .limit(POOL);
       chainPool = raw.filter(
         (c) => c.userId === currentUserId || (!c.isPrivate && !privateUserIds.has(c.userId)),
@@ -161,7 +174,12 @@ router.get("/", async (req, res) => {
       .from(chainsTable)
       .innerJoin(usersTable, and(eq(usersTable.id, chainsTable.userId), eq(usersTable.isPrivate, false)))
       .where(and(isNull(chainsTable.deletedAt), eq(chainsTable.isPrivate, false)))
-      .orderBy(desc(chainsTable.createdAt))
+      .orderBy(desc(sql`GREATEST(
+        ${chainsTable.createdAt},
+        COALESCE((SELECT MAX(created_at) FROM chain_likes WHERE chain_id = ${chainsTable.id}), ${chainsTable.createdAt}),
+        COALESCE((SELECT MAX(created_at) FROM chain_comments WHERE chain_id = ${chainsTable.id}), ${chainsTable.createdAt}),
+        COALESCE((SELECT MAX(started_at) FROM chain_runs WHERE chain_id = ${chainsTable.id}), ${chainsTable.createdAt})
+      )`))
       .limit(POOL)
       .then(rows => rows.map(r => r.chain));
   }
