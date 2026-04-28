@@ -92,6 +92,15 @@ router.get("/invite/:inviteId", async (req, res) => {
       movieYear: inviterTicket.movieYear,
       posterUrl: inviterTicket.posterUrl,
       partySize: inviterTicket.partySize,
+      // Source card visual fields — so the receiver's preview can match
+      // the inviter's chosen card style (theme + backdrop). We DO NOT expose
+      // rating / caption / memoryNote / username here: the receiver fills
+      // their own, and including them in the preview would be misleading.
+      cardTheme: inviterTicket.cardTheme,
+      cardBackdropUrl: inviterTicket.cardBackdropUrl,
+      cardBackdropOffsetX: inviterTicket.cardBackdropOffsetX,
+      genre: inviterTicket.genre,
+      ratingType: inviterTicket.ratingType,
     } : null,
     inviter: inviterUser ? {
       id: inviterUser.id,

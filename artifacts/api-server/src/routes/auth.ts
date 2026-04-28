@@ -383,7 +383,12 @@ router.get("/google", (req, res) => {
   const state = crypto.randomUUID();
 
   req.session.oauthState = state;
-  const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${scope}&state=${state}`;
+  // `prompt=select_account` forces Google to ALWAYS show the account chooser,
+  // even when the browser is already signed into a single Google account.
+  // Without it, every browser signed into the same Google would silently
+  // reuse that mapping → on a shared machine, opening the site in a new
+  // browser would auto-pick the same Ticker user, defeating multi-account.
+  const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${scope}&state=${state}&prompt=select_account&access_type=online`;
   res.redirect(url);
 });
 

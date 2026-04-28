@@ -180,6 +180,15 @@ export interface Strings {
   noCommentsYet: string;
   beFirstToComment: string;
   addCommentPlaceholder: string;
+  // Used by ChainsSection share & comments — kept here next to the other
+  // comments/social keys so future translators see the cluster together.
+  sendToFriend: string;
+  searchShortPlaceholder: string;
+  usersLabel: string;
+  recentChatsLabel: string;
+  userLabel: string;
+  noUsersFoundShort: string;
+  relativeTimeShort: (diffMs: number) => string;
   deleteCardTitle: string;
   deleteCardDesc: string;
   deleteCardBtn: string;
@@ -752,6 +761,21 @@ const TH: Strings = {
   noCommentsYet: "ยังไม่มีความคิดเห็น",
   beFirstToComment: "เป็นคนแรกที่แสดงความคิดเห็น",
   addCommentPlaceholder: "เพิ่มความคิดเห็น...",
+  sendToFriend: "ส่งให้เพื่อน",
+  searchShortPlaceholder: "ค้นหา...",
+  usersLabel: "ผู้ใช้",
+  recentChatsLabel: "แชทล่าสุด",
+  userLabel: "ผู้ใช้",
+  noUsersFoundShort: "ไม่พบผู้ใช้",
+  relativeTimeShort: (diffMs) => {
+    const mins  = Math.floor(diffMs / 60000);
+    const hours = Math.floor(diffMs / 3600000);
+    const days  = Math.floor(diffMs / 86400000);
+    if (mins < 1) return "เมื่อกี้";
+    if (mins < 60) return `${mins} น.`;
+    if (hours < 24) return `${hours} ชม.`;
+    return `${days} ว.`;
+  },
   deleteCardTitle: "ลบการ์ดนี้",
   deleteCardDesc: "การ์ดนี้จะถูกลบถาวรและไม่สามารถกู้คืนได้",
   deleteCardBtn: "ลบการ์ด",
@@ -1276,6 +1300,21 @@ const EN: Strings = {
   noCommentsYet: "No comments yet",
   beFirstToComment: "Be the first to comment",
   addCommentPlaceholder: "Add a comment...",
+  sendToFriend: "Send to a friend",
+  searchShortPlaceholder: "Search...",
+  usersLabel: "Users",
+  recentChatsLabel: "Recent chats",
+  userLabel: "User",
+  noUsersFoundShort: "No users found",
+  relativeTimeShort: (diffMs) => {
+    const mins  = Math.floor(diffMs / 60000);
+    const hours = Math.floor(diffMs / 3600000);
+    const days  = Math.floor(diffMs / 86400000);
+    if (mins < 1) return "just now";
+    if (mins < 60) return `${mins}m`;
+    if (hours < 24) return `${hours}h`;
+    return `${days}d`;
+  },
   deleteCardTitle: "Delete this card",
   deleteCardDesc: "This card will be permanently deleted and cannot be recovered",
   deleteCardBtn: "Delete Card",

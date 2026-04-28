@@ -897,7 +897,7 @@ router.patch(
       .limit(1);
     if (!ticket) throw new NotFoundError("Ticket");
     if (ticket.userId !== currentUserId) throw new ForbiddenError();
-    const { caption, captionAlign, memoryNote, rating, watchedAt, location } = req.body;
+    const { caption, captionAlign, memoryNote, rating, watchedAt, location, isSpoiler } = req.body;
     await db
       .update(ticketsTable)
       .set({
@@ -907,6 +907,7 @@ router.patch(
         rating: typeof rating === "number" && rating >= 1 && rating <= 5 ? String(rating) : ticket.rating,
         watchedAt: typeof watchedAt === "string" && watchedAt ? watchedAt : watchedAt === "" ? null : ticket.watchedAt,
         location: typeof location === "string" ? location.trim() || null : ticket.location,
+        isSpoiler: typeof isSpoiler === "boolean" ? isSpoiler : ticket.isSpoiler,
       })
       .where(eq(ticketsTable.id, ticketId));
     res.json({ success: true });

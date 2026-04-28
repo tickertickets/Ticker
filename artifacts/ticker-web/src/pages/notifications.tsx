@@ -11,12 +11,28 @@ import { usePageScroll } from "@/hooks/use-page-scroll";
 import { VerifiedBadge, isVerified } from "@/components/VerifiedBadge";
 import { BadgeIcon } from "@/components/BadgeIcon";
 import { getNotifText } from "@/lib/notif-text";
+import { PosterCardFront, ClassicCardFront, getRatingCardStyle } from "@/components/CardFaceComponents";
+import type { Ticket } from "@workspace/api-client-react";
 
 // ── Party invite modal ──────────────────────────────────────────────────────
 
 interface PartyInviteInfo {
   invite: { id: string; partyGroupId: string; status: string; assignedSeat?: number | null };
-  movie: { movieTitle: string; movieYear?: string | null; posterUrl?: string | null; partySize?: number | null } | null;
+  movie: {
+    movieTitle: string;
+    movieYear?: string | null;
+    posterUrl?: string | null;
+    partySize?: number | null;
+    // Source card visual fields (mirrors the inviter's chosen style).
+    // The receiver's preview should reflect these so they know what theme
+    // their ticket will use, but rating / caption / @user are intentionally
+    // NOT included — those are filled in by the receiver.
+    cardTheme?: string | null;
+    cardBackdropUrl?: string | null;
+    cardBackdropOffsetX?: number | null;
+    genre?: string | null;
+    ratingType?: string | null;
+  } | null;
   inviter: { id: string; username: string; displayName?: string | null; avatarUrl?: string | null } | null;
   takenSeats: number[];
 }
@@ -118,15 +134,84 @@ function PartyAcceptModal({
 
         {!isLoading && !isExpired && (
           <div className="px-5 space-y-5" style={{ paddingBottom: "3rem" }}>
-            <div className="flex items-center gap-3">
-              {info?.movie?.posterUrl && (
-                <img src={info.movie.posterUrl} alt={info.movie.movieTitle} className="w-12 h-16 rounded-xl object-cover flex-shrink-0" />
-              )}
-              <div>
+            <div className="flex items-start gap-4">
+              {/*
+                Card preview that mirrors the inviter's chosen variant.
+                We render the real PosterCardFront / ClassicCardFront so the
+                receiver sees exactly the visual style they'll be joining.
+                A scaled wrapper is used because the card components are
+                tuned for the create-ticket SEED size (190 × 285) — scaling
+                via CSS preserves typography/proportions perfectly without
+                having to thread a "size" prop through them.
+                The synthetic ticket OMITS rating, user, caption and
+                memoryNote: those belong to the receiver and would mislead
+                if shown filled-in here.
+              */}
+              {info?.movie && (() => {
+                const previewW = 110;
+                const previewH = 165;
+                const seedW = 190;
+                const seedH = 285;
+                const scale = previewW / seedW;
+                const isPoster = info.movie.cardTheme === "poster";
+                const syntheticTicket = {
+                  id: "preview",
+                  movieTitle: info.movie.movieTitle,
+                  movieYear: info.movie.movieYear ?? null,
+                  posterUrl: info.movie.posterUrl ?? null,
+                  cardTheme: info.movie.cardTheme ?? "classic",
+                  cardBackdropUrl: info.movie.cardBackdropUrl ?? info.movie.posterUrl ?? null,
+                  cardBackdropOffsetX: info.movie.cardBackdropOffsetX ?? 50,
+                  genre: info.movie.genre ?? null,
+                  ratingType: info.movie.ratingType ?? "star",
+                  rating: null,
+                  caption: null,
+                  memoryNote: null,
+                  user: null,
+                  partySeatNumber: null,
+                  partySize: info.movie.partySize ?? null,
+                } as unknown as Ticket;
+                const rStyle = getRatingCardStyle(null, syntheticTicket.ratingType ?? "star");
+                return (
+                  <div
+                    style={{
+                      width: previewW,
+                      height: previewH,
+                      flexShrink: 0,
+                      position: "relative",
+                      overflow: "hidden",
+                      borderRadius: isPoster ? 0 : 12,
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: seedW,
+                        height: seedH,
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                        transform: `scale(${scale})`,
+                        transformOrigin: "top left",
+                      }}
+                    >
+                      {isPoster ? (
+                        <PosterCardFront
+                          ticket={syntheticTicket}
+                          imageSrc={syntheticTicket.cardBackdropUrl as string | null}
+                          borderColorHex={rStyle.borderColorHex}
+                        />
+                      ) : (
+                        <ClassicCardFront ticket={syntheticTicket} imageSrc={info.movie.posterUrl ?? null} />
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+              <div className="flex-1 min-w-0">
                 <p className="text-xs text-muted-foreground font-medium">{t.partyInviteFrom}</p>
-                <p className="font-bold text-foreground text-sm">{info?.inviter?.displayName ?? `@${info?.inviter?.username}`}</p>
-                <p className="font-display font-black text-base text-foreground leading-tight mt-0.5">{info?.movie?.movieTitle}</p>
-                <p className="text-xs text-muted-foreground">{displayYear(info?.movie?.movieYear, lang)} · {t.partySizeLabel(partySize)}</p>
+                <p className="font-bold text-foreground text-sm truncate">{info?.inviter?.displayName ?? `@${info?.inviter?.username}`}</p>
+                <p className="font-display font-black text-base text-foreground leading-tight mt-0.5 line-clamp-2">{info?.movie?.movieTitle}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{displayYear(info?.movie?.movieYear, lang)} · {t.partySizeLabel(partySize)}</p>
               </div>
             </div>
 

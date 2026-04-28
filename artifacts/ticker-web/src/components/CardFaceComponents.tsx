@@ -449,12 +449,18 @@ export function CardBackFace({ ticket }: { ticket: Ticket }) {
             width: 20,
             height: 20,
             borderRadius: "50%",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            // Center the digit using line-height = box height instead of
+            // flex/align-items. html2canvas + foreignObjectRendering can
+            // mis-align flex baselines when exporting to PNG, causing the
+            // number to drift upward in saved images. Setting lineHeight
+            // equal to the height pins the glyph to the vertical center
+            // identically in both the live DOM and the captured canvas.
+            textAlign: "center",
+            lineHeight: "20px",
             fontSize: 9,
             fontWeight: 900,
             zIndex: 10,
+            padding: 0,
             ...(specialColorCfg
               ? { background: specialColorCfg.color, color: "#000" }
               : { background: "rgba(0,0,0,0.7)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff" }),

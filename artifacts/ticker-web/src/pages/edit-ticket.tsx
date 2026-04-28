@@ -40,6 +40,7 @@ export default function EditTicket() {
   const [captionAlign, setCaptionAlign] = useState<"left" | "center" | "right">(() => (src as any)?.captionAlign ?? "left");
   const [watchDate, setWatchDate] = useState(() => (src as any)?.watchedAt ?? "");
   const [watchLocation, setWatchLocation] = useState(() => (src as any)?.location ?? "");
+  const [isSpoiler, setIsSpoiler] = useState(() => Boolean((src as any)?.isSpoiler));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [seeded, setSeeded] = useState(!!cached);
@@ -58,6 +59,7 @@ export default function EditTicket() {
     setCaptionAlign(((tk["captionAlign"] as string) ?? "left") as "left" | "center" | "right");
     setWatchDate((tk["watchedAt"] as string) ?? "");
     setWatchLocation((tk["location"] as string) ?? "");
+    setIsSpoiler(Boolean(tk["isSpoiler"]));
     setSeeded(true);
   }, [ticket, seeded]);
 
@@ -70,7 +72,7 @@ export default function EditTicket() {
         method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ caption, captionAlign, memoryNote, rating, watchedAt: watchDate || "", location: watchLocation }),
+        body: JSON.stringify({ caption, captionAlign, memoryNote, rating, watchedAt: watchDate || "", location: watchLocation, isSpoiler }),
       });
       if (!res.ok) throw new Error(t.errSaveFailed);
       queryClient.removeQueries({ queryKey: [`/api/tickets/${ticketId}`] });
@@ -241,6 +243,18 @@ export default function EditTicket() {
                 placeholder={t.locationPlaceholder} value={watchLocation} onChange={(e) => setWatchLocation(e.target.value)} />
             </div>
           </div>
+        </div>
+
+        {/* Spoiler alert toggle */}
+        <div className="flex items-center justify-between py-3 px-4 bg-secondary rounded-2xl">
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-foreground">{t.spoilerAlert}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{t.spoilerAlertDesc}</p>
+          </div>
+          <button onClick={() => setIsSpoiler(v => !v)}
+            className={cn("shrink-0 w-11 h-6 rounded-full transition-colors relative", isSpoiler ? "bg-foreground" : "bg-border")}>
+            <div className={cn("absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all", isSpoiler ? "left-5" : "left-0.5")} />
+          </button>
         </div>
 
         {error && <p className="text-sm text-red-500 text-center font-semibold">{error}</p>}

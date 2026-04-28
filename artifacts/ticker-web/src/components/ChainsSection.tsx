@@ -50,6 +50,7 @@ type ChainComment = {
 // ── Chain Comment Sheet ─────────────────────────────────────────────────────
 
 export function ChainCommentSheet({ chainId, onClose, commentCount: initialCommentCount = 1, onCommentAdded, onCommentDeleted }: { chainId: string; onClose: () => void; commentCount?: number; onCommentAdded?: () => void; onCommentDeleted?: () => void }) {
+  const { t } = useLang();
   const { user } = useAuth();
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -105,7 +106,7 @@ export function ChainCommentSheet({ chainId, onClose, commentCount: initialComme
         </div>
         <div className="flex items-center px-4 pb-3 border-b border-border flex-shrink-0">
           <p className="font-bold text-sm text-foreground flex-1">
-            ความคิดเห็น{comments.length > 0 ? ` (${comments.length})` : ""}
+            {t.commentsLabel}{comments.length > 0 ? ` (${comments.length})` : ""}
           </p>
           <button onClick={onClose} className="w-7 h-7 rounded-full bg-secondary flex items-center justify-center">
             <X className="w-3.5 h-3.5 text-muted-foreground" />
@@ -128,14 +129,10 @@ export function ChainCommentSheet({ chainId, onClose, commentCount: initialComme
               ))}
             </div>
           ) : comments.length === 0 ? (
-            <p className="text-center text-sm text-muted-foreground py-8">ยังไม่มีคอมเมนต์ — เป็นคนแรก!</p>
+            <p className="text-center text-sm text-muted-foreground py-8">{t.beFirstToComment}</p>
           ) : (
             comments.map(c => {
-              const diff  = Date.now() - new Date(c.createdAt).getTime();
-              const mins  = Math.floor(diff / 60000);
-              const hours = Math.floor(diff / 3600000);
-              const days  = Math.floor(diff / 86400000);
-              const timeStr = mins < 1 ? "เมื่อกี้" : mins < 60 ? `${mins} น.` : hours < 24 ? `${hours} ชม.` : `${days} ว.`;
+              const timeStr = t.relativeTimeShort(Date.now() - new Date(c.createdAt).getTime());
               return (
                 <div key={c.id} className="flex gap-3 px-4 py-2.5">
                   <div className="w-8 h-8 rounded-2xl bg-black flex-shrink-0 overflow-hidden flex items-center justify-center border border-white/10">
@@ -195,7 +192,7 @@ export function ChainCommentSheet({ chainId, onClose, commentCount: initialComme
               value={comment}
               onChange={e => setComment(e.target.value)}
               onKeyDown={e => e.key === "Enter" && !e.shiftKey && handleSubmit()}
-              placeholder="เพิ่มความคิดเห็น..."
+              placeholder={t.addCommentPlaceholder}
               className="flex-1 bg-secondary rounded-2xl px-3.5 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none"
             />
             <button
@@ -255,7 +252,7 @@ function ChainCommentBubble({ chainId, commentCount }: { chainId: string; commen
         className="text-xs text-foreground/70 leading-snug line-clamp-1 flex-1 transition-opacity duration-300"
         style={{ opacity: show ? 1 : 0 }}
       >
-        <span className="font-semibold text-foreground/85">{c.displayName || c.username || "ผู้ใช้"}</span>
+        <span className="font-semibold text-foreground/85">{c.displayName || c.username || ""}</span>
         {" "}{c.content}
       </p>
     </div>
@@ -320,6 +317,7 @@ type ConvParticipant = { id: string; username: string; displayName: string | nul
 type Conversation = { id: string; participants: ConvParticipant[]; unreadCount: number };
 
 export function ChainShareModal({ chain, onClose }: { chain: ChainItem; onClose: () => void }) {
+  const { t } = useLang();
   const { user } = useAuth();
   const [, navigate] = useLocation();
   const [search, setSearch] = useState("");
@@ -432,7 +430,7 @@ export function ChainShareModal({ chain, onClose }: { chain: ChainItem; onClose:
         </div>
         <div className="flex items-center gap-3 px-4 pt-2 pb-3 border-b border-border flex-shrink-0">
           <div className="flex-1">
-            <p className="font-bold text-sm text-foreground">ส่งให้เพื่อน</p>
+            <p className="font-bold text-sm text-foreground">{t.sendToFriend}</p>
             <p className="text-xs text-muted-foreground truncate mt-0.5 flex items-center gap-1.5">
               <Link2 className="w-3 h-3 flex-shrink-0" strokeWidth={2.75} />
               {chain.title}
@@ -448,7 +446,7 @@ export function ChainShareModal({ chain, onClose }: { chain: ChainItem; onClose:
             <Search className="w-4 h-4 text-muted-foreground flex-shrink-0" />
             <input
               type="text"
-              placeholder="ค้นหา..."
+              placeholder={t.searchShortPlaceholder}
               value={search}
               onChange={e => setSearch(e.target.value)}
               autoFocus
@@ -460,7 +458,7 @@ export function ChainShareModal({ chain, onClose }: { chain: ChainItem; onClose:
         <div className="overflow-y-auto flex-1">
           {search.trim() && searchResults.length > 0 && (
             <>
-              <p className="px-4 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">ผู้ใช้</p>
+              <p className="px-4 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{t.usersLabel}</p>
               {searchResults.map((u: ConvParticipant) => (
                 <button
                   key={u.id}
@@ -490,7 +488,7 @@ export function ChainShareModal({ chain, onClose }: { chain: ChainItem; onClose:
           {filtered.length > 0 && (
             <>
               {search.trim() && searchResults.length > 0 && <div className="h-px bg-border mx-4" />}
-              <p className="px-4 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">แชทล่าสุด</p>
+              <p className="px-4 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{t.recentChatsLabel}</p>
               {filtered.map(conv => {
                 const other = conv.participants.find(p => p.id !== user?.id) ?? conv.participants[0]!;
                 const isSent = sent === conv.id;
@@ -526,10 +524,10 @@ export function ChainShareModal({ chain, onClose }: { chain: ChainItem; onClose:
           )}
 
           {!search.trim() && filtered.length === 0 && (
-            <p className="px-4 py-6 text-sm text-muted-foreground text-center">ยังไม่มีแชท</p>
+            <p className="px-4 py-6 text-sm text-muted-foreground text-center">{t.noChats}</p>
           )}
           {search.trim() && filtered.length === 0 && searchResults.length === 0 && (
-            <p className="px-4 py-6 text-sm text-muted-foreground text-center">ไม่พบผู้ใช้</p>
+            <p className="px-4 py-6 text-sm text-muted-foreground text-center">{t.noUsersFoundShort}</p>
           )}
         </div>
       </div>
@@ -661,7 +659,7 @@ export function ChainCard({ chain }: { chain: ChainItem }) {
   const handleLike = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!user) { toast({ title: "กด + เพื่อเข้าสู่ระบบหรือสมัครสมาชิก", duration: 1500 }); return; }
+    if (!user) { toast({ title: t.signInToLike, duration: 1500 }); return; }
     const next = !liked;
     setLiked(next);
     setLikeCount(c => next ? c + 1 : Math.max(0, c - 1));
@@ -707,7 +705,7 @@ export function ChainCard({ chain }: { chain: ChainItem }) {
   const handleBookmark = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!user) { toast({ title: "กด + เพื่อเข้าสู่ระบบหรือสมัครสมาชิก", duration: 1500 }); return; }
+    if (!user) { toast({ title: t.signInToLike, duration: 1500 }); return; }
     const next = !bookmarked;
     setBookmarked(next);
     try {
@@ -873,7 +871,7 @@ export function ChainCard({ chain }: { chain: ChainItem }) {
           </button>
 
           <button
-            onClick={e => { e.preventDefault(); e.stopPropagation(); if (!user) { toast({ title: "กด + เพื่อเข้าสู่ระบบหรือสมัครสมาชิก", duration: 1500 }); return; } setCommentOpen(true); }}
+            onClick={e => { e.preventDefault(); e.stopPropagation(); if (!user) { toast({ title: t.signInToLike, duration: 1500 }); return; } setCommentOpen(true); }}
             className="flex items-center gap-1.5 transition-all duration-100 active:scale-75 active:opacity-50 group"
           >
             <MessagesSquare className="w-[20px] h-[20px] text-muted-foreground/60 group-hover:text-foreground transition-colors" />
@@ -890,7 +888,7 @@ export function ChainCard({ chain }: { chain: ChainItem }) {
           </button>
 
           <button
-            onClick={e => { e.preventDefault(); e.stopPropagation(); if (!user) { toast({ title: "กด + เพื่อเข้าสู่ระบบหรือสมัครสมาชิก", duration: 1500 }); return; } handleShare(e); }}
+            onClick={e => { e.preventDefault(); e.stopPropagation(); if (!user) { toast({ title: t.signInToLike, duration: 1500 }); return; } handleShare(e); }}
             className="flex items-center gap-1.5 transition-all duration-100 active:scale-75 active:opacity-50 group"
           >
             <Share2 className="w-[20px] h-[20px] text-muted-foreground/60 group-hover:text-foreground transition-colors" />
