@@ -10,6 +10,22 @@
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 
+    <!-- ── iOS Add-to-Home-Screen / PWA install ─────────────────────────────
+         iOS Safari ignores manifest.icons and only honours `apple-touch-icon`
+         + `apple-mobile-web-app-*` meta tags. Without these, the home-screen
+         icon shows a screenshot thumbnail instead of the Ticker logo and the
+         standalone display flags don't apply. Sizes 180 covers iPhone 12 Pro
+         Max (highest pixel-density target). The status-bar style is
+         "black-translucent" so the app draws under the notch (safe-area
+         insets are already handled by the React layout).
+    -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Ticker" />
+    <meta name="theme-color" content="#000000" />
+
     <!-- Open Graph -->
     <meta property="og:title" content="Ticker — Movie Social Platform" />
     <meta property="og:description" content="Share movie reviews, discover what your friends are watching, and build your movie watchlist on Ticker." />

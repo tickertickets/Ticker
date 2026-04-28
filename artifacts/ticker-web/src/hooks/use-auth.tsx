@@ -1,4 +1,5 @@
 import { createContext, useContext, ReactNode, useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useGetMe, type UserSession } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
 import { scrollStore } from "@/lib/scroll-store";
@@ -24,6 +25,15 @@ interface AuthContextType {
   logout: () => void;
   loginWithEmail: (email: string, password: string) => Promise<void>;
   signupWithEmail: (email: string, password: string) => Promise<void>;
+  /**
+   * Force-refresh the cached user session by re-fetching `/api/auth/me`.
+   * Clears stale 401 cache entries first so a previously-failed query will
+   * actually re-execute. Returns the fresh user or `null` if still not logged in.
+   *
+   * Use this in custom login/signup flows after the login POST has succeeded,
+   * so that AuthProvider state is updated BEFORE you navigate away.
+   */
+  refreshUser: () => Promise<UserSession | null>;
   authError: string | null;
 }
 
@@ -31,6 +41,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
   const [authError, setAuthError] = useState<string | null>(null);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   // Prevents getMe from re-fetching (and restoring user) while logout is in flight
@@ -95,6 +106,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = () => {
     window.location.href = "/api/auth/google";
+  };
+
+  // ── refreshUser ───────────────────────────────────────────────────────────
+  // Reliable post-login refresh: clears any cached 401 error so the query
+  // actually re-runs, awaits the new fetch, then writes the result into the
+  // query cache + cachedUser state BEFORE returning.  Callers can safely
+  // navigate away as soon as this resolves.
+  const refreshUser = async (): Promise<UserSession | null> => {
+    // Drop any stale cached error/data so the next observer fetches fresh.
+    queryClient.removeQueries({ queryKey: ["/api/auth/me"] });
+    try {
+      const result = await refetch?.();
+      const fresh = result?.data ?? null;
+      if (fresh) {
+        // Pre-seed the query cache so the very next render sees the user.
+        queryClient.setQueryData(["/api/auth/me"], fresh);
+        setCachedUser(fresh);
+        try { localStorage.setItem(USER_CACHE_KEY, JSON.stringify(fresh)); } catch { /* ignore quota errors */ }
+        if (fresh.id) applyThemeForUser(fresh.id);
+      } else {
+        setCachedUser(null);
+        try { localStorage.removeItem(USER_CACHE_KEY); } catch { /* ignore */ }
+      }
+      return fresh;
+    } catch {
+      return null;
+    }
   };
 
   const logout = async () => {
@@ -162,15 +200,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Show loader while session is being verified
       setIsAuthenticating(true);
-      const result = await refetch?.();
-      // Immediately seed the cache so components that read cachedUser don't
-      // see a null window between navigate and the next query cycle.
-      if (result?.data) {
-        setCachedUser(result.data);
-        localStorage.setItem(USER_CACHE_KEY, JSON.stringify(result.data));
-      }
-      // Apply the new user's saved theme as soon as we know their ID
-      if (result?.data?.id) applyThemeForUser(result.data.id);
+      // refreshUser drops stale 401 cache, awaits a fresh /api/auth/me, and
+      // seeds queryClient + cachedUser before returning.
+      await refreshUser();
       setLocation("/");
     } catch (err) {
       const message = err instanceof Error ? err.message : "An error occurred";
@@ -204,8 +236,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       resetTheme();
 
       setIsAuthenticating(true);
-      const result = await refetch?.();
-      if (result?.data?.id) applyThemeForUser(result.data.id);
+      await refreshUser();
       setLocation("/");
     } catch (err) {
       const message = err instanceof Error ? err.message : "An error occurred";
@@ -218,7 +249,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, isLoading, isAuthenticating, login, logout, loginWithEmail, signupWithEmail, authError }}
+      value={{ user, isLoading, isAuthenticating, login, logout, loginWithEmail, signupWithEmail, refreshUser, authError }}
     >
       {children}
     </AuthContext.Provider>
@@ -236,6 +267,7 @@ export function useAuth() {
       logout: () => {},
       loginWithEmail: async () => {},
       signupWithEmail: async () => {},
+      refreshUser: async () => null,
       authError: null,
     } as AuthContextType;
   }

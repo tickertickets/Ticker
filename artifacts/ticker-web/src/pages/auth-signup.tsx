@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { Eye, EyeOff, Loader2, ArrowRight, ChevronLeft } from "lucide-react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
@@ -20,10 +19,9 @@ function isValidEmail(v: string): boolean {
 
 export default function AuthSignup() {
   const [, navigate] = useLocation();
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { lang } = useLang();
   const tr = (th: string, en: string) => (lang === "th" ? th : en);
-  const qc = useQueryClient();
   const BASE = import.meta.env.BASE_URL ?? "/";
 
   const [email, setEmail] = useState("");
@@ -59,7 +57,9 @@ export default function AuthSignup() {
         setError(localized ?? tr("เกิดข้อผิดพลาด", "Something went wrong"));
         return;
       }
-      qc.invalidateQueries();
+      // Wait for /api/auth/me to confirm the new session BEFORE navigating —
+      // otherwise onboarding renders in guest mode and bounces back to /login.
+      await refreshUser();
       navigate("/onboarding");
     } catch {
       setError(tr("Server กำลังตื่นนอน กรุณารอสักครู่แล้วลองใหม่", "Server is waking up, please try again in a moment"));

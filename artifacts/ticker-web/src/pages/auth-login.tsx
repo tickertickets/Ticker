@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { Eye, EyeOff, Loader2, ArrowRight, ChevronLeft, CheckCircle2 } from "lucide-react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
@@ -22,10 +21,9 @@ type SubMode = "login" | "forgot" | "forgot-sent" | "reset-password" | "reset-do
 
 export default function AuthLogin() {
   const [, navigate] = useLocation();
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { lang } = useLang();
   const tr = (th: string, en: string) => (lang === "th" ? th : en);
-  const qc = useQueryClient();
   const BASE = import.meta.env.BASE_URL ?? "/";
 
   const [subMode, setSubMode] = useState<SubMode>("login");
@@ -76,8 +74,11 @@ export default function AuthLogin() {
         setError(localized ?? tr("อีเมลหรือรหัสผ่านไม่ถูกต้อง", "Incorrect email or password"));
         return;
       }
-      qc.invalidateQueries();
-      navigate("/");
+      // Wait until /api/auth/me confirms the new session BEFORE navigating —
+      // otherwise the home page renders in guest mode (no feed, no chains)
+      // until the next auth-context tick.
+      const fresh = await refreshUser();
+      navigate(fresh && !fresh.isOnboarded ? "/onboarding" : "/");
     } catch {
       setError(tr("Server กำลังตื่นนอน กรุณารอสักครู่แล้วลองใหม่", "Server is waking up, please try again in a moment"));
     } finally {

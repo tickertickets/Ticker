@@ -128,6 +128,7 @@ export async function calculateRankTier(
         const votes = cached.voteCount ?? 0;
         const popularity = parseFloat(cached.popularity ?? "0");
         const genreIds = (cached.genreIds as number[]) ?? [];
+        const franchiseIds = (cached.franchiseIds as number[] | null) ?? [];
         const releaseYear = cached.releaseDate
           ? parseInt(cached.releaseDate.slice(0, 4), 10)
           : null;
@@ -136,7 +137,7 @@ export async function calculateRankTier(
         return {
           tier,
           score: Math.round(ws * 10),
-          snapshot: { tmdbRating: rating, voteCount: votes, year: releaseYear, popularity, genreIds },
+          snapshot: { tmdbRating: rating, voteCount: votes, year: releaseYear, popularity, genreIds, franchiseIds },
         };
       }
     }
@@ -189,6 +190,7 @@ export async function calculateRankTier(
           voteCount: votes,
           popularity: popularity.toString(),
           genreIds,
+          franchiseIds,
           fetchedAt: new Date(),
         })
         .onConflictDoUpdate({
@@ -198,6 +200,7 @@ export async function calculateRankTier(
             voteCount: votes,
             popularity: popularity.toString(),
             genreIds,
+            franchiseIds,
             fetchedAt: new Date(),
           },
         });
@@ -278,13 +281,14 @@ export async function buildTicketBatch(
     uniqueTmdbIds.length > 0
       ? db
           .select({
-            tmdbId:      moviesTable.tmdbId,
-            voteAverage: moviesTable.voteAverage,
-            voteCount:   moviesTable.voteCount,
-            genreIds:    moviesTable.genreIds,
-            popularity:  moviesTable.popularity,
-            releaseDate: moviesTable.releaseDate,
-            fetchedAt:   moviesTable.fetchedAt,
+            tmdbId:       moviesTable.tmdbId,
+            voteAverage:  moviesTable.voteAverage,
+            voteCount:    moviesTable.voteCount,
+            genreIds:     moviesTable.genreIds,
+            franchiseIds: moviesTable.franchiseIds,
+            popularity:   moviesTable.popularity,
+            releaseDate:  moviesTable.releaseDate,
+            fetchedAt:    moviesTable.fetchedAt,
           })
           .from(moviesTable)
           .where(inArray(moviesTable.tmdbId, uniqueTmdbIds))
@@ -293,6 +297,7 @@ export async function buildTicketBatch(
           voteAverage: string | null;
           voteCount: number | null;
           genreIds: number[] | null;
+          franchiseIds: number[] | null;
           popularity: string | null;
           releaseDate: string | null;
           fetchedAt: Date | null;
@@ -379,21 +384,23 @@ export async function buildTicketBatch(
       ? (() => { try { return JSON.parse(ticket.tmdbSnapshot!); } catch { return null; } })()
       : null;
 
-    // Build a live snapshot from the movies DB cache (refreshed every 7 days from TMDB).
+    // Build a live snapshot from the movies DB cache (refreshed every 1 hour from TMDB).
     // This gives the frontend the SAME data source that the movie-detail page uses,
-    // so rank badges on cards are always identical to what's shown inside the detail.
-    // franchiseIds is intentionally omitted — it never changes and is correctly
-    // preserved in tmdbSnapshot (the movie's franchise membership is immutable).
+    // so rank badges on cards are always identical to what's shown inside the detail —
+    // INCLUDING franchiseIds, which is required to award FR / LEGENDARY tiers when a
+    // movie is part of a franchise (TMDB sometimes adds franchise memberships AFTER
+    // the ticket was created, so the per-ticket tmdbSnapshot can be stale).
     const tmdbIdNum = parseTmdbId(ticket.imdbId);
     const freshMovie = tmdbIdNum != null ? freshMovieMap.get(tmdbIdNum) : undefined;
     const movieLiveSnapshot = freshMovie != null ? {
-      rating:      freshMovie.voteAverage != null ? parseFloat(freshMovie.voteAverage) : null,
-      voteCount:   freshMovie.voteCount   ?? null,
-      genreIds:    freshMovie.genreIds    ?? null,
-      popularity:  freshMovie.popularity  != null ? parseFloat(freshMovie.popularity)  : null,
-      releaseDate: freshMovie.releaseDate ?? null,
+      rating:       freshMovie.voteAverage != null ? parseFloat(freshMovie.voteAverage) : null,
+      voteCount:    freshMovie.voteCount   ?? null,
+      genreIds:     freshMovie.genreIds    ?? null,
+      franchiseIds: freshMovie.franchiseIds ?? null,
+      popularity:   freshMovie.popularity  != null ? parseFloat(freshMovie.popularity)  : null,
+      releaseDate:  freshMovie.releaseDate ?? null,
       // Extract year from "YYYY-MM-DD" release date stored in movies table
-      year:        freshMovie.releaseDate ? parseInt(freshMovie.releaseDate.slice(0, 4), 10) : null,
+      year:         freshMovie.releaseDate ? parseInt(freshMovie.releaseDate.slice(0, 4), 10) : null,
     } : null;
 
     return {
@@ -589,18 +596,20 @@ export async function buildTicket(
 
   let movieLiveSnapshot: {
     rating: number | null; voteCount: number | null; genreIds: number[] | null;
-    popularity: number | null; releaseDate: string | null; year: number | null;
+    franchiseIds: number[] | null; popularity: number | null;
+    releaseDate: string | null; year: number | null;
   } | null = null;
 
   if (parsedTmdbId != null) {
     const [cached] = await db
       .select({
-        voteAverage: moviesTable.voteAverage,
-        voteCount:   moviesTable.voteCount,
-        genreIds:    moviesTable.genreIds,
-        popularity:  moviesTable.popularity,
-        releaseDate: moviesTable.releaseDate,
-        fetchedAt:   moviesTable.fetchedAt,
+        voteAverage:  moviesTable.voteAverage,
+        voteCount:    moviesTable.voteCount,
+        genreIds:     moviesTable.genreIds,
+        franchiseIds: moviesTable.franchiseIds,
+        popularity:   moviesTable.popularity,
+        releaseDate:  moviesTable.releaseDate,
+        fetchedAt:    moviesTable.fetchedAt,
       })
       .from(moviesTable)
       .where(eq(moviesTable.tmdbId, parsedTmdbId))
@@ -608,12 +617,13 @@ export async function buildTicket(
 
     if (cached) {
       movieLiveSnapshot = {
-        rating:      cached.voteAverage != null ? parseFloat(cached.voteAverage) : null,
-        voteCount:   cached.voteCount   ?? null,
-        genreIds:    cached.genreIds    ?? null,
-        popularity:  cached.popularity  != null ? parseFloat(cached.popularity)  : null,
-        releaseDate: cached.releaseDate ?? null,
-        year:        cached.releaseDate ? parseInt(cached.releaseDate.slice(0, 4), 10) : null,
+        rating:       cached.voteAverage != null ? parseFloat(cached.voteAverage) : null,
+        voteCount:    cached.voteCount   ?? null,
+        genreIds:     cached.genreIds    ?? null,
+        franchiseIds: cached.franchiseIds ?? null,
+        popularity:   cached.popularity  != null ? parseFloat(cached.popularity)  : null,
+        releaseDate:  cached.releaseDate ?? null,
+        year:         cached.releaseDate ? parseInt(cached.releaseDate.slice(0, 4), 10) : null,
       };
       const age = cached.fetchedAt ? Date.now() - new Date(cached.fetchedAt).getTime() : Infinity;
       if (age > MOVIE_CACHE_TTL_MS) {

@@ -1,4 +1,4 @@
-import { pgTable, text, boolean, timestamp, date, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, boolean, timestamp, date, pgEnum, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -16,6 +16,11 @@ export const usersTable = pgTable("users", {
   isPrivate: boolean("is_private").notNull().default(false),
   agreedToTermsAt: timestamp("agreed_to_terms_at", { withTimezone: true }),
   profileOrder: text("profile_order"),
+  // Ordered list of ticket IDs the user has chosen to "pin" as the cover
+  // mosaic on their profile. When empty, the cover falls back to the user's
+  // most recent / popular tickets (existing behaviour). Capped at 6 entries
+  // because the cover only renders 6 tiles.
+  pinnedTicketIds: jsonb("pinned_ticket_ids").$type<string[]>().default([]),
   preferredLang: text("preferred_lang").notNull().default("en"),
   timezone: text("timezone"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

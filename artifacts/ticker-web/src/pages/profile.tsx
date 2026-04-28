@@ -1050,7 +1050,13 @@ export default function Profile() {
   const tickets  = ticketsData?.tickets ?? [];
   const profileUserId = ((profile as unknown) as Record<string, unknown>)?.["id"] as string | undefined;
 
-  const coverPosters = tickets
+  // Resolve cover-mosaic source: prefer the user's pinned tickets (set via
+  // long-press → "ปักหมุดบนโปรไฟล์" on any of their cards). When the user
+  // hasn't pinned anything we fall back to their most popular tickets so the
+  // cover never goes empty for an active profile.
+  const pinnedTickets = (((profile as unknown) as Record<string, unknown>)?.["pinnedTickets"] as Ticket[] | undefined) ?? [];
+  const coverSource: Ticket[] = pinnedTickets.length > 0 ? pinnedTickets : tickets.slice(0, 6);
+  const coverPosters = coverSource
     .slice(0, 6)
     .map(t => {
       const cardTheme = (((t as unknown) as Record<string, unknown>)["cardTheme"] as string | undefined);

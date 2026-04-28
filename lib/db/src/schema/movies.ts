@@ -23,6 +23,13 @@ export const moviesTable = pgTable("movies", {
   voteCount: integer("vote_count"),
   popularity: numeric("popularity", { precision: 12, scale: 4 }),
   genreIds: jsonb("genre_ids").$type<number[]>(),
+  // TMDB collection (franchise) IDs that this movie belongs to.
+  // Required for rank-tier eligibility (FR / LEGENDARY tiers).
+  // Persisted here so cards on the feed can compute the same tier as the
+  // movie-detail page — without this, franchise_ids was only ever stored
+  // inside the per-ticket tmdb_snapshot (frozen at create time), causing
+  // card / detail mismatches when a franchise membership was added later.
+  franchiseIds: jsonb("franchise_ids").$type<number[]>().default([]),
   fetchedAt: timestamp("fetched_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

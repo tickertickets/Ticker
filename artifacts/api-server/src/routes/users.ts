@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { usersTable, followsTable, ticketsTable, followRequestsTable, chainsTable, chainRunsTable, likesTable, commentsTable, chainLikesTable, chainCommentsTable, bookmarksTable, usernameChangesTable, USERNAME_CHANGE_COOLDOWN_DAYS } from "@workspace/db/schema";
-import { eq, and, count, desc, asc, lt, or, ilike, isNull, sql } from "drizzle-orm";
+import { eq, and, count, desc, asc, lt, or, ilike, isNull, inArray, sql } from "drizzle-orm";
 import { sanitize } from "../lib/sanitize";
 import { nanoid } from "nanoid";
 import { buildTicket } from "./tickets";
@@ -96,6 +96,56 @@ router.patch("/me/timezone", async (req, res) => {
     .set({ timezone: tz, updatedAt: new Date() })
     .where(eq(usersTable.id, userId));
   res.json({ ok: true, timezone: tz });
+});
+
+// ── PATCH /me/pinned ──────────────────────────────────────────────────────────
+// Replace the user's pinned-ticket list (used as the profile cover mosaic).
+//
+// Body: { ticketIds: string[] } — order matters, max 6 entries, must be
+// tickets owned by the current user (no leaking other people's ticket IDs).
+// Empty array clears all pins (cover falls back to recent/popular tickets).
+router.patch("/me/pinned", async (req, res) => {
+  const userId = req.session?.userId;
+  if (!userId) { res.status(401).json({ error: "unauthorized" }); return; }
+
+  const raw = (req.body?.ticketIds ?? []) as unknown;
+  if (!Array.isArray(raw)) {
+    res.status(400).json({ error: "bad_request", message: "ticketIds must be an array" });
+    return;
+  }
+  // Normalise: drop blanks/dupes, keep first 6, ensure all strings.
+  const seen = new Set<string>();
+  const requested: string[] = [];
+  for (const v of raw) {
+    if (typeof v !== "string") continue;
+    const id = v.trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    requested.push(id);
+    if (requested.length >= 6) break;
+  }
+
+  // Validate: every ID must be a non-deleted ticket owned by the current user.
+  // Anything else is silently dropped (don't 400 on a stale ID — UI may still
+  // be holding a deleted ticket reference).
+  let validated: string[] = [];
+  if (requested.length > 0) {
+    const owned = await db
+      .select({ id: ticketsTable.id })
+      .from(ticketsTable)
+      .where(and(
+        eq(ticketsTable.userId, userId),
+        isNull(ticketsTable.deletedAt),
+        inArray(ticketsTable.id, requested),
+      ));
+    const ownedSet = new Set(owned.map((r) => r.id));
+    validated = requested.filter((id) => ownedSet.has(id));
+  }
+
+  await db.update(usersTable)
+    .set({ pinnedTicketIds: validated, updatedAt: new Date() })
+    .where(eq(usersTable.id, userId));
+  res.json({ ok: true, pinnedTicketIds: validated });
 });
 
 router.patch("/me/lang", async (req, res) => {
@@ -385,6 +435,32 @@ router.get("/:username/following", async (req, res) => {
 });
 
 async function buildUserProfile(user: typeof usersTable.$inferSelect, currentUserId?: string) {
+  // Resolve the user's pinned ticket IDs into actual ticket records (in
+  // pinned order, dropping any IDs that point to private/deleted tickets the
+  // viewer can't see). This drives the profile-cover mosaic; when empty, the
+  // frontend falls back to recent tickets.
+  const isOwner = currentUserId === user.id;
+  const pinnedIdsRaw = (user.pinnedTicketIds as string[] | null) ?? [];
+  const pinnedIds = pinnedIdsRaw.slice(0, 6);
+  let pinnedTickets: Awaited<ReturnType<typeof buildTicket>>[] = [];
+  if (pinnedIds.length > 0) {
+    const rows = await db
+      .select()
+      .from(ticketsTable)
+      .where(and(
+        eq(ticketsTable.userId, user.id),
+        isNull(ticketsTable.deletedAt),
+        // Hide private tickets from non-owners (don't expose the existence
+        // of pinned-but-private tickets either — drop them silently).
+        isOwner ? sql`true` : eq(ticketsTable.isPrivate, false),
+        inArray(ticketsTable.id, pinnedIds),
+      ));
+    const byId = new Map(rows.map((t) => [t.id, t]));
+    // Preserve user-defined pin order (DB rows come back unordered).
+    const ordered = pinnedIds.map((id) => byId.get(id)).filter((t): t is typeof rows[0] => !!t);
+    pinnedTickets = await Promise.all(ordered.map((t) => buildTicket(t, currentUserId)));
+  }
+
   const [ticketCountResult] = await db.select({ count: count() }).from(ticketsTable).where(
     and(eq(ticketsTable.userId, user.id), eq(ticketsTable.isPrivate, false), isNull(ticketsTable.deletedAt))
   );
@@ -453,6 +529,11 @@ async function buildUserProfile(user: typeof usersTable.$inferSelect, currentUse
     followRequestPending,
     // Only expose profileOrder to the profile owner (prevents leaking private/album IDs to others)
     profileOrder: currentUserId === user.id ? (user.profileOrder ?? null) : null,
+    // Pinned ticket IDs in user-defined order (only the owner sees the raw list,
+    // viewers always get the resolved `pinnedTickets` array below — which is
+    // already filtered to public tickets only).
+    pinnedTicketIds: isOwner ? pinnedIds : null,
+    pinnedTickets,
     createdAt: user.createdAt,
   };
 }

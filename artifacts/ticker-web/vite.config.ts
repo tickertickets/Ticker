@@ -73,7 +73,14 @@ export default defineConfig({
       injectManifest: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
       },
-      includeAssets: ["favicon.svg", "icon.svg", "notification-badge.svg"],
+      includeAssets: [
+        "favicon.svg",
+        "icon.svg",
+        "notification-badge.svg",
+        "apple-touch-icon.png",
+        "icon-192.png",
+        "icon-512.png",
+      ],
       manifest: {
         name: "Ticker — Movie Social Platform",
         short_name: "Ticker",
@@ -85,8 +92,16 @@ export default defineConfig({
         scope: "/",
         start_url: "/",
         prefer_related_applications: false,
+        // Raster PNGs are required for cross-platform install: iOS uses
+        // apple-touch-icon (linked in index.html) but Android Chrome needs
+        // these PNG sizes in the manifest before "Add to Home Screen" will
+        // create a true standalone PWA shortcut. The SVG entry stays as a
+        // fallback for browsers that prefer scalable icons.
         icons: [
-          { src: "icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any maskable" },
+          { src: "icon-192.png",  sizes: "192x192", type: "image/png", purpose: "any" },
+          { src: "icon-512.png",  sizes: "512x512", type: "image/png", purpose: "any" },
+          { src: "icon-512.png",  sizes: "512x512", type: "image/png", purpose: "maskable" },
+          { src: "icon.svg",      sizes: "any",     type: "image/svg+xml", purpose: "any" },
         ],
         categories: ["entertainment", "social"],
       },

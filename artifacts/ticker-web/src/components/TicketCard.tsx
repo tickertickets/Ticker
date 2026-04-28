@@ -4,7 +4,7 @@ import { ExpandableText } from "./ExpandableText";
 import { createPortal } from "react-dom";
 import { useKeyboardHeight } from "@/hooks/use-keyboard-height";
 import { Link, useLocation } from "wouter";
-import { Bookmark, Star, MapPin, CalendarDays, ArrowRight, Lock, Unlock, Users, Flag, Send, Search, X, MessageCircle, Trash2, MoreVertical, Loader2, Ticket as TicketIcon, MessagesSquare, Share2, Pencil } from "lucide-react";
+import { Bookmark, Star, MapPin, CalendarDays, ArrowRight, Lock, Unlock, Users, Flag, Send, Search, X, MessageCircle, Trash2, MoreVertical, Loader2, Ticket as TicketIcon, MessagesSquare, Share2, Pencil, Pin, PinOff } from "lucide-react";
 import { ReactionButton } from "./ReactionButton";
 import { saveAs } from "file-saver";
 import html2canvas from "html2canvas";
@@ -93,25 +93,27 @@ function syncReactionCache(qc: QueryClient, ticketId: string, patch: ReactionPat
 
 // ── Types for live movie data from the server ─────────────────────
 type MovieLiveSnapshot = {
-  rating:      number | null;
-  voteCount:   number | null;
-  genreIds:    number[] | null;
-  popularity:  number | null;
-  releaseDate: string | null;
-  year:        number | null;
+  rating:       number | null;
+  voteCount:    number | null;
+  genreIds:     number[] | null;
+  // Live franchise IDs from the movies DB cache. Required so cards on the feed
+  // award FR / LEGENDARY tiers consistently with the movie-detail page even
+  // when TMDB added the franchise membership AFTER the ticket was created
+  // (the per-ticket tmdbSnapshot freezes franchiseIds at create time).
+  franchiseIds: number[] | null;
+  popularity:   number | null;
+  releaseDate:  string | null;
+  year:         number | null;
 };
 
 // ── Build the ScoreInput for rank computation ─────────────────────
 //
 // Priority — for each field:
-//   1. movieLiveSnapshot  (DB cache, refreshed every 7 days from TMDB)
+//   1. movieLiveSnapshot  (DB cache, refreshed every 1 hour from TMDB)
 //   2. tmdbSnapshot       (frozen at ticket-creation time — fallback only)
 //
 // This makes the card rank IDENTICAL to the movie-detail page, which uses
 // the same DB cache as the source of truth.
-// franchiseIds is intentionally taken from the snapshot only: it is immutable
-// (a movie's franchise membership never changes) and is not stored in the
-// movies DB table.
 function buildScoreInput(
   live: MovieLiveSnapshot | null,
   snap: { tmdbRating?: number; voteCount?: number; year?: number | null;
@@ -124,12 +126,20 @@ function buildScoreInput(
     snap?.year       ??
     (movieYear ? parseInt(movieYear, 10) : null);
 
+  // franchiseIds: prefer the live snapshot (always up to date) but fall back
+  // to the per-ticket snapshot if the movies cache row predates this column.
+  const liveFranchise = live?.franchiseIds;
+  const resolvedFranchise =
+    liveFranchise && liveFranchise.length > 0
+      ? liveFranchise
+      : (snap?.franchiseIds ?? liveFranchise ?? []);
+
   return {
     tmdbRating:   live?.rating       ?? snap?.tmdbRating  ?? 0,
     voteCount:    live?.voteCount    ?? snap?.voteCount   ?? 0,
     popularity:   live?.popularity   ?? snap?.popularity  ?? 0,
     genreIds:     live?.genreIds     ?? snap?.genreIds    ?? [],
-    franchiseIds: snap?.franchiseIds ?? [],
+    franchiseIds: resolvedFranchise,
     year:         resolvedYear,
     releaseDate:  live?.releaseDate  ?? null,
   };
@@ -1480,11 +1490,19 @@ export function CardContextMenu({ ticket, onClose }: CardMenuProps) {
   const { t, lang } = useLang();
   const queryClient = useQueryClient();
   const deleteTicket = useDeleteTicket();
+  const { user: me } = useAuth();
   const [, navigate] = useLocation();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [visible, setVisible] = useState(false);
+  // pinnedIds === null  → still loading (button hidden)
+  // pinnedIds === []    → user has nothing pinned yet
+  const [pinnedIds, setPinnedIds] = useState<string[] | null>(null);
+  const [pinning, setPinning] = useState(false);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isOwner = !!me && me.id === ticket.userId;
+  const isPinned = pinnedIds != null && pinnedIds.includes(ticket.id);
+  const PIN_LIMIT = 6;
 
   useEffect(() => {
     document.documentElement.setAttribute("data-scroll-lock", "true");
@@ -1495,6 +1513,26 @@ export function CardContextMenu({ ticket, onClose }: CardMenuProps) {
       if (closeTimerRef.current !== null) clearTimeout(closeTimerRef.current);
     };
   }, []);
+
+  // Fetch the current user's pinned-ticket list once when the menu opens, so
+  // we know whether to show "Pin to cover" or "Unpin from cover".
+  useEffect(() => {
+    if (!isOwner) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/users/me/profile", { credentials: "include" });
+        if (!res.ok) { if (!cancelled) setPinnedIds([]); return; }
+        const data = await res.json();
+        if (cancelled) return;
+        const ids = Array.isArray(data?.pinnedTicketIds) ? (data.pinnedTicketIds as string[]) : [];
+        setPinnedIds(ids);
+      } catch {
+        if (!cancelled) setPinnedIds([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isOwner]);
 
   const handleClose = () => {
     if (closeTimerRef.current !== null) return;
@@ -1534,6 +1572,35 @@ export function CardContextMenu({ ticket, onClose }: CardMenuProps) {
       await fetch(`/api/tickets/${ticket.id}/hide-comments`, { method: "PATCH", credentials: "include" });
       queryClient.invalidateQueries();
     } catch {}
+    handleClose();
+  };
+
+  // Toggle this ticket in the user's pinned-cover list. Limit is enforced by
+  // the API (drops anything past 6) so we mirror the cap in the UI to avoid
+  // sending extra IDs that would silently get dropped.
+  const handleTogglePin = async () => {
+    if (pinnedIds == null || pinning) return;
+    const nextIds = isPinned
+      ? pinnedIds.filter((id) => id !== ticket.id)
+      : [ticket.id, ...pinnedIds].slice(0, PIN_LIMIT);
+    setPinning(true);
+    try {
+      const res = await fetch("/api/users/me/pinned", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ticketIds: nextIds }),
+      });
+      if (res.ok) {
+        // Local state updates immediately; profile pages refetch on focus so
+        // the cover mosaic refreshes without a manual reload.
+        setPinnedIds(nextIds);
+        if (me?.username) {
+          queryClient.invalidateQueries({ queryKey: [`/api/users/${me.username}`] });
+        }
+      }
+    } catch { /* swallow — silent failure is fine, user can retry */ }
+    setPinning(false);
     handleClose();
   };
 
@@ -1647,6 +1714,24 @@ export function CardContextMenu({ ticket, onClose }: CardMenuProps) {
               </div>
               <span>{((ticket as any)?.hideComments) ? t.enableComments : t.disableComments}</span>
             </button>
+            {isOwner && pinnedIds != null && (
+              <button
+                className="w-full flex items-center gap-3 px-5 py-3.5 text-sm font-medium text-foreground active:bg-secondary transition-colors disabled:opacity-60"
+                onClick={handleTogglePin}
+                disabled={pinning}
+              >
+                <div className="w-8 h-8 rounded-xl bg-secondary flex items-center justify-center">
+                  {isPinned
+                    ? <PinOff className="w-4 h-4 text-muted-foreground" />
+                    : <Pin className="w-4 h-4 text-muted-foreground" />}
+                </div>
+                <span>
+                  {isPinned
+                    ? (lang === "th" ? "ยกเลิกการปักหมุดบนโปรไฟล์" : "Unpin from profile cover")
+                    : (lang === "th" ? "ปักหมุดบนโปรไฟล์" : "Pin to profile cover")}
+                </span>
+              </button>
+            )}
             <button
               className="w-full flex items-center gap-3 px-5 py-3.5 text-sm font-medium text-foreground active:bg-secondary transition-colors"
               onClick={handleDelete}

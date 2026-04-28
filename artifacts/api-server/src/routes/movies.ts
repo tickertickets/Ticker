@@ -1930,6 +1930,7 @@ router.get(
         voteCount: tvResult.voteCount,
         popularity: tvResult.popularity.toString(),
         genreIds: tvResult.genreIds,
+        franchiseIds: tvResult.franchiseIds,
         fetchedAt: new Date(),
       }).onConflictDoUpdate({
         target: moviesTable.tmdbId,
@@ -1938,6 +1939,7 @@ router.get(
           voteCount: tvResult.voteCount,
           popularity: tvResult.popularity.toString(),
           genreIds: tvResult.genreIds,
+          franchiseIds: tvResult.franchiseIds,
           fetchedAt: new Date(),
         },
       }).catch(() => {});
@@ -2066,6 +2068,7 @@ router.get(
       voteCount: movieResult.voteCount,
       popularity: movieResult.popularity.toString(),
       genreIds: movieResult.genreIds,
+      franchiseIds: movieResult.franchiseIds,
       fetchedAt: new Date(),
     }).onConflictDoUpdate({
       target: moviesTable.tmdbId,
@@ -2074,6 +2077,7 @@ router.get(
         voteCount: movieResult.voteCount,
         popularity: movieResult.popularity.toString(),
         genreIds: movieResult.genreIds,
+        franchiseIds: movieResult.franchiseIds,
         fetchedAt: new Date(),
       },
     }).catch(() => {});
