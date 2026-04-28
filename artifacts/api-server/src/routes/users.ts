@@ -101,9 +101,11 @@ router.patch("/me/timezone", async (req, res) => {
 // ── PATCH /me/pinned ──────────────────────────────────────────────────────────
 // Replace the user's pinned-ticket list (used as the profile cover mosaic).
 //
-// Body: { ticketIds: string[] } — order matters, max 6 entries, must be
-// tickets owned by the current user (no leaking other people's ticket IDs).
-// Empty array clears all pins (cover falls back to recent/popular tickets).
+// Body: { ticketIds: string[] } — order matters, max 3 entries (cover only
+// renders 3 tiles). Each ID must be owned by the current user. Soft-deleted
+// tickets are kept in the stored list as placeholders: their cover tile goes
+// blank while they're deleted and reappears in the same slot if/when the
+// ticket is restored. Empty array clears all pins (cover stays empty).
 router.patch("/me/pinned", async (req, res) => {
   const userId = req.session?.userId;
   if (!userId) { res.status(401).json({ error: "unauthorized" }); return; }
@@ -113,7 +115,7 @@ router.patch("/me/pinned", async (req, res) => {
     res.status(400).json({ error: "bad_request", message: "ticketIds must be an array" });
     return;
   }
-  // Normalise: drop blanks/dupes, keep first 6, ensure all strings.
+  // Normalise: drop blanks/dupes, keep first 3, ensure all strings.
   const seen = new Set<string>();
   const requested: string[] = [];
   for (const v of raw) {
@@ -122,12 +124,13 @@ router.patch("/me/pinned", async (req, res) => {
     if (!id || seen.has(id)) continue;
     seen.add(id);
     requested.push(id);
-    if (requested.length >= 6) break;
+    if (requested.length >= 3) break;
   }
 
-  // Validate: every ID must be a non-deleted ticket owned by the current user.
-  // Anything else is silently dropped (don't 400 on a stale ID — UI may still
-  // be holding a deleted ticket reference).
+  // Validate: every ID must be a ticket owned by the current user. We
+  // intentionally allow soft-deleted tickets through so a deleted-then-
+  // restored post returns to its original pin slot. Pins to other people's
+  // tickets are silently dropped (don't leak existence via 400s either).
   let validated: string[] = [];
   if (requested.length > 0) {
     const owned = await db
@@ -135,7 +138,6 @@ router.patch("/me/pinned", async (req, res) => {
       .from(ticketsTable)
       .where(and(
         eq(ticketsTable.userId, userId),
-        isNull(ticketsTable.deletedAt),
         inArray(ticketsTable.id, requested),
       ));
     const ownedSet = new Set(owned.map((r) => r.id));
@@ -438,10 +440,12 @@ async function buildUserProfile(user: typeof usersTable.$inferSelect, currentUse
   // Resolve the user's pinned ticket IDs into actual ticket records (in
   // pinned order, dropping any IDs that point to private/deleted tickets the
   // viewer can't see). This drives the profile-cover mosaic; when empty, the
-  // frontend falls back to recent tickets.
+  // cover stays blank — we no longer fall back to recent tickets. Deleted
+  // pins are kept in pinnedTicketIds as placeholders so the slot reappears
+  // if/when the post is restored (until a newer pin pushes them out).
   const isOwner = currentUserId === user.id;
   const pinnedIdsRaw = (user.pinnedTicketIds as string[] | null) ?? [];
-  const pinnedIds = pinnedIdsRaw.slice(0, 6);
+  const pinnedIds = pinnedIdsRaw.slice(0, 3);
   let pinnedTickets: Awaited<ReturnType<typeof buildTicket>>[] = [];
   if (pinnedIds.length > 0) {
     const rows = await db

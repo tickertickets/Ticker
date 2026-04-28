@@ -1050,14 +1050,13 @@ export default function Profile() {
   const tickets  = ticketsData?.tickets ?? [];
   const profileUserId = ((profile as unknown) as Record<string, unknown>)?.["id"] as string | undefined;
 
-  // Resolve cover-mosaic source: prefer the user's pinned tickets (set via
-  // long-press → "ปักหมุดบนโปรไฟล์" on any of their cards). When the user
-  // hasn't pinned anything we fall back to their most popular tickets so the
-  // cover never goes empty for an active profile.
+  // Cover mosaic shows ONLY the user's pinned tickets (set via long-press →
+  // "ปักหมุดบนโปรไฟล์" on their own cards). One image per pin, max 3,
+  // arranged left-to-right. When nothing is pinned the cover stays empty —
+  // we no longer fall back to recent tickets.
   const pinnedTickets = (((profile as unknown) as Record<string, unknown>)?.["pinnedTickets"] as Ticket[] | undefined) ?? [];
-  const coverSource: Ticket[] = pinnedTickets.length > 0 ? pinnedTickets : tickets.slice(0, 6);
-  const coverPosters = coverSource
-    .slice(0, 6)
+  const coverPosters = pinnedTickets
+    .slice(0, 3)
     .map(t => {
       const cardTheme = (((t as unknown) as Record<string, unknown>)["cardTheme"] as string | undefined);
       const cardBackdropUrl = (((t as unknown) as Record<string, unknown>)["cardBackdropUrl"] as string | undefined);
@@ -1138,8 +1137,10 @@ export default function Profile() {
         style={{ height: "calc(200px + env(safe-area-inset-top, 0px))" }}
       >
         {coverPosters.length > 0 ? (
+          // 1 row × 3 columns, left-aligned. One image per pinned post — no
+          // duplication. Empty slots stay blank (background shows through).
           <div className="absolute inset-0 grid grid-cols-3">
-            {[...coverPosters, ...coverPosters].slice(0, 6).map((url, i) => (
+            {coverPosters.slice(0, 3).map((url, i) => (
               <div key={i} className="relative overflow-hidden">
                 <img src={url} alt="" className="w-full h-full object-cover scale-110" />
               </div>

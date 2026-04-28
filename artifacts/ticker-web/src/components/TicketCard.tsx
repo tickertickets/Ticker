@@ -1502,7 +1502,9 @@ export function CardContextMenu({ ticket, onClose }: CardMenuProps) {
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isOwner = !!me && me.id === ticket.userId;
   const isPinned = pinnedIds != null && pinnedIds.includes(ticket.id);
-  const PIN_LIMIT = 6;
+  // Profile cover renders 3 tiles (1 row × 3 cols, one image per pinned post).
+  // Newest pin goes to the front (left); pinning a 4th pushes the oldest out.
+  const PIN_LIMIT = 3;
 
   useEffect(() => {
     document.documentElement.setAttribute("data-scroll-lock", "true");
@@ -1660,6 +1662,24 @@ export function CardContextMenu({ ticket, onClose }: CardMenuProps) {
         ) : (
           /* ── Normal menu ── */
           <div className="py-2">
+            {isOwner && pinnedIds != null && (
+              <button
+                className="w-full flex items-center gap-3 px-5 py-3.5 text-sm font-medium text-foreground active:bg-secondary transition-colors disabled:opacity-60"
+                onClick={handleTogglePin}
+                disabled={pinning}
+              >
+                <div className="w-8 h-8 rounded-xl bg-secondary flex items-center justify-center">
+                  {isPinned
+                    ? <PinOff className="w-4 h-4 text-muted-foreground" />
+                    : <Pin className="w-4 h-4 text-muted-foreground" />}
+                </div>
+                <span>
+                  {isPinned
+                    ? (lang === "th" ? "ยกเลิกการปักหมุดบนโปรไฟล์" : "Unpin from profile cover")
+                    : (lang === "th" ? "ปักหมุดบนโปรไฟล์" : "Pin to profile cover")}
+                </span>
+              </button>
+            )}
             <button
               className="w-full flex items-center gap-3 px-5 py-3.5 text-sm font-medium text-foreground active:bg-secondary transition-colors"
               onClick={() => {
@@ -1714,24 +1734,6 @@ export function CardContextMenu({ ticket, onClose }: CardMenuProps) {
               </div>
               <span>{((ticket as any)?.hideComments) ? t.enableComments : t.disableComments}</span>
             </button>
-            {isOwner && pinnedIds != null && (
-              <button
-                className="w-full flex items-center gap-3 px-5 py-3.5 text-sm font-medium text-foreground active:bg-secondary transition-colors disabled:opacity-60"
-                onClick={handleTogglePin}
-                disabled={pinning}
-              >
-                <div className="w-8 h-8 rounded-xl bg-secondary flex items-center justify-center">
-                  {isPinned
-                    ? <PinOff className="w-4 h-4 text-muted-foreground" />
-                    : <Pin className="w-4 h-4 text-muted-foreground" />}
-                </div>
-                <span>
-                  {isPinned
-                    ? (lang === "th" ? "ยกเลิกการปักหมุดบนโปรไฟล์" : "Unpin from profile cover")
-                    : (lang === "th" ? "ปักหมุดบนโปรไฟล์" : "Pin to profile cover")}
-                </span>
-              </button>
-            )}
             <button
               className="w-full flex items-center gap-3 px-5 py-3.5 text-sm font-medium text-foreground active:bg-secondary transition-colors"
               onClick={handleDelete}

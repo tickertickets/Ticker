@@ -1,6 +1,6 @@
 import { createContext, useContext, ReactNode, useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useGetMe, type UserSession } from "@workspace/api-client-react";
+import { useGetMe, getMe, type UserSession } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
 import { scrollStore } from "@/lib/scroll-store";
 import { clearAccountState } from "@/lib/query-client";
@@ -51,7 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // before the server responds (Render free tier cold-start can take ~60s).
   const [cachedUser, setCachedUser] = useState<UserSession | null>(() => loadCachedUser());
 
-  const { data: serverUser, isLoading, error, refetch } = useGetMe({
+  const { data: serverUser, isLoading, error } = useGetMe({
     query: {
       enabled: !loggingOut,
       retry: (failureCount, err: unknown) => {
@@ -114,23 +114,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // query cache + cachedUser state BEFORE returning.  Callers can safely
   // navigate away as soon as this resolves.
   const refreshUser = async (): Promise<UserSession | null> => {
-    // Drop any stale cached error/data so the next observer fetches fresh.
+    // Cancel any in-flight observer fetches and wipe stale cache so neither
+    // the previous 401 error nor a half-resolved refetch can override the
+    // fresh data we're about to write.
+    await queryClient.cancelQueries({ queryKey: ["/api/auth/me"] });
     queryClient.removeQueries({ queryKey: ["/api/auth/me"] });
+    // Suppress refetch's stale-error closure by going through fetchQuery
+    // directly — it executes the query function, writes the result into the
+    // cache (which the existing useGetMe observer then picks up on its very
+    // next render), and resolves with the fresh user. Avoids the race where
+    // refetch?.() returns a value derived from the observer's old state.
     try {
-      const result = await refetch?.();
-      const fresh = result?.data ?? null;
+      const fresh = await queryClient.fetchQuery<UserSession>({
+        queryKey: ["/api/auth/me"],
+        queryFn: () => getMe(),
+        retry: false,
+        staleTime: 0,
+      });
       if (fresh) {
-        // Pre-seed the query cache so the very next render sees the user.
-        queryClient.setQueryData(["/api/auth/me"], fresh);
         setCachedUser(fresh);
         try { localStorage.setItem(USER_CACHE_KEY, JSON.stringify(fresh)); } catch { /* ignore quota errors */ }
         if (fresh.id) applyThemeForUser(fresh.id);
-      } else {
-        setCachedUser(null);
-        try { localStorage.removeItem(USER_CACHE_KEY); } catch { /* ignore */ }
       }
-      return fresh;
+      return fresh ?? null;
     } catch {
+      setCachedUser(null);
+      try { localStorage.removeItem(USER_CACHE_KEY); } catch { /* ignore */ }
       return null;
     }
   };

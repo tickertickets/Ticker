@@ -17,9 +17,10 @@ export const usersTable = pgTable("users", {
   agreedToTermsAt: timestamp("agreed_to_terms_at", { withTimezone: true }),
   profileOrder: text("profile_order"),
   // Ordered list of ticket IDs the user has chosen to "pin" as the cover
-  // mosaic on their profile. When empty, the cover falls back to the user's
-  // most recent / popular tickets (existing behaviour). Capped at 6 entries
-  // because the cover only renders 6 tiles.
+  // mosaic on their profile (newest first → leftmost tile). When empty, the
+  // cover stays blank. Capped at 3 entries because the cover only renders 3
+  // tiles. Soft-deleted tickets are kept in this list as placeholders so a
+  // restored post returns to its slot.
   pinnedTicketIds: jsonb("pinned_ticket_ids").$type<string[]>().default([]),
   preferredLang: text("preferred_lang").notNull().default("en"),
   timezone: text("timezone"),
