@@ -167,6 +167,22 @@ async function buildCombinedPng(
     // a transparent image area but keeps all text / overlay layers intact.
     const frontDiv = wrap.children[0] as HTMLElement;
 
+    // Neutralize `display: -webkit-box` + `-webkit-line-clamp` on every
+    // descendant. iOS WebKit renders these incorrectly inside an SVG
+    // <foreignObject>: the line-box height is mis-measured and overflow:hidden
+    // ends up clipping text at roughly half-letter height. We replace the
+    // box with a regular block; the parent card's overflow:hidden still clips
+    // any genuinely-overflowing text.
+    const neutralizeLineClamp = (el: HTMLElement) => {
+      const cs = el.style;
+      if (cs.display === "-webkit-box" || cs.webkitLineClamp) {
+        cs.display          = "block";
+        cs.webkitLineClamp  = "";
+        cs.webkitBoxOrient  = "";
+        cs.overflow         = "visible";
+      }
+    };
+
     if (isPoster) {
       // PosterCardFront root has background: POSTER_BG — remove it.
       const root0 = frontDiv.firstElementChild as HTMLElement | null;
@@ -176,6 +192,7 @@ async function buildCombinedPng(
         if (el.style.backgroundImage && el.style.backgroundImage !== "none") {
           el.style.backgroundImage = "none";
         }
+        neutralizeLineClamp(el);
       }
     } else {
       // ClassicCardFront root has background: "#18181b" — remove it.
@@ -184,6 +201,18 @@ async function buildCombinedPng(
       // Hide the <img> (it won't paint anyway, but makes the area transparent).
       for (const img of Array.from(frontDiv.querySelectorAll<HTMLImageElement>("img"))) {
         img.style.display = "none";
+      }
+      for (const el of Array.from(frontDiv.querySelectorAll<HTMLElement>("*"))) {
+        neutralizeLineClamp(el);
+      }
+    }
+
+    // Also neutralize on the back card (CardBackFace uses line-clamp on the
+    // private-memory text and other long fields).
+    const backDiv = wrap.children[1] as HTMLElement | undefined;
+    if (backDiv) {
+      for (const el of Array.from(backDiv.querySelectorAll<HTMLElement>("*"))) {
+        neutralizeLineClamp(el);
       }
     }
 
