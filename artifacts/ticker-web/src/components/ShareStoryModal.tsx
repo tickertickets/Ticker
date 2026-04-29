@@ -245,40 +245,72 @@ async function buildCombinedPng(
     const ctx   = comp.getContext("2d")!;
 
     if (posterImg) {
-      const cX = PAD_W * S;
-      const cY = PAD_W * S;
-      const cW = SEED_W * S;
-      const cH = SEED_H * S;
+      // Measure the ACTUAL on-screen rect of the image area (poster) or card
+      // (classic) instead of trusting hard-coded math. iOS may render padding
+      // / aspect-ratio with sub-pixel rounding, which would offset the drawn
+      // image relative to the layoutCanvas overlay (the visible "frame"). Using
+      // getBoundingClientRect guarantees exact alignment with the captured
+      // layout.
+      const wrapRect = wrap.getBoundingClientRect();
+      // Honour the user-chosen horizontal crop position (background-position
+      // `${offsetX}% center` in PosterCardFront). 50 = centred.
+      const offsetX = ((t["cardBackdropOffsetX"] as number | null | undefined) ?? 50) / 100;
 
       if (isPoster) {
-        // ① POSTER_BG background for entire front card area
-        ctx.fillStyle = POSTER_BG;
-        ctx.fillRect(cX, cY, cW, cH);
+        // The image area is the descendant <div style="aspect-ratio:1/1">
+        let imageAreaEl: HTMLElement | null = null;
+        for (const el of Array.from(frontDiv.querySelectorAll<HTMLElement>("*"))) {
+          // style.aspectRatio is normalised to "1 / 1" in WebKit.
+          const ar = el.style.aspectRatio.replace(/\s+/g, "");
+          if (ar === "1/1") { imageAreaEl = el; break; }
+        }
 
-        // ② Poster image fills the square (5px padding on all sides at card top)
-        const imgX    = (PAD_W + 5) * S;
-        const imgY    = (PAD_W + 5) * S;
-        const imgSide = (SEED_W - 10) * S;
-        const sc = Math.max(imgSide / posterImg.naturalWidth, imgSide / posterImg.naturalHeight);
+        const r       = (imageAreaEl ?? frontDiv).getBoundingClientRect();
+        const imgX    = (r.left - wrapRect.left) * S;
+        const imgY    = (r.top  - wrapRect.top ) * S;
+        const imgW    = r.width  * S;
+        const imgH    = r.height * S;
+
+        // Fill POSTER_BG over the entire FRONT-card area (measured)
+        const fr   = frontDiv.getBoundingClientRect();
+        const fX   = (fr.left - wrapRect.left) * S;
+        const fY   = (fr.top  - wrapRect.top ) * S;
+        const fW   = fr.width  * S;
+        const fH   = fr.height * S;
+        ctx.fillStyle = POSTER_BG;
+        ctx.fillRect(fX, fY, fW, fH);
+
+        const sc = Math.max(imgW / posterImg.naturalWidth, imgH / posterImg.naturalHeight);
         const dw = posterImg.naturalWidth  * sc;
         const dh = posterImg.naturalHeight * sc;
         ctx.save();
         ctx.beginPath();
-        ctx.rect(imgX, imgY, imgSide, imgSide);
+        ctx.rect(imgX, imgY, imgW, imgH);
         ctx.clip();
-        ctx.drawImage(posterImg, imgX + (imgSide - dw) / 2, imgY + (imgSide - dh) / 2, dw, dh);
+        ctx.drawImage(
+          posterImg,
+          imgX + (imgW - dw) * offsetX,   // honour user offsetX (0..1)
+          imgY + (imgH - dh) * 0.5,       // vertical: always centred
+          dw,
+          dh,
+        );
         ctx.restore();
       } else {
-        // ① Classic: image fills entire card front (clipped to border radius)
-        const sc = Math.max(cW / posterImg.naturalWidth, cH / posterImg.naturalHeight);
+        // Classic: image fills the entire FRONT card (measured), clipped to
+        // border radius.
+        const fr = frontDiv.getBoundingClientRect();
+        const fX = (fr.left - wrapRect.left) * S;
+        const fY = (fr.top  - wrapRect.top ) * S;
+        const fW = fr.width  * S;
+        const fH = fr.height * S;
+        const sc = Math.max(fW / posterImg.naturalWidth, fH / posterImg.naturalHeight);
         const dw = posterImg.naturalWidth  * sc;
         const dh = posterImg.naturalHeight * sc;
         ctx.save();
         ctx.beginPath();
-        // border-radius: 12px in DOM → radius*S px in canvas
-        roundRectPath(ctx, cX, cY, cW, cH, radius * S);
+        roundRectPath(ctx, fX, fY, fW, fH, radius * S);
         ctx.clip();
-        ctx.drawImage(posterImg, cX + (cW - dw) / 2, cY + (cH - dh) / 2, dw, dh);
+        ctx.drawImage(posterImg, fX + (fW - dw) / 2, fY + (fH - dh) / 2, dw, dh);
         ctx.restore();
       }
     }
