@@ -7,7 +7,6 @@ import { navBack } from "@/lib/nav-back";
 import { compressImage } from "@/lib/image-compress";
 import { useLang } from "@/lib/i18n";
 
-const PROMPTPAY_NUMBER = import.meta.env.VITE_PROMPTPAY_NUMBER ?? "0925375441";
 const SUPPORTER_AMOUNT = import.meta.env.VITE_SUPPORTER_AMOUNT ?? "99";
 
 interface SupporterRequest {
@@ -202,13 +201,20 @@ export default function SupporterRequest() {
                   <span className="text-[13px] font-bold text-foreground">PromptPay</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-[12px] text-muted-foreground">{t.paymentNumber}</span>
-                  <span className="text-[11px] font-bold text-foreground">{PROMPTPAY_NUMBER}</span>
-                </div>
-                <div className="flex justify-between items-center">
                   <span className="text-[12px] text-muted-foreground">{t.paymentAmount}</span>
                   <span className="text-[11px] font-bold text-foreground">฿{SUPPORTER_AMOUNT}</span>
                 </div>
+              </div>
+              <div className="flex flex-col items-center gap-2 py-1">
+                <div className="w-44 h-44 rounded-2xl overflow-hidden bg-white p-2 border border-border">
+                  <img
+                    src="/promptpay-qr.png"
+                    alt="PromptPay QR"
+                    className="w-full h-full object-contain"
+                    draggable={false}
+                  />
+                </div>
+                <p className="text-[11px] text-muted-foreground font-medium">{t.scanQrToPay}</p>
               </div>
               <p className="text-[10px] text-muted-foreground text-center">
                 {t.attachSlipNote}

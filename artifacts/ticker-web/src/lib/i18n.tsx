@@ -313,8 +313,8 @@ export interface Strings {
   supporterBenefits: string[];
   howToSupportTitle: string;
   paymentMethod: string;
-  paymentNumber: string;
   paymentAmount: string;
+  scanQrToPay: string;
   attachSlipNote: string;
   uploadSlipTitle: string;
   tapToSelectSlip: string;
@@ -614,8 +614,8 @@ const TH: Strings = {
   ],
   howToSupportTitle: "วิธีสนับสนุน",
   paymentMethod: "ช่องทาง",
-  paymentNumber: "หมายเลข",
   paymentAmount: "จำนวน",
+  scanQrToPay: "สแกน QR เพื่อชำระเงิน",
   attachSlipNote: "แนบสลิปเป็นหลักฐาน",
   uploadSlipTitle: "อัพโหลดสลิป",
   tapToSelectSlip: "แตะเพื่อเลือกรูปสลิป",
@@ -1155,8 +1155,8 @@ const EN: Strings = {
   ],
   howToSupportTitle: "How to Support",
   paymentMethod: "Method",
-  paymentNumber: "Number",
   paymentAmount: "Amount",
+  scanQrToPay: "Scan QR to pay",
   attachSlipNote: "Attach payment slip as proof",
   uploadSlipTitle: "Upload Slip",
   tapToSelectSlip: "Tap to select slip image",
