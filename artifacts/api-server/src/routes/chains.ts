@@ -17,7 +17,7 @@ import {
 import { eq, and, desc, isNull, isNotNull, count, max, asc, sql, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { sanitize } from "../lib/sanitize";
-import { hotScore } from "../lib/hot-score";
+import { hotScore, makeAffinity, makeFreshBoost } from "../lib/hot-score";
 import { tmdbFetch } from "../lib/tmdb-client";
 import { awardXp } from "../services/badge.service";
 import { notifyFollowersNewPost, createNotification } from "../services/notify.service";
@@ -296,13 +296,17 @@ router.get("/", async (req, res) => {
 
     if (poolChains.length > 0) {
       const poolIds = poolChains.map(c => c.id);
-      const [likeRows, commentRows, runRows] = await Promise.all([
+      const [likeRows, commentRows, runRows, followRows] = await Promise.all([
         db.select({ chainId: chainLikesTable.chainId, n: count(), lastAt: max(chainLikesTable.createdAt) })
           .from(chainLikesTable).where(inArray(chainLikesTable.chainId, poolIds)).groupBy(chainLikesTable.chainId),
         db.select({ chainId: chainCommentsTable.chainId, n: count(), lastAt: max(chainCommentsTable.createdAt) })
           .from(chainCommentsTable).where(inArray(chainCommentsTable.chainId, poolIds)).groupBy(chainCommentsTable.chainId),
         db.select({ chainId: chainRunsTable.chainId, n: count(), lastAt: max(chainRunsTable.startedAt) })
           .from(chainRunsTable).where(inArray(chainRunsTable.chainId, poolIds)).groupBy(chainRunsTable.chainId),
+        currentUserId
+          ? db.select({ followingId: followsTable.followingId })
+              .from(followsTable).where(eq(followsTable.followerId, currentUserId))
+          : Promise.resolve([] as { followingId: string }[]),
       ]);
       const likeMap    = new Map(likeRows.map(r => [r.chainId, Number(r.n)]));
       const commentMap = new Map(commentRows.map(r => [r.chainId, Number(r.n)]));
@@ -311,13 +315,23 @@ router.get("/", async (req, res) => {
       const cmtLastAt  = new Map(commentRows.map(r => [r.chainId, r.lastAt ? new Date(r.lastAt) : null]));
       const runLastAt  = new Map(runRows.map(r => [r.chainId, r.lastAt ? new Date(r.lastAt) : null]));
 
+      // Affinity + fresh boost: same treatment as /api/feed and /api/tickets (home).
+      // Followed users (and own posts) get 2× score, with up to 15× decaying boost
+      // for posts < 30 min old.
+      const followedSet = currentUserId
+        ? new Set<string>([...followRows.map(r => r.followingId), currentUserId])
+        : null;
+      const affinityFn = makeAffinity(followedSet);
+      const freshBoostFn = makeFreshBoost(followedSet);
+
       const scored = poolChains.map(c => {
         const lastActivityAt = [c.createdAt, likeLastAt.get(c.id), cmtLastAt.get(c.id), runLastAt.get(c.id)]
           .filter((d): d is Date => d instanceof Date)
           .reduce((a, b) => (a > b ? a : b), c.createdAt);
+        const base = hotScore({ likes: likeMap.get(c.id) ?? 0, comments: commentMap.get(c.id) ?? 0, bonus: runMap.get(c.id) ?? c.chainCount, lastActivityAt });
         return {
           chain: c,
-          score: hotScore({ likes: likeMap.get(c.id) ?? 0, comments: commentMap.get(c.id) ?? 0, bonus: runMap.get(c.id) ?? c.chainCount, lastActivityAt }),
+          score: base * affinityFn(c.userId) * freshBoostFn(c.userId, c.createdAt),
         };
       });
       scored.sort((a, b) => b.score - a.score);
@@ -507,8 +521,8 @@ router.get("/hot", async (req, res) => {
 
   const chainIds = rawChains.map((c) => c.id);
 
-  // Bulk engagement: likes, comments, runs (no N+1)
-  const [likeRows, commentRows, runRows] = await Promise.all([
+  // Bulk engagement: likes, comments, runs (no N+1) + follow graph for affinity
+  const [likeRows, commentRows, runRows, followRows] = await Promise.all([
     db.select({ chainId: chainLikesTable.chainId, n: count(), lastAt: max(chainLikesTable.createdAt) })
       .from(chainLikesTable)
       .where(inArray(chainLikesTable.chainId, chainIds))
@@ -521,6 +535,10 @@ router.get("/hot", async (req, res) => {
       .from(chainRunsTable)
       .where(inArray(chainRunsTable.chainId, chainIds))
       .groupBy(chainRunsTable.chainId),
+    currentUserId
+      ? db.select({ followingId: followsTable.followingId })
+          .from(followsTable).where(eq(followsTable.followerId, currentUserId))
+      : Promise.resolve([] as { followingId: string }[]),
   ]);
 
   const likeMap      = new Map(likeRows.map((r) => [r.chainId, Number(r.n)]));
@@ -530,20 +548,30 @@ router.get("/hot", async (req, res) => {
   const cmtLastAt    = new Map(commentRows.map((r) => [r.chainId, r.lastAt ? new Date(r.lastAt) : null]));
   const runLastAt    = new Map(runRows.map((r) => [r.chainId, r.lastAt ? new Date(r.lastAt) : null]));
 
+  // Affinity + fresh boost: same treatment as /api/feed and /api/tickets (home).
+  // Followed users (and own posts) get 2× score, with up to 15× decaying boost
+  // for posts < 30 min old.
+  const followedSet = currentUserId
+    ? new Set<string>([...followRows.map(r => r.followingId), currentUserId])
+    : null;
+  const affinityFn = makeAffinity(followedSet);
+  const freshBoostFn = makeFreshBoost(followedSet);
+
   // Universal hot score — chain participants (runs) count as "bonus × 3"
   //   lastActivityAt = most recent like, comment, new run, or creation
   const scored = rawChains.map((c) => {
     const lastActivityAt = [c.createdAt, likeLastAt.get(c.id), cmtLastAt.get(c.id), runLastAt.get(c.id)]
       .filter((d): d is Date => d instanceof Date)
       .reduce((a, b) => (a > b ? a : b), c.createdAt);
+    const base = hotScore({
+      likes:          likeMap.get(c.id) ?? 0,
+      comments:       commentMap.get(c.id) ?? 0,
+      bonus:          runMap.get(c.id) ?? c.chainCount,
+      lastActivityAt,
+    });
     return {
       chain: c,
-      score: hotScore({
-        likes:          likeMap.get(c.id) ?? 0,
-        comments:       commentMap.get(c.id) ?? 0,
-        bonus:          runMap.get(c.id) ?? c.chainCount,
-        lastActivityAt,
-      }),
+      score: base * affinityFn(c.userId) * freshBoostFn(c.userId, c.createdAt),
     };
   });
 

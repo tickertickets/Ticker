@@ -32,3 +32,29 @@ export function hotScore({ likes, comments, bonus = 0, lastActivityAt }: HotScor
   const ageHours   = (Date.now() - lastActivityAt.getTime()) / 3_600_000;
   return (engagement + 1) / Math.pow(ageHours + 2, HOT_GRAVITY);
 }
+
+// ── Shared boost helpers (used by /api/feed, /api/tickets, /api/chains) ──────
+//
+// Affinity: posts by users in `followedSet` (own + followed) get a 2× boost.
+// Fresh boost: posts < 30 min old by users in `followedSet` get a decaying
+// multiplier (15× at t=0 → 1× at t=30min). Matches Instagram/Reddit behaviour.
+
+export const AFFINITY_FOLLOWED = 2.0;
+export const AFFINITY_DISCOVERY = 1.0;
+export const FRESH_WINDOW_MS = 30 * 60 * 1000;
+
+export function makeAffinity(followedSet: Set<string> | null) {
+  if (!followedSet || followedSet.size === 0) return () => AFFINITY_DISCOVERY;
+  return (userId: string) => (followedSet.has(userId) ? AFFINITY_FOLLOWED : AFFINITY_DISCOVERY);
+}
+
+export function makeFreshBoost(followedSet: Set<string> | null) {
+  if (!followedSet || followedSet.size === 0) return () => 1.0;
+  return (userId: string, createdAt: Date): number => {
+    if (!followedSet.has(userId)) return 1.0;
+    const ageMs = Date.now() - createdAt.getTime();
+    if (ageMs >= FRESH_WINDOW_MS) return 1.0;
+    const t = ageMs / FRESH_WINDOW_MS;
+    return 1.0 + 14.0 * (1 - t); // 15× at t=0, 1× at t=1
+  };
+}
