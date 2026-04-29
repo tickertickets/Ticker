@@ -66,11 +66,6 @@ export function emitNotificationNew(userId: string): void {
 }
 
 /**
- * Notifies both the follower and the user being followed/unfollowed so
- * each side's profile (followerCount / followingCount / isFollowing) can
- * refresh in real time without waiting for a 30s poll.
- */
-/**
  * Notifies the given user(s) that their chat state changed (new message
  * received, conversation marked read, etc) so every device they're
  * viewing on can refresh the chat unread badge + conversations list

@@ -4,11 +4,13 @@ let socket: Socket | null = null;
 
 export function getSocket(): Socket {
   if (!socket) {
-    socket = io({
+    const url: string | undefined = import.meta.env.VITE_API_URL || undefined;
+    socket = io(url, {
       path: "/api/socket.io",
       transports: ["websocket", "polling"],
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 10000,
+      reconnectionDelay: 2000,
+      reconnectionDelayMax: 30000,
+      reconnectionAttempts: 8,
     });
   }
   return socket;

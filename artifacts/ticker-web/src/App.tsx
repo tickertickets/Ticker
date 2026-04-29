@@ -113,7 +113,7 @@ function PersistentTab({
         transform: isActive ? "translateX(0)" : "translateX(-100%)",
         pointerEvents: isActive ? "auto" : "none",
       }}
-      aria-hidden={!isActive}
+      {...(!isActive ? { inert: "" } as Record<string, string> : {})}
     >
       <Component />
     </div>
@@ -248,7 +248,7 @@ function AppRoutes() {
               transform:    isOnGuestMoviePage ? "translateX(0)" : "translateX(-100%)",
               pointerEvents: isOnGuestMoviePage ? "auto" : "none",
             }}
-            aria-hidden={!isOnGuestMoviePage}
+            {...(!isOnGuestMoviePage ? { inert: "" } as Record<string, string> : {})}
           >
             <MovieDetail />
           </div>
@@ -296,7 +296,7 @@ function AppRoutes() {
             transform:    movieLayerActive ? "translateX(0)" : "translateX(-100%)",
             pointerEvents: movieLayerActive ? "auto" : "none",
           }}
-          aria-hidden={!movieLayerActive}
+          {...(!movieLayerActive ? { inert: "" } as Record<string, string> : {})}
         >
           <MovieDetail />
         </div>
