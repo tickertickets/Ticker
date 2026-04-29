@@ -513,6 +513,7 @@ export interface Strings {
   savedToDeviceTitle: string;
   openGalleryHint: string;
   saveCardSubdesc: string;
+  iosLongPressHint: string;
   comingSoon: string;
   savingShort: string;
   sendInChatBtn: string;
@@ -1054,6 +1055,7 @@ const TH: Strings = {
   savedToDeviceTitle: "บันทึกรูปลงเครื่องแล้ว",
   openGalleryHint: "เปิดแอปคลังรูป แล้วลงสตอรี่ได้เลย",
   saveCardSubdesc: "แอปจะบันทึกการ์ดหน้า + หลัง ลงในเครื่องของคุณ",
+  iosLongPressHint: "กดค้างที่รูปด้านบน แล้วเลือก “เพิ่มในรูปภาพ” เพื่อบันทึกลงเครื่อง",
   comingSoon: "เร็วๆนี้",
   savingShort: "กำลังบันทึก…",
   sendInChatBtn: "ส่งในแชท",
@@ -1595,6 +1597,7 @@ const EN: Strings = {
   savedToDeviceTitle: "Saved to device",
   openGalleryHint: "Open your gallery app and post to story",
   saveCardSubdesc: "Both front and back of the card will be saved to your device",
+  iosLongPressHint: "Press and hold the image above, then choose “Add to Photos” to save",
   comingSoon: "Coming Soon",
   savingShort: "Saving…",
   sendInChatBtn: "Send in Chat",

@@ -224,6 +224,12 @@ export function ShareStoryModal({ ticket, onClose, onOpenChat }: ShareStoryModal
 
   useEffect(() => () => { if (imageSrc) URL.revokeObjectURL(imageSrc); }, [imageSrc]);
 
+  // iOS-only fallback: open the rendered image in a new tab so the user can
+  // long-press → "Save to Photos". Apple's WebKit forbids direct downloads to
+  // Photos from the web, so this is the only reliable path on older iOS that
+  // can't share Files via navigator.share.
+  const [iosLongPressUrl, setIosLongPressUrl] = useState<string | null>(null);
+
   const handleSave = useCallback(async () => {
     setSaving(true);
     setError(null);
@@ -239,22 +245,40 @@ export function ShareStoryModal({ ticket, onClose, onOpenChat }: ShareStoryModal
       const filename = `ticker-${(ticket.movieTitle ?? "card").replace(/\s+/g, "-")}.png`;
       const file     = new File([blob], filename, { type: "image/png" });
 
-      if (isIOS() && navigator.canShare?.({ files: [file] })) {
-        try {
-          await navigator.share({ files: [file], title: ticket.movieTitle ?? "Ticker" });
-        } catch (e) {
-          if (e instanceof Error && e.name === "AbortError") { setSaving(false); return; }
-          const url = URL.createObjectURL(blob);
-          window.open(url, "_blank");
-          setTimeout(() => URL.revokeObjectURL(url), 30_000);
+      if (isIOS()) {
+        // iOS path — try Web Share API with files (iOS 16.4+ in PWA, 15+ in Safari).
+        // Pass ONLY the file — no title/text — so the iOS share sheet doesn't
+        // expose a "Copy" action that would copy the title string instead of
+        // the image (this was the previous bug).
+        if (navigator.canShare?.({ files: [file] })) {
+          try {
+            await navigator.share({ files: [file] });
+            setSaved(true);
+            setTimeout(() => { setSaved(false); onClose(); }, 2_000);
+            return;
+          } catch (e) {
+            if (e instanceof Error && e.name === "AbortError") {
+              setSaving(false);
+              return;
+            }
+            // fall through to long-press fallback
+          }
         }
-      } else {
+        // Older iOS / non-PWA without canShare(files) — open the image in a
+        // new tab and ask the user to long-press → Save to Photos. This is
+        // the ONLY reliable path on iOS Safari without the Files share API.
         const url = URL.createObjectURL(blob);
-        const a   = document.createElement("a");
-        a.href = url; a.download = filename;
-        document.body.appendChild(a); a.click(); document.body.removeChild(a);
-        setTimeout(() => URL.revokeObjectURL(url), 5_000);
+        setIosLongPressUrl(url);
+        setSaving(false);
+        return;
       }
+
+      // Android / desktop — direct download via anchor element.
+      const url = URL.createObjectURL(blob);
+      const a   = document.createElement("a");
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 5_000);
 
       setSaved(true);
       setTimeout(() => { setSaved(false); onClose(); }, 2_000);
@@ -262,7 +286,12 @@ export function ShareStoryModal({ ticket, onClose, onOpenChat }: ShareStoryModal
       setError(e instanceof Error ? e.message : t.errSaveCardFailed);
       setSaving(false);
     }
-  }, [ticket, onClose, rawImageUrl, ratingType]);
+  }, [ticket, onClose, rawImageUrl, ratingType, t.errSaveCardFailed]);
+
+  // Cleanup the long-press blob URL when the modal closes
+  useEffect(() => () => {
+    if (iosLongPressUrl) URL.revokeObjectURL(iosLongPressUrl);
+  }, [iosLongPressUrl]);
 
   const handleCopyLink = useCallback(async () => {
     const link = `${window.location.origin}/ticket/${ticket.id}`;
@@ -331,7 +360,30 @@ export function ShareStoryModal({ ticket, onClose, onOpenChat }: ShareStoryModal
         </div>
 
         <div className="px-5 pt-5 space-y-4">
-          {saved ? (
+          {iosLongPressUrl ? (
+            // iOS long-press fallback: show the rendered card image directly
+            // inside the sheet. The user long-presses on the image and picks
+            // "Add to Photos" from the iOS context menu. This is the only way
+            // to save to Photos on older iOS Safari versions that don't support
+            // navigator.share with files.
+            <div className="flex flex-col items-center gap-4 py-2">
+              <img
+                src={iosLongPressUrl}
+                alt={ticket.movieTitle ?? "Ticker card"}
+                style={{
+                  maxWidth: "100%",
+                  maxHeight: "55vh",
+                  borderRadius: 12,
+                  boxShadow: "0 10px 25px rgba(0,0,0,0.25)",
+                  WebkitTouchCallout: "default",
+                  touchAction: "manipulation",
+                }}
+              />
+              <p className="text-center text-xs text-muted-foreground leading-relaxed px-4">
+                {t.iosLongPressHint}
+              </p>
+            </div>
+          ) : saved ? (
             <div className="flex flex-col items-center justify-center gap-3 py-6">
               <div className="w-14 h-14 rounded-full bg-green-500/15 flex items-center justify-center text-green-500">
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none"
