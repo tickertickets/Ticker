@@ -118,39 +118,104 @@ async function buildCombinedPng(
     </LangProvider>,
   );
 
-  // Two-phase wait so the poster image is FULLY decoded before capture:
-  //   1. Yield to React commit + initial paint
-  //   2. Walk every <img> in the wrapper and await decode()
-  //   3. Wait for fonts (so text metrics are stable)
-  await new Promise<void>(r => setTimeout(r, 50));
-  const imgs = Array.from(wrap.querySelectorAll("img"));
+  // Wait for React to commit + all <img> to load/decode + fonts.
+  await new Promise<void>(r => setTimeout(r, 80));
+  const imgs = Array.from(wrap.querySelectorAll<HTMLImageElement>("img"));
   await Promise.all(imgs.map(img => {
     if (img.complete && img.naturalWidth > 0) return Promise.resolve();
     return new Promise<void>(r => {
-      const done = () => { img.removeEventListener("load", done); img.removeEventListener("error", done); r(); };
+      const done = () => r();
       img.addEventListener("load", done, { once: true });
       img.addEventListener("error", done, { once: true });
-      // Safety timeout — never block forever on a broken image
       setTimeout(done, 2_500);
     });
   }));
-  // Pre-decode each image so the rasteriser has a fully-decoded bitmap ready
   await Promise.all(imgs.map(img => img.decode?.().catch(() => undefined)));
   await document.fonts.ready;
-  // Final safety frame — let the browser commit the loaded images to layout
   await new Promise<void>(r => requestAnimationFrame(() => r()));
 
-  // foreignObjectRendering: false → use html2canvas's manual canvas painter.
-  // Safari/iOS WebKit drops images and CSS background-image inside SVG
-  // <foreignObject>, so the SVG path produces a card with NO poster.
-  // The manual painter handles both <img> and CSS background-image reliably.
+  // ── iOS canvas-swap ──────────────────────────────────────────────────────
+  // iOS / iPadOS WebKit refuses to paint <img> elements AND CSS
+  // background-image inside an SVG <foreignObject>. As a result,
+  // foreignObjectRendering: true produces blank poster areas on iOS.
+  //
+  // Fix: before calling html2canvas, walk the wrapper and replace every
+  //   • <img src="data:..."> with a <canvas> that has the image pre-drawn
+  //   • CSS background-image: url("data:...") with a child <canvas>
+  // Canvas bitmaps ARE rasterised correctly by WebKit inside foreignObject.
+  // This swap is iOS-only — Android/desktop already work without it.
+  if (isIOS()) {
+    // ① <img> → <canvas>
+    for (const img of imgs) {
+      if (!img.complete || img.naturalWidth === 0) continue;
+      const w = img.offsetWidth;
+      const h = img.offsetHeight;
+      if (!w || !h) continue;
+      const c = document.createElement("canvas");
+      c.width = w;
+      c.height = h;
+      const cs = window.getComputedStyle(img);
+      c.style.position = cs.position;
+      c.style.top = cs.top;
+      c.style.left = cs.left;
+      c.style.right = cs.right;
+      c.style.bottom = cs.bottom;
+      c.style.width = w + "px";
+      c.style.height = h + "px";
+      const ctx = c.getContext("2d");
+      if (ctx) {
+        // Draw with object-fit: cover semantics
+        const iw = img.naturalWidth, ih = img.naturalHeight;
+        const sc = Math.max(w / iw, h / ih);
+        ctx.drawImage(img, (w - iw * sc) / 2, (h - ih * sc) / 2, iw * sc, ih * sc);
+      }
+      img.parentElement?.replaceChild(c, img);
+    }
+
+    // ② CSS background-image: url("data:...") → child <canvas>
+    for (const el of Array.from(wrap.querySelectorAll<HTMLElement>("*"))) {
+      const bg = (el as HTMLElement).style.backgroundImage;
+      if (!bg || bg === "none") continue;
+      const match = bg.match(/url\(["']?(data:[^"')]+)["']?\)/);
+      if (!match) continue;
+      const w = el.offsetWidth;
+      const h = el.offsetHeight;
+      if (!w || !h) continue;
+      const imgEl = new Image();
+      imgEl.src = match[1];
+      await new Promise<void>(r => {
+        if (imgEl.complete && imgEl.naturalWidth > 0) { r(); return; }
+        imgEl.onload = () => r(); imgEl.onerror = () => r(); setTimeout(r, 1_000);
+      });
+      if (!imgEl.naturalWidth) continue;
+      const c = document.createElement("canvas");
+      c.width = w; c.height = h;
+      c.style.cssText = `position:absolute;top:0;left:0;width:${w}px;height:${h}px;`;
+      const ctx = c.getContext("2d");
+      if (ctx) {
+        // Replicate background-size: cover with background-position
+        const posStr = el.style.backgroundPosition || "50% 50%";
+        const posX = parseFloat(posStr) / 100;
+        const iw = imgEl.naturalWidth, ih = imgEl.naturalHeight;
+        const sc = Math.max(w / iw, h / ih);
+        const dw = iw * sc, dh = ih * sc;
+        ctx.drawImage(imgEl, (w - dw) * (isNaN(posX) ? 0.5 : posX), (h - dh) * 0.5, dw, dh);
+      }
+      el.style.backgroundImage = "none";
+      el.insertBefore(c, el.firstChild);
+    }
+  }
+
+  // foreignObjectRendering: true → browser renders HTML natively inside SVG.
+  // Gives pixel-perfect layout (text, flexbox, absolute positions all exact).
+  // On iOS the canvas-swap above ensures poster images ARE visible.
   const canvas = await html2canvas(wrap, {
     scale: S,
     useCORS: true,
     allowTaint: true,
     backgroundColor: null,
     logging: false,
-    foreignObjectRendering: false,
+    foreignObjectRendering: true,
   });
 
   root.unmount();
