@@ -170,17 +170,29 @@ async function buildCombinedPng(
     // Neutralize `display: -webkit-box` + `-webkit-line-clamp` on every
     // descendant. iOS WebKit renders these incorrectly inside an SVG
     // <foreignObject>: the line-box height is mis-measured and overflow:hidden
-    // ends up clipping text at roughly half-letter height. We replace the
-    // box with a regular block; the parent card's overflow:hidden still clips
-    // any genuinely-overflowing text.
+    // ends up clipping text at roughly half-letter height.
+    //
+    // Replace with a regular block + an explicit `max-height` equal to
+    // `lineHeight × clampLines` (+2px buffer for iOS rounding). This preserves
+    // the original "clamp to N lines" intent without triggering the
+    // half-letter clip bug.
     const neutralizeLineClamp = (el: HTMLElement) => {
       const cs = el.style;
-      if (cs.display === "-webkit-box" || cs.webkitLineClamp) {
-        cs.display          = "block";
-        cs.webkitLineClamp  = "";
-        cs.webkitBoxOrient  = "";
-        cs.overflow         = "visible";
-      }
+      const lineClampStr = cs.webkitLineClamp;
+      if (cs.display !== "-webkit-box" && !lineClampStr) return;
+
+      const lines = Math.max(1, parseInt(lineClampStr || "1", 10) || 1);
+      const computed = window.getComputedStyle(el);
+      const fontSize = parseFloat(computed.fontSize) || 16;
+      const lhRaw    = computed.lineHeight;
+      const lineHeight =
+        !lhRaw || lhRaw === "normal" ? fontSize * 1.2 : parseFloat(lhRaw);
+
+      cs.display         = "block";
+      cs.webkitLineClamp = "";
+      cs.webkitBoxOrient = "";
+      cs.maxHeight       = `${Math.ceil(lineHeight * lines) + 2}px`;
+      cs.overflow        = "hidden";
     };
 
     if (isPoster) {
