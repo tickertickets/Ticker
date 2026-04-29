@@ -246,27 +246,37 @@ export function ShareStoryModal({ ticket, onClose, onOpenChat }: ShareStoryModal
       const file     = new File([blob], filename, { type: "image/png" });
 
       if (isIOS()) {
-        // iOS path — try Web Share API with files (iOS 16.4+ in PWA, 15+ in Safari).
-        // Pass ONLY the file — no title/text — so the iOS share sheet doesn't
-        // expose a "Copy" action that would copy the title string instead of
-        // the image (this was the previous bug).
-        if (navigator.canShare?.({ files: [file] })) {
-          try {
-            await navigator.share({ files: [file] });
-            setSaved(true);
-            setTimeout(() => { setSaved(false); onClose(); }, 2_000);
-            return;
-          } catch (e) {
-            if (e instanceof Error && e.name === "AbortError") {
-              setSaving(false);
+        // iOS path — try Web Share API with files (iOS 15+ Safari, 16.4+ PWA).
+        // We attempt navigator.share unconditionally if it exists, because in
+        // some iOS PWA modes navigator.canShare is missing or returns false
+        // even though sharing actually works. Pass ONLY the file (no title /
+        // text) so the iOS share sheet doesn't expose a "Copy" action that
+        // copies the title string instead of the image.
+        if (typeof navigator.share === "function") {
+          // canShare check is best-effort — if it exists and explicitly says
+          // false, skip; otherwise attempt the share.
+          const canShareSaid = typeof navigator.canShare === "function"
+            ? navigator.canShare({ files: [file] })
+            : null;
+          if (canShareSaid !== false) {
+            try {
+              await navigator.share({ files: [file] });
+              setSaved(true);
+              setTimeout(() => { setSaved(false); onClose(); }, 2_000);
               return;
+            } catch (e) {
+              if (e instanceof Error && e.name === "AbortError") {
+                setSaving(false);
+                return;
+              }
+              // fall through to long-press fallback
             }
-            // fall through to long-press fallback
           }
         }
-        // Older iOS / non-PWA without canShare(files) — open the image in a
-        // new tab and ask the user to long-press → Save to Photos. This is
-        // the ONLY reliable path on iOS Safari without the Files share API.
+        // Older iOS / no Web Share API — show the rendered image inside the
+        // sheet so the user can long-press → "Save to Photos" / "Add to
+        // Photos". This is the only reliable path on iOS Safari without the
+        // Files share API.
         const url = URL.createObjectURL(blob);
         setIosLongPressUrl(url);
         setSaving(false);

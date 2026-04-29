@@ -200,12 +200,25 @@ html.theme-transitioning *::after {
   }
   ::-webkit-scrollbar { display: none; width: 0; height: 0; }
   * { scrollbar-width: none; -ms-overflow-style: none; }
-  /* Prevent browser native image/link long-press callout on mobile */
-  img {
+  /* Prevent browser native long-press callout / context menu on mobile.
+     Applied to images, links, and buttons — the things iOS users typically
+     long-press by mistake on touch UIs.  Inputs / textareas / contenteditable
+     are excluded so users can still select & copy text inside form fields.
+     The Save-to-Story modal explicitly opts back in via inline style so users
+     CAN long-press the rendered card image to save to Photos. */
+  img,
+  a,
+  button,
+  [role="button"] {
     -webkit-touch-callout: none;
     -webkit-user-drag: none;
     user-select: none;
     -webkit-user-select: none;
+  }
+  input, textarea, [contenteditable="true"] {
+    -webkit-touch-callout: default;
+    user-select: text;
+    -webkit-user-select: text;
   }
 }
 

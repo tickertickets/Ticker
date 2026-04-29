@@ -401,12 +401,11 @@ export function ChainShareModal({ chain, onClose }: { chain: ChainItem; onClose:
           <div className="w-9 h-1 rounded-full bg-border" />
         </div>
 
-        {/* Header */}
+        {/* Header — chain title only, no "Send to friend" label */}
         <div className="flex items-center gap-3 px-5 pt-2 pb-4 border-b border-border">
           <div className="flex-1 min-w-0">
-            <p className="font-bold text-sm text-foreground">{t.sendToFriend}</p>
-            <p className="text-xs text-muted-foreground truncate mt-0.5 flex items-center gap-1.5">
-              <Link2 className="w-3 h-3 flex-shrink-0" strokeWidth={2.75} />
+            <p className="font-bold text-sm text-foreground truncate flex items-center gap-1.5">
+              <Link2 className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={2.75} />
               <span className="truncate">{chain.title}</span>
             </p>
           </div>
@@ -1037,67 +1036,26 @@ export function ChainCard({ chain }: { chain: ChainItem }) {
   );
 }
 
-// ── Smart feed algorithm — Tier 1 (≤24 h, recency) / Tier 2 (hot score) ────
+// ── ChainsSection (unified smart feed — server-ranked) ─────────────────────
 //
-// Design: latest posts from the last 24 h always surface above older ones,
-// sorted purely by age (newest first).  Posts older than 24 h fall into
-// Tier 2 where engagement/time^1.5 determines rank.
-
-function smartScore(chain: ChainItem): number {
-  const ageHours = chain.createdAt
-    ? (Date.now() - new Date(chain.createdAt).getTime()) / (1000 * 60 * 60)
-    : 48;
-  const engagement = (chain.likeCount ?? 0) + (chain.commentCount ?? 0) * 2 + (chain.chainCount ?? 0) * 3;
-
-  if (ageHours <= 24) {
-    // Tier 1 — floor is 9 000; newest chain ≈ 10 000, 24 h-old ≈ 9 760.
-    // Engagement adds a tiny tiebreaker nudge so two equal-age chains
-    // with different activity aren't totally identical.
-    const ageMinutes = ageHours * 60;
-    return 10_000 - ageMinutes + engagement * 0.01;
-  }
-
-  // Tier 2 — hot score (always < 500, never overlaps Tier 1)
-  const hoursAfterGrace = ageHours - 22;          // smooth boundary
-  return (Math.max(1, engagement) / Math.pow(hoursAfterGrace, 1.5)) * 100;
-}
-
-// ── ChainsSection (unified smart feed — no new/popular split) ───────────────
+// All ranking happens server-side in GET /api/chains so this list matches
+// the algorithm used by /api/feed (mixed home feed). The previous client-side
+// re-sort ignored last-activity time, causing brand-new chains with 0 likes
+// to outrank older chains that just received fresh likes today.
 
 export function ChainsSection() {
   const { t } = useLang();
-  const { data: recentData, isLoading: recentLoading } = useQuery<{ chains: ChainItem[] }>({
-    queryKey: ["chains-recent"],
+  const { data, isLoading } = useQuery<{ chains: ChainItem[] }>({
+    queryKey: ["chains-feed"],
     queryFn: async () => {
-      const res = await fetch("/api/chains?limit=15");
+      const res = await fetch("/api/chains?limit=30", { credentials: "include" });
       if (!res.ok) throw new Error("failed");
       return res.json();
     },
     staleTime: 1000 * 60 * 2,
   });
 
-  const { data: hotData, isLoading: hotLoading } = useQuery<{ chains: ChainItem[] }>({
-    queryKey: ["chains-hot"],
-    queryFn: async () => {
-      const res = await fetch("/api/chains/hot?limit=15");
-      if (!res.ok) throw new Error("failed");
-      return res.json();
-    },
-    staleTime: 1000 * 60 * 2,
-  });
-
-  const isLoading = recentLoading || hotLoading;
-
-  const chains: ChainItem[] = (() => {
-    const all = [...(recentData?.chains ?? []), ...(hotData?.chains ?? [])];
-    const seen = new Set<string>();
-    const deduped = all.filter(c => {
-      if (seen.has(c.id)) return false;
-      seen.add(c.id);
-      return true;
-    });
-    return deduped.sort((a, b) => smartScore(b) - smartScore(a));
-  })();
+  const chains: ChainItem[] = data?.chains ?? [];
 
   return (
     <div className="pb-4">

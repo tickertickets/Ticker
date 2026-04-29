@@ -493,13 +493,9 @@ export default function MovieDetail() {
         </button>
 
 
-        {/* Rank + effect badges — below bookmark.
-            Wrapper width matches the bookmark button (36px). Regular tiers
-            (badge column = 26px wide) are pinned LEFT inside the wrapper, so
-            the badge column's right edge sits 10px inside the wrapper's right
-            edge. Special wide badges (LEGENDARY / CULT CLASSIC) are pinned to
-            the wrapper's right edge so the badge always touches the screen-side
-            margin. The popup mirrors these right edges below. */}
+        {/* Rank + effect badges — below bookmark, centred with it */}
+        {/* Wrapper has SAME right & width as the bookmark button,            */}
+        {/* so flexbox centering always aligns badge center to button center. */}
         {movie && (
           <div
             ref={badgeColRef}
@@ -509,7 +505,7 @@ export default function MovieDetail() {
               right:          16,
               width:          36,
               display:        "flex",
-              justifyContent: (_rank === "legendary" || _rank === "cult_classic") ? "flex-end" : "flex-start",
+              justifyContent: (_rank === "legendary" || _rank === "cult_classic") ? "flex-end" : "center",
             }}
           >
             <MovieBadges
@@ -532,21 +528,23 @@ export default function MovieDetail() {
         {/* Badge popup — positioned directly below the tapped badge.
             Each badge has a fixed designated spot in this container's coord
             system, so the popup always lands at the same offset for a given
-            badge regardless of how the page has been scrolled. The popup's
-            right edge mirrors the right edge of the badge column it belongs
-            to: regular tiers (column 26px wide, pinned LEFT inside the 36px
-            wrapper at right=16) → popup right = 16 + (36 - 26) = 26.
-            Special wide badges (pinned RIGHT) → popup right = 16. */}
+            badge regardless of how the page has been scrolled.
+            The popup's right edge lines up exactly with the badge's right
+            edge:
+              • Regular tiers — badge column = 26px wide, centred in a 36px
+                wrapper at right=16 → badge right edge = 16 + (36-26)/2 = 21.
+              • Special wide badges (LEGENDARY / CULT CLASSIC) — pinned to the
+                wrapper's right edge → popup right = 16. */}
         {openBadge && (
           <div
             ref={badgePopupRef}
-            className="absolute z-50 bg-zinc-900/95 text-white text-xs rounded-xl px-3 py-2 shadow-xl leading-relaxed text-center"
+            className="absolute z-50 bg-zinc-900/95 text-white text-xs rounded-xl px-3 py-2 shadow-xl leading-relaxed text-left"
             style={{
               // Badge container starts at: max(1rem, safe-area) + 2.75rem
               // Inside the container (size="md"): PAD(3) + idx*(side+gap=24) + side(20) = 23 + 24*idx
               // + 6px breathing gap below the badge
               top:           `calc(max(1rem, env(safe-area-inset-top, 0px)) + 2.75rem + ${29 + 24 * openBadge.idx}px)`,
-              right:         (_rank === "legendary" || _rank === "cult_classic") ? 16 : 26,
+              right:         (_rank === "legendary" || _rank === "cult_classic") ? 16 : 21,
               whiteSpace:    "pre",
               pointerEvents: "auto",
             }}
