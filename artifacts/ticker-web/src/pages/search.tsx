@@ -753,10 +753,10 @@ export default function Search() {
           "transition-transform duration-300 ease-in-out",
           headerHidden && "-translate-y-full"
         )}
-        style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
+        style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 4px)" }}
       >
         {/* Title row */}
-        <div className="flex items-center px-4 pt-4 pb-3">
+        <div className="flex items-center px-4 pb-3">
           <div className="w-9 h-9" />
           <h1 className="font-display font-bold text-xl tracking-tight text-foreground flex-1 text-center">Ticker</h1>
           <div className="w-9 h-9" />

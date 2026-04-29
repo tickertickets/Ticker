@@ -1153,7 +1153,7 @@ export default function Profile() {
         <div className="absolute inset-0 bg-gradient-to-b from-black/20 to-black/60" />
         <div
           className="absolute top-0 inset-x-0 flex items-center justify-between px-4 pt-4"
-          style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 16px)" }}
+          style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 4px)" }}
         >
           {isOwn ? (
             <Link href="/bookmarks"><button className="w-9 h-9 flex items-center justify-center"><Bookmark className="w-6 h-6 text-white" /></button></Link>
