@@ -35,17 +35,23 @@ export function hotScore({ likes, comments, bonus = 0, lastActivityAt }: HotScor
 
 // ── Shared boost helpers (used by /api/feed, /api/tickets, /api/chains) ──────
 //
-// Affinity: posts by users in `followedSet` (own + followed) get a 2× boost.
-// Fresh boost: posts < 30 min old by users in `followedSet` get a decaying
-// multiplier (15× at t=0 → 1× at t=30min). Matches Instagram/Reddit behaviour.
+// Design rationale (matches Instagram/Reddit behaviour):
+//   • Fresh boost ONLY — posts < 60 min old by users in `followedSet` get a
+//     decaying multiplier (15× at t=0 → 1× at t=60min).
+//   • After the fresh window, every post competes equally on hotScore alone,
+//     regardless of who you follow. This keeps the feed fair.
+//   • No permanent affinity multiplier (was 2× before — removed for fairness).
 
-export const AFFINITY_FOLLOWED = 2.0;
+export const FRESH_WINDOW_MS = 60 * 60 * 1000; // 60 minutes
+
+// Kept for backward compatibility / call-sites that reference these names.
+// They now both return 1.0 — affinity is no longer applied as a permanent
+// multiplier; only the fresh boost gives followed users an edge.
+export const AFFINITY_FOLLOWED = 1.0;
 export const AFFINITY_DISCOVERY = 1.0;
-export const FRESH_WINDOW_MS = 30 * 60 * 1000;
 
-export function makeAffinity(followedSet: Set<string> | null) {
-  if (!followedSet || followedSet.size === 0) return () => AFFINITY_DISCOVERY;
-  return (userId: string) => (followedSet.has(userId) ? AFFINITY_FOLLOWED : AFFINITY_DISCOVERY);
+export function makeAffinity(_followedSet: Set<string> | null) {
+  return () => 1.0;
 }
 
 export function makeFreshBoost(followedSet: Set<string> | null) {
@@ -55,6 +61,6 @@ export function makeFreshBoost(followedSet: Set<string> | null) {
     const ageMs = Date.now() - createdAt.getTime();
     if (ageMs >= FRESH_WINDOW_MS) return 1.0;
     const t = ageMs / FRESH_WINDOW_MS;
-    return 1.0 + 14.0 * (1 - t); // 15× at t=0, 1× at t=1
+    return 1.0 + 14.0 * (1 - t); // 15× at t=0, linearly down to 1× at t=1
   };
 }

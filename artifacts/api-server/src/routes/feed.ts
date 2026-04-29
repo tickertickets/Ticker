@@ -61,21 +61,19 @@ router.get("/", async (req, res) => {
     for (const r of privateRows) privateUserIds.add(r.id);
   }
 
-  // Affinity boost: home mode gives 2× to followed users so fresh posts from
-  // people you care about surface above equally-scored discovery content.
-  const AFFINITY_FOLLOWED = mode === "home" ? 2.0 : 1.0;
-  const AFFINITY_DISCOVERY = 1.0;
-  const affinity = (uid: string) =>
-    followedSet.has(uid) ? AFFINITY_FOLLOWED : AFFINITY_DISCOVERY;
+  // No permanent affinity multiplier — every post competes equally on hotScore
+  // once outside the fresh window. Followed users only get a head start via the
+  // fresh-post boost below.
+  const affinity = (_uid: string) => 1.0;
 
-  // Fresh-post boost: posts ≤ 30 min old from people you follow (or yourself)
+  // Fresh-post boost: posts ≤ 60 min old from people you follow (or yourself)
   // get a temporary multiplier that decays linearly from 15× → 1× over the
-  // window. After expiry they compete purely on hotScore × affinity — if they
-  // became popular during that window they stay up naturally.
+  // window. After expiry they compete purely on hotScore — if they became
+  // popular during that window they stay up naturally.
   //
   // In ALL modes (including discover), own posts always receive the boost so
   // a user sees their own freshly-created post at the top of every feed.
-  const FRESH_WINDOW_MS = 30 * 60 * 1000; // 30 minutes
+  const FRESH_WINDOW_MS = 60 * 60 * 1000; // 60 minutes
   const freshBoost = (userId: string, createdAt: Date): number => {
     const isOwnPost = currentUserId && userId === currentUserId;
     const isFollowedPost = mode === "home" || mode === "following" ? followedSet.has(userId) : false;

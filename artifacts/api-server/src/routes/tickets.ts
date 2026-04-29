@@ -111,11 +111,12 @@ router.get(
     type RawTicket = typeof ticketsTable.$inferSelect;
 
     // ── Fresh-post boost (industry-standard "velocity" signal) ────────────────
-    // Posts < 30 min old from the current user (all modes) or from followed
+    // Posts < 60 min old from the current user (all modes) or from followed
     // users (home/following mode) receive a decaying multiplier: 15× at t=0,
-    // dropping linearly to 1× at t=1 (30 min). After expiry they compete
-    // purely on hotScore × affinity — matching Instagram/Reddit behaviour.
-    const FRESH_WINDOW_MS = 30 * 60 * 1000;
+    // dropping linearly to 1× at t=1 (60 min). After expiry they compete
+    // purely on hotScore — no permanent affinity multiplier.
+    // Matches Instagram/Reddit behaviour.
+    const FRESH_WINDOW_MS = 60 * 60 * 1000;
     const makeFreshBoost = (followedSet?: Set<string>) =>
       (userId: string, createdAt: Date): number => {
         const isOwnPost = currentUserId && userId === currentUserId;
@@ -178,15 +179,15 @@ router.get(
       //
       // Two-tier candidate pool:
       //   Tier A: Own posts (all visibility) + followed users' public posts
-      //           → Affinity boost 2.0× (recent posts from people you care about surface first)
       //   Tier B: Discovery pool from public accounts
-      //           → Affinity 1.0× (viral/popular posts can still rise to the top)
       //
-      // Final ranking: hotScore × affinity, merged and sorted.
-      // This matches Instagram/TikTok's home feed model.
+      // Final ranking: hotScore × freshBoost, merged and sorted.
+      // No permanent affinity multiplier — followed users only get the
+      // 60-minute fresh boost (and own/followed posts get pulled into Tier A).
+      // After the fresh window, every post competes equally.
 
       const POOL = limit * 4;
-      const AFFINITY_FOLLOWED = 2.0;
+      const AFFINITY_FOLLOWED = 1.0;
       const AFFINITY_DISCOVERY = 1.0;
 
       // 1. Get followed user IDs
