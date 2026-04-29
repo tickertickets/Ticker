@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { rateLimit, ipKeyGenerator } from "express-rate-limit";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
-import { db } from "@workspace/db";
+import { db, pool } from "@workspace/db";
 import { usersTable, passwordResetsTable } from "@workspace/db/schema";
 import { eq, and, gt, isNull } from "drizzle-orm";
 import { getSupabase } from "../lib/supabase";
@@ -349,6 +349,18 @@ router.post("/reset-password", authLimiter, async (req, res) => {
 
     // Mark token as used only after password is updated successfully
     await db.update(passwordResetsTable).set({ usedAt: now }).where(eq(passwordResetsTable.token, token));
+
+    // Invalidate ALL existing sessions for this user — any device/browser that
+    // was logged in must be signed out so a stolen password (the reason the
+    // user just rotated it) can't keep an attacker logged in elsewhere.
+    try {
+      await pool.query(
+        `DELETE FROM "user_sessions" WHERE (sess::jsonb)->>'userId' = $1`,
+        [record.userId],
+      );
+    } catch (err) {
+      req.log.warn({ err }, "Failed to revoke other sessions after password reset (non-fatal)");
+    }
 
     res.json({ success: true });
   } catch (err) {

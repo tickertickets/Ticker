@@ -314,21 +314,41 @@ export function PosterCollage({ posters, emptyIcon }: { posters: string[]; empty
   );
 }
 
-// ── ChainShareModal — full chat-picker sheet ───────────────────────────────────
+// ── ChainShareModal — two-step (entry sheet → chat picker) ──────────────────
+// Mirrors the Ticket share flow: a small entry sheet with two side-by-side
+// buttons ("Send in Chat" + "Copy Link"). "Send in Chat" opens the full
+// ChainSendToChatModal chat picker; "Copy Link" copies the chain URL inline.
 
 type ConvParticipant = { id: string; username: string; displayName: string | null; avatarUrl: string | null };
 type Conversation = { id: string; participants: ConvParticipant[]; unreadCount: number };
 
 export function ChainShareModal({ chain, onClose }: { chain: ChainItem; onClose: () => void }) {
   const { t } = useLang();
-  const { user } = useAuth();
-  const [, navigate] = useLocation();
-  const [search, setSearch] = useState("");
-  const [sending, setSending] = useState<string | null>(null);
-  const [sent, setSent] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [chatPickerOpen, setChatPickerOpen] = useState(false);
+  const [visible, setVisible] = useState(false);
 
   useModalBackButton(onClose);
+
+  // Slide-in animation
+  useEffect(() => { requestAnimationFrame(() => setVisible(true)); }, []);
+
+  // Lock background scroll while the entry sheet is open
+  useEffect(() => {
+    if (chatPickerOpen) return;
+    const html = document.documentElement;
+    const prevHtml = html.style.overflow;
+    const prevBody = document.body.style.overflow;
+    html.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+    const block = (e: TouchEvent) => e.preventDefault();
+    document.addEventListener("touchmove", block, { passive: false });
+    return () => {
+      html.style.overflow = prevHtml;
+      document.body.style.overflow = prevBody;
+      document.removeEventListener("touchmove", block);
+    };
+  }, [chatPickerOpen]);
 
   const handleCopyLink = useCallback(async () => {
     const link = `${window.location.origin}/chain/${chain.id}`;
@@ -344,8 +364,95 @@ export function ChainShareModal({ chain, onClose }: { chain: ChainItem; onClose:
       document.body.removeChild(el);
     }
     setLinkCopied(true);
-    setTimeout(() => setLinkCopied(false), 2_500);
+    setTimeout(() => setLinkCopied(false), 2_000);
   }, [chain.id]);
+
+  // When user picks "Send in Chat", swap to the full chat picker. The picker
+  // owns its own portal/backdrop and closes back to the parent (onClose) when
+  // sent — so we don't need to render the entry sheet underneath.
+  if (chatPickerOpen) {
+    return <ChainSendToChatModal chain={chain} onClose={onClose} />;
+  }
+
+  return createPortal(
+    <>
+      <div
+        style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}
+        onClick={onClose}
+      />
+      <div
+        className="bg-background"
+        style={{
+          position: "fixed",
+          bottom: 0,
+          left: "50%",
+          zIndex: 9999,
+          width: "min(100vw, 430px)",
+          transform: `translateX(-50%) translateY(${visible ? "0" : "100%"})`,
+          transition: "transform 300ms cubic-bezier(0.32, 0.72, 0, 1)",
+          borderRadius: "24px 24px 0 0",
+          boxShadow: "0 -4px 32px rgba(0,0,0,0.22)",
+          paddingBottom: "max(env(safe-area-inset-bottom, 0px), 20px)",
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Drag pill */}
+        <div className="flex justify-center pt-3 pb-1">
+          <div className="w-9 h-1 rounded-full bg-border" />
+        </div>
+
+        {/* Header */}
+        <div className="flex items-center gap-3 px-5 pt-2 pb-4 border-b border-border">
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-sm text-foreground">{t.sendToFriend}</p>
+            <p className="text-xs text-muted-foreground truncate mt-0.5 flex items-center gap-1.5">
+              <Link2 className="w-3 h-3 flex-shrink-0" strokeWidth={2.75} />
+              <span className="truncate">{chain.title}</span>
+            </p>
+          </div>
+          <button onPointerDown={onClose} className="w-7 h-7 flex items-center justify-center rounded-full bg-secondary flex-shrink-0">
+            <X className="w-3.5 h-3.5 text-muted-foreground" />
+          </button>
+        </div>
+
+        {/* Action buttons row — same layout as ShareStoryModal */}
+        <div className="px-5 pt-5">
+          <div className="flex items-center justify-center gap-3">
+            <button
+              onClick={() => setChatPickerOpen(true)}
+              className="flex items-center gap-2 border border-border text-foreground text-sm font-medium px-5 py-3 rounded-2xl active:scale-95 hover:bg-secondary transition-all"
+            >
+              <MessageCircle className="w-4 h-4" />
+              {t.sendInChatBtn}
+            </button>
+            <button
+              onClick={handleCopyLink}
+              className="flex items-center gap-2 border border-border text-foreground text-sm font-medium px-5 py-3 rounded-2xl active:scale-95 hover:bg-secondary transition-all"
+            >
+              {linkCopied
+                ? <><Check className="w-4 h-4 text-green-500" /> {t.copiedLabel}</>
+                : <><Link2 className="w-4 h-4" /> {t.copyLinkBtn}</>}
+            </button>
+          </div>
+        </div>
+      </div>
+    </>,
+    document.body,
+  );
+}
+
+// ── ChainSendToChatModal — full chat-picker sheet ───────────────────────────
+// (Internal — opened from ChainShareModal when user picks "Send in Chat".)
+
+function ChainSendToChatModal({ chain, onClose }: { chain: ChainItem; onClose: () => void }) {
+  const { t } = useLang();
+  const { user } = useAuth();
+  const [, navigate] = useLocation();
+  const [search, setSearch] = useState("");
+  const [sending, setSending] = useState<string | null>(null);
+  const [sent, setSent] = useState<string | null>(null);
+
+  useModalBackButton(onClose);
 
   useEffect(() => {
     const html = document.documentElement;
@@ -552,17 +659,6 @@ export function ChainShareModal({ chain, onClose }: { chain: ChainItem; onClose:
           {search.trim() && filtered.length === 0 && searchResults.length === 0 && (
             <p className="px-4 py-6 text-sm text-muted-foreground text-center">{t.noUsersFoundShort}</p>
           )}
-        </div>
-
-        <div className="px-4 pt-3 pb-1 border-t border-border flex-shrink-0">
-          <button
-            onClick={handleCopyLink}
-            className="w-full flex items-center justify-center gap-2 border border-border text-foreground text-sm font-medium px-5 py-3 rounded-2xl active:scale-95 hover:bg-secondary transition-all"
-          >
-            {linkCopied
-              ? <><Check className="w-4 h-4 text-green-500" />{t.copiedLabel}</>
-              : <><Link2 className="w-4 h-4" />{t.copyLinkBtn}</>}
-          </button>
         </div>
       </div>
     </>,
