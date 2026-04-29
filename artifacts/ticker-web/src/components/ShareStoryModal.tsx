@@ -88,51 +88,69 @@ async function buildCombinedPng(
   document.body.appendChild(wrap);
 
   const root = createRoot(wrap);
-  await new Promise<void>(resolve => {
-    root.render(
-      <LangProvider>
-        {/* Front face */}
-        <div style={{
-          width: SEED_W, height: SEED_H, flexShrink: 0,
-          overflow: "hidden", borderRadius: radius,
-          position: "relative",
-        }}>
-          {isPoster ? (
-            <PosterCardFront
-              ticket={ticket}
-              imageSrc={dataUrl}
-              borderColorHex={rStyle.borderColorHex}
-            />
-          ) : (
-            <ClassicCardFront ticket={ticket} imageSrc={dataUrl} />
-          )}
-        </div>
+  root.render(
+    <LangProvider>
+      {/* Front face */}
+      <div style={{
+        width: SEED_W, height: SEED_H, flexShrink: 0,
+        overflow: "hidden", borderRadius: radius,
+        position: "relative",
+      }}>
+        {isPoster ? (
+          <PosterCardFront
+            ticket={ticket}
+            imageSrc={dataUrl}
+            borderColorHex={rStyle.borderColorHex}
+          />
+        ) : (
+          <ClassicCardFront ticket={ticket} imageSrc={dataUrl} />
+        )}
+      </div>
 
-        {/* Back face */}
-        <div style={{
-          width: SEED_W, height: SEED_H, flexShrink: 0,
-          overflow: "hidden", borderRadius: radius,
-          position: "relative",
-        }}>
-          <CardBackFace ticket={ticket} />
-        </div>
-      </LangProvider>,
-    );
-    setTimeout(resolve, 500);
-  });
+      {/* Back face */}
+      <div style={{
+        width: SEED_W, height: SEED_H, flexShrink: 0,
+        overflow: "hidden", borderRadius: radius,
+        position: "relative",
+      }}>
+        <CardBackFace ticket={ticket} />
+      </div>
+    </LangProvider>,
+  );
 
-  // Ensure all fonts are fully loaded before capture
+  // Two-phase wait so the poster image is FULLY decoded before capture:
+  //   1. Yield to React commit + initial paint
+  //   2. Walk every <img> in the wrapper and await decode()
+  //   3. Wait for fonts (so text metrics are stable)
+  await new Promise<void>(r => setTimeout(r, 50));
+  const imgs = Array.from(wrap.querySelectorAll("img"));
+  await Promise.all(imgs.map(img => {
+    if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+    return new Promise<void>(r => {
+      const done = () => { img.removeEventListener("load", done); img.removeEventListener("error", done); r(); };
+      img.addEventListener("load", done, { once: true });
+      img.addEventListener("error", done, { once: true });
+      // Safety timeout — never block forever on a broken image
+      setTimeout(done, 2_500);
+    });
+  }));
+  // Pre-decode each image so the rasteriser has a fully-decoded bitmap ready
+  await Promise.all(imgs.map(img => img.decode?.().catch(() => undefined)));
   await document.fonts.ready;
+  // Final safety frame — let the browser commit the loaded images to layout
+  await new Promise<void>(r => requestAnimationFrame(() => r()));
 
-  // foreignObjectRendering=true → browser renders HTML inside SVG natively.
-  // This gives EXACT same output as the real DOM (fonts, spacing, gradients).
+  // foreignObjectRendering: false → use html2canvas's manual canvas painter.
+  // Safari/iOS WebKit drops images and CSS background-image inside SVG
+  // <foreignObject>, so the SVG path produces a card with NO poster.
+  // The manual painter handles both <img> and CSS background-image reliably.
   const canvas = await html2canvas(wrap, {
     scale: S,
-    useCORS: false,
+    useCORS: true,
     allowTaint: true,
     backgroundColor: null,
     logging: false,
-    foreignObjectRendering: true,
+    foreignObjectRendering: false,
   });
 
   root.unmount();
@@ -243,40 +261,14 @@ export function ShareStoryModal({ ticket, onClose, onOpenChat }: ShareStoryModal
 
       const blob     = await buildCombinedPng(ticket, du, ratingType);
       const filename = `ticker-${(ticket.movieTitle ?? "card").replace(/\s+/g, "-")}.png`;
-      const file     = new File([blob], filename, { type: "image/png" });
 
       if (isIOS()) {
-        // iOS path — try Web Share API with files (iOS 15+ Safari, 16.4+ PWA).
-        // We attempt navigator.share unconditionally if it exists, because in
-        // some iOS PWA modes navigator.canShare is missing or returns false
-        // even though sharing actually works. Pass ONLY the file (no title /
-        // text) so the iOS share sheet doesn't expose a "Copy" action that
-        // copies the title string instead of the image.
-        if (typeof navigator.share === "function") {
-          // canShare check is best-effort — if it exists and explicitly says
-          // false, skip; otherwise attempt the share.
-          const canShareSaid = typeof navigator.canShare === "function"
-            ? navigator.canShare({ files: [file] })
-            : null;
-          if (canShareSaid !== false) {
-            try {
-              await navigator.share({ files: [file] });
-              setSaved(true);
-              setTimeout(() => { setSaved(false); onClose(); }, 2_000);
-              return;
-            } catch (e) {
-              if (e instanceof Error && e.name === "AbortError") {
-                setSaving(false);
-                return;
-              }
-              // fall through to long-press fallback
-            }
-          }
-        }
-        // Older iOS / no Web Share API — show the rendered image inside the
-        // sheet so the user can long-press → "Save to Photos" / "Add to
-        // Photos". This is the only reliable path on iOS Safari without the
-        // Files share API.
+        // iOS path — ALWAYS show the rendered image inline so the user can
+        // long-press → "Add to Photos". We deliberately do NOT call
+        // navigator.share here, because the iOS share sheet exposes
+        // unwanted "Copy / Save File / Delete File" options that confuse
+        // users. Long-press on the inline image gives the cleanest UX:
+        // a single "Add to Photos" / "Save Image" choice.
         const url = URL.createObjectURL(blob);
         setIosLongPressUrl(url);
         setSaving(false);

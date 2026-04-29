@@ -168,9 +168,9 @@ export default function Bookmarks() {
       {/* Header */}
       <div
         className="sticky top-0 z-30 bg-background border-b border-border"
-        style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 4px)" }}
+        style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
       >
-        <div className="px-4 pt-0 pb-4 flex items-center gap-2">
+        <div className="px-4 py-4 flex items-center gap-2">
           <button
             onClick={() => navBack(navigate)}
             className="w-9 h-9 flex items-center justify-center rounded-full bg-secondary active:bg-secondary/70 transition-colors flex-shrink-0"
