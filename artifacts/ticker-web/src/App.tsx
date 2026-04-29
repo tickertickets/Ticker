@@ -37,7 +37,6 @@ import PageVerificationRequest from "@/pages/page-verification-request";
 import AuthSignup        from "@/pages/auth-signup";
 import AuthLogin         from "@/pages/auth-login";
 import AdminPanel       from "@/pages/admin";
-import AlgorithmLab    from "@/pages/algorithm-lab";
 import { TicketLarge, BadgeIconStatic } from "@/components/BadgeIcon";
 import { PushPermissionPrompt } from "@/components/PushPermissionPrompt";
 function BadgePreview() {
@@ -220,7 +219,6 @@ function AppRoutes() {
       location === "/search" ||
       location === "/join" ||
       location === "/login" ||
-      location === "/algorithm" ||
       /^\/ticket\/(?!new$)[^/]+$/.test(location) ||
       /^\/profile\/[^/]+$/.test(location) ||
       /^\/movie\/.+$/.test(location) ||
@@ -264,7 +262,6 @@ function AppRoutes() {
               <Route path="/ticket/:id"        component={TicketDetail} />
               <Route path="/profile/:username" component={Profile} />
               <Route path="/chain/:id"         component={ChainDetail} />
-              <Route path="/algorithm"         component={AlgorithmLab} />
               <Route><Redirect to="/" /></Route>
             </Switch>
           </ShimmerActiveWrapper>
@@ -322,7 +319,6 @@ function AppRoutes() {
             <Route path="/supporter"         component={SupporterRequest} />
             <Route path="/page-verify"       component={PageVerificationRequest} />
             <Route path="/admin"             component={AdminPanel} />
-            <Route path="/algorithm"         component={AlgorithmLab} />
             <Route path="/join"><Redirect to="/" /></Route>
             <Route path="/login"><Redirect to="/" /></Route>
             <Route><Redirect to="/" /></Route>
