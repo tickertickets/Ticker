@@ -153,6 +153,10 @@ async function buildCombinedPng(
   // on iOS (clips at half-letter height), so we pre-rewrite line-clamp into
   // an explicit `max-height` block — the rasterizer renders that correctly.
   if (isIOS()) {
+    // The iOS rasterizer mis-handles `display: -webkit-box` + `-webkit-line-clamp`
+    // (clips text vertically — only bottom half of glyphs visible). Convert to
+    // an explicit `display: block` with a generous max-height that includes a
+    // safety buffer for ascenders/descenders and font-metric quirks.
     const neutralizeLineClamp = (el: HTMLElement) => {
       const cs = el.style;
       const lineClampStr = cs.webkitLineClamp;
@@ -163,18 +167,60 @@ async function buildCombinedPng(
       const fontSize = parseFloat(computed.fontSize) || 16;
       const lhRaw    = computed.lineHeight;
       const lineHeight =
-        !lhRaw || lhRaw === "normal" ? fontSize * 1.2 : parseFloat(lhRaw);
+        !lhRaw || lhRaw === "normal" ? fontSize * 1.25 : parseFloat(lhRaw);
+
+      // Use a 1.35× safety multiplier on the line box plus a 6px buffer so
+      // tall glyphs (uppercase Latin, Thai with floating tone marks, etc.)
+      // don't get clipped by the rasterizer's tight bounding box.
+      const boxH = Math.ceil(lineHeight * lines * 1.35) + 6;
 
       cs.display         = "block";
       cs.webkitLineClamp = "";
       cs.webkitBoxOrient = "";
-      cs.maxHeight       = `${Math.ceil(lineHeight * lines) + 2}px`;
+      cs.lineHeight      = `${Math.ceil(lineHeight)}px`;
+      cs.maxHeight       = `${boxH}px`;
+      cs.minHeight       = `${Math.ceil(lineHeight * lines)}px`;
       cs.overflow        = "hidden";
+    };
+
+    // The iOS rasterizer also doesn't support the `aspect-ratio` CSS property
+    // — boxes that rely on it for sizing collapse or grow to fill their parent,
+    // letting their `background-image` / `<img>` content escape the visible
+    // frame (e.g. poster covers spilling over the title row). Replace it with
+    // an explicit pixel height computed from the live width.
+    const neutralizeAspectRatio = (el: HTMLElement) => {
+      const cs = el.style;
+      const arRaw = cs.aspectRatio || window.getComputedStyle(el).aspectRatio;
+      if (!arRaw || arRaw === "auto") return;
+
+      // Parse "W / H" or a plain number ("1.5")
+      let ratio = NaN;
+      const slashMatch = arRaw.match(/([\d.]+)\s*\/\s*([\d.]+)/);
+      if (slashMatch) {
+        const w = parseFloat(slashMatch[1]);
+        const h = parseFloat(slashMatch[2]);
+        if (w > 0 && h > 0) ratio = w / h;
+      } else {
+        ratio = parseFloat(arRaw);
+      }
+      if (!isFinite(ratio) || ratio <= 0) return;
+
+      const widthPx = el.getBoundingClientRect().width;
+      if (widthPx <= 0) return;
+
+      cs.aspectRatio = "auto";
+      cs.height      = `${Math.round(widthPx / ratio)}px`;
     };
 
     for (const el of Array.from(wrap.querySelectorAll<HTMLElement>("*"))) {
       neutralizeLineClamp(el);
+      neutralizeAspectRatio(el);
     }
+
+    // Force the browser to re-flow with the new heights before html2canvas
+    // walks the layout, otherwise it may snapshot stale geometry on iOS.
+    void wrap.getBoundingClientRect();
+    await new Promise<void>(r => requestAnimationFrame(() => r()));
   }
 
   const canvas = await html2canvas(wrap, {
