@@ -493,9 +493,13 @@ export default function MovieDetail() {
         </button>
 
 
-        {/* Rank + effect badges — below bookmark, centred with it */}
-        {/* Wrapper has SAME right & width as the bookmark button,            */}
-        {/* so flexbox centering always aligns badge center to button center. */}
+        {/* Rank + effect badges — below bookmark.
+            Wrapper width matches the bookmark button (36px). Regular tiers
+            (badge column = 26px wide) are pinned LEFT inside the wrapper, so
+            the badge column's right edge sits 10px inside the wrapper's right
+            edge. Special wide badges (LEGENDARY / CULT CLASSIC) are pinned to
+            the wrapper's right edge so the badge always touches the screen-side
+            margin. The popup mirrors these right edges below. */}
         {movie && (
           <div
             ref={badgeColRef}
@@ -505,7 +509,7 @@ export default function MovieDetail() {
               right:          16,
               width:          36,
               display:        "flex",
-              justifyContent: (_rank === "legendary" || _rank === "cult_classic") ? "flex-end" : "center",
+              justifyContent: (_rank === "legendary" || _rank === "cult_classic") ? "flex-end" : "flex-start",
             }}
           >
             <MovieBadges
@@ -528,7 +532,11 @@ export default function MovieDetail() {
         {/* Badge popup — positioned directly below the tapped badge.
             Each badge has a fixed designated spot in this container's coord
             system, so the popup always lands at the same offset for a given
-            badge regardless of how the page has been scrolled. */}
+            badge regardless of how the page has been scrolled. The popup's
+            right edge mirrors the right edge of the badge column it belongs
+            to: regular tiers (column 26px wide, pinned LEFT inside the 36px
+            wrapper at right=16) → popup right = 16 + (36 - 26) = 26.
+            Special wide badges (pinned RIGHT) → popup right = 16. */}
         {openBadge && (
           <div
             ref={badgePopupRef}
@@ -538,7 +546,7 @@ export default function MovieDetail() {
               // Inside the container (size="md"): PAD(3) + idx*(side+gap=24) + side(20) = 23 + 24*idx
               // + 6px breathing gap below the badge
               top:           `calc(max(1rem, env(safe-area-inset-top, 0px)) + 2.75rem + ${29 + 24 * openBadge.idx}px)`,
-              right:         16,
+              right:         (_rank === "legendary" || _rank === "cult_classic") ? 16 : 26,
               whiteSpace:    "pre",
               pointerEvents: "auto",
             }}
