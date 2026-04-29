@@ -334,7 +334,11 @@ router.get("/", async (req, res) => {
           score: base * affinityFn(c.userId) * freshBoostFn(c.userId, c.createdAt),
         };
       });
-      scored.sort((a, b) => b.score - a.score);
+      scored.sort((a, b) => {
+        const diff = b.score - a.score;
+        if (Math.abs(diff) > 1e-10) return diff;
+        return b.chain.createdAt.getTime() - a.chain.createdAt.getTime();
+      });
       chains = scored.slice(0, limit + 1).map(s => s.chain);
     } else {
       chains = [];
@@ -575,7 +579,11 @@ router.get("/hot", async (req, res) => {
     };
   });
 
-  scored.sort((a, b) => b.score - a.score);
+  scored.sort((a, b) => {
+    const diff = b.score - a.score;
+    if (Math.abs(diff) > 1e-10) return diff;
+    return b.chain.createdAt.getTime() - a.chain.createdAt.getTime();
+  });
   const topChains = scored.slice(0, limit).map((s) => s.chain);
 
   const result = await Promise.all(topChains.map(c => buildChain(c, currentUserId)));

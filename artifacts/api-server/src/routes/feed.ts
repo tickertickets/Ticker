@@ -319,7 +319,12 @@ router.get("/", async (req, res) => {
   }
 
   // ── Merge and sort ───────────────────────────────────────────────────────────
-  scoredItems.sort((a, b) => b.score - a.score);
+  // Primary: hotScore descending. Tiebreaker: newer content first (createdAt DESC).
+  scoredItems.sort((a, b) => {
+    const diff = b.score - a.score;
+    if (Math.abs(diff) > 1e-10) return diff;
+    return b.data.createdAt.getTime() - a.data.createdAt.getTime();
+  });
   const hasMore = scoredItems.length > limit;
   const page = scoredItems.slice(0, limit);
 

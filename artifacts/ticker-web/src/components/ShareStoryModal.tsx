@@ -12,6 +12,7 @@ import {
   PosterCardFront,
   ClassicCardFront,
   CardBackFace,
+  POSTER_BG,
 } from "./CardFaceComponents";
 
 // ── Sizes ──────────────────────────────────────────────────────────────────────
@@ -134,81 +135,124 @@ async function buildCombinedPng(
   await document.fonts.ready;
   await new Promise<void>(r => requestAnimationFrame(() => r()));
 
-  // ── iOS canvas-swap ──────────────────────────────────────────────────────
-  // iOS / iPadOS WebKit refuses to paint <img> elements AND CSS
-  // background-image inside an SVG <foreignObject>. As a result,
-  // foreignObjectRendering: true produces blank poster areas on iOS.
+  // ── iOS: composite approach ──────────────────────────────────────────────
+  // iOS/iPadOS WebKit will not paint <img> or CSS background-image inside an
+  // SVG <foreignObject> — not even when they are replaced with <canvas>
+  // elements. Compositing is the only reliable fix:
   //
-  // Fix: before calling html2canvas, walk the wrapper and replace every
-  //   • <img src="data:..."> with a <canvas> that has the image pre-drawn
-  //   • CSS background-image: url("data:...") with a child <canvas>
-  // Canvas bitmaps ARE rasterised correctly by WebKit inside foreignObject.
-  // This swap is iOS-only — Android/desktop already work without it.
+  //  1. Strip the opaque card background + poster image from the live DOM so
+  //     html2canvas captures a TRANSPARENT image area with the correct layout
+  //     (text, gradient, flexbox, borders) around it.
+  //  2. Manually draw the poster image onto a fresh canvas using the 2D API
+  //     (canvas drawImage always works, even on iOS).
+  //  3. Overlay the html2canvas layout result on top.
+  //
+  // Card geometry (DOM px → canvas px at scale S=3):
+  //   Front card:      x=PAD_W*S=60,  y=PAD_W*S=60,  w=SEED_W*S=570, h=SEED_H*S=855
+  //   Poster img sq:   x=(PAD_W+5)*S=75, y=(PAD_W+5)*S=75, side=(SEED_W-10)*S=540
   if (isIOS()) {
-    // ① <img> → <canvas>
-    for (const img of imgs) {
-      if (!img.complete || img.naturalWidth === 0) continue;
-      const w = img.offsetWidth;
-      const h = img.offsetHeight;
-      if (!w || !h) continue;
-      const c = document.createElement("canvas");
-      c.width = w;
-      c.height = h;
-      const cs = window.getComputedStyle(img);
-      c.style.position = cs.position;
-      c.style.top = cs.top;
-      c.style.left = cs.left;
-      c.style.right = cs.right;
-      c.style.bottom = cs.bottom;
-      c.style.width = w + "px";
-      c.style.height = h + "px";
-      const ctx = c.getContext("2d");
-      if (ctx) {
-        // Draw with object-fit: cover semantics
-        const iw = img.naturalWidth, ih = img.naturalHeight;
-        const sc = Math.max(w / iw, h / ih);
-        ctx.drawImage(img, (w - iw * sc) / 2, (h - ih * sc) / 2, iw * sc, ih * sc);
-      }
-      img.parentElement?.replaceChild(c, img);
+    // Load the poster image from the data URL
+    let posterImg: HTMLImageElement | null = null;
+    if (dataUrl) {
+      const img = new Image();
+      img.src = dataUrl;
+      await new Promise<void>(r => {
+        if (img.complete && img.naturalWidth > 0) { r(); return; }
+        img.onload = () => r(); img.onerror = () => r(); setTimeout(r, 2_000);
+      });
+      if (img.naturalWidth > 0) posterImg = img;
     }
 
-    // ② CSS background-image: url("data:...") → child <canvas>
-    for (const el of Array.from(wrap.querySelectorAll<HTMLElement>("*"))) {
-      const bg = (el as HTMLElement).style.backgroundImage;
-      if (!bg || bg === "none") continue;
-      const match = bg.match(/url\(["']?(data:[^"')]+)["']?\)/);
-      if (!match) continue;
-      const w = el.offsetWidth;
-      const h = el.offsetHeight;
-      if (!w || !h) continue;
-      const imgEl = new Image();
-      imgEl.src = match[1];
-      await new Promise<void>(r => {
-        if (imgEl.complete && imgEl.naturalWidth > 0) { r(); return; }
-        imgEl.onload = () => r(); imgEl.onerror = () => r(); setTimeout(r, 1_000);
-      });
-      if (!imgEl.naturalWidth) continue;
-      const c = document.createElement("canvas");
-      c.width = w; c.height = h;
-      c.style.cssText = `position:absolute;top:0;left:0;width:${w}px;height:${h}px;`;
-      const ctx = c.getContext("2d");
-      if (ctx) {
-        // Replicate background-size: cover with background-position
-        const posStr = el.style.backgroundPosition || "50% 50%";
-        const posX = parseFloat(posStr) / 100;
-        const iw = imgEl.naturalWidth, ih = imgEl.naturalHeight;
-        const sc = Math.max(w / iw, h / ih);
-        const dw = iw * sc, dh = ih * sc;
-        ctx.drawImage(imgEl, (w - dw) * (isNaN(posX) ? 0.5 : posX), (h - dh) * 0.5, dw, dh);
+    // Strip backgrounds / image from the front card so html2canvas gets
+    // a transparent image area but keeps all text / overlay layers intact.
+    const frontDiv = wrap.children[0] as HTMLElement;
+
+    if (isPoster) {
+      // PosterCardFront root has background: POSTER_BG — remove it.
+      const root0 = frontDiv.firstElementChild as HTMLElement | null;
+      if (root0) { root0.style.background = "transparent"; root0.style.backgroundColor = "transparent"; }
+      // Also remove the backdrop div's backgroundImage (the actual image source).
+      for (const el of Array.from(frontDiv.querySelectorAll<HTMLElement>("*"))) {
+        if (el.style.backgroundImage && el.style.backgroundImage !== "none") {
+          el.style.backgroundImage = "none";
+        }
       }
-      el.style.backgroundImage = "none";
-      el.insertBefore(c, el.firstChild);
+    } else {
+      // ClassicCardFront root has background: "#18181b" — remove it.
+      const root0 = frontDiv.firstElementChild as HTMLElement | null;
+      if (root0) { root0.style.background = "transparent"; root0.style.backgroundColor = "transparent"; }
+      // Hide the <img> (it won't paint anyway, but makes the area transparent).
+      for (const img of Array.from(frontDiv.querySelectorAll<HTMLImageElement>("img"))) {
+        img.style.display = "none";
+      }
     }
+
+    // Capture layout with correct text / gradient / flexbox positions.
+    const layoutCanvas = await html2canvas(wrap, {
+      scale: S,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: null,
+      logging: false,
+      foreignObjectRendering: true,
+    });
+
+    // Composite
+    const comp = document.createElement("canvas");
+    comp.width  = layoutCanvas.width;
+    comp.height = layoutCanvas.height;
+    const ctx   = comp.getContext("2d")!;
+
+    if (posterImg) {
+      const cX = PAD_W * S;
+      const cY = PAD_W * S;
+      const cW = SEED_W * S;
+      const cH = SEED_H * S;
+
+      if (isPoster) {
+        // ① POSTER_BG background for entire front card area
+        ctx.fillStyle = POSTER_BG;
+        ctx.fillRect(cX, cY, cW, cH);
+
+        // ② Poster image fills the square (5px padding on all sides at card top)
+        const imgX    = (PAD_W + 5) * S;
+        const imgY    = (PAD_W + 5) * S;
+        const imgSide = (SEED_W - 10) * S;
+        const sc = Math.max(imgSide / posterImg.naturalWidth, imgSide / posterImg.naturalHeight);
+        const dw = posterImg.naturalWidth  * sc;
+        const dh = posterImg.naturalHeight * sc;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(imgX, imgY, imgSide, imgSide);
+        ctx.clip();
+        ctx.drawImage(posterImg, imgX + (imgSide - dw) / 2, imgY + (imgSide - dh) / 2, dw, dh);
+        ctx.restore();
+      } else {
+        // ① Classic: image fills entire card front (clipped to border radius)
+        const sc = Math.max(cW / posterImg.naturalWidth, cH / posterImg.naturalHeight);
+        const dw = posterImg.naturalWidth  * sc;
+        const dh = posterImg.naturalHeight * sc;
+        ctx.save();
+        ctx.beginPath();
+        // border-radius: 12px in DOM → radius*S px in canvas
+        roundRectPath(ctx, cX, cY, cW, cH, radius * S);
+        ctx.clip();
+        ctx.drawImage(posterImg, cX + (cW - dw) / 2, cY + (cH - dh) / 2, dw, dh);
+        ctx.restore();
+      }
+    }
+
+    // ③ Overlay the layout (text, gradient overlay, back card, everything)
+    ctx.drawImage(layoutCanvas, 0, 0);
+
+    root.unmount();
+    document.body.removeChild(wrap);
+    return new Promise<Blob>((resolve, reject) => {
+      comp.toBlob(b => (b ? resolve(b) : reject(new Error("toBlob failed"))), "image/png");
+    });
   }
 
-  // foreignObjectRendering: true → browser renders HTML natively inside SVG.
-  // Gives pixel-perfect layout (text, flexbox, absolute positions all exact).
-  // On iOS the canvas-swap above ensures poster images ARE visible.
+  // ── Non-iOS: foreignObjectRendering: true works correctly ─────────────────
   const canvas = await html2canvas(wrap, {
     scale: S,
     useCORS: true,
@@ -235,6 +279,26 @@ function isIOS() {
     /iPad|iPhone|iPod/.test(navigator.userAgent) ||
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
   );
+}
+
+function roundRectPath(
+  ctx: CanvasRenderingContext2D,
+  x: number, y: number, w: number, h: number, r: number,
+) {
+  if (typeof ctx.roundRect === "function") {
+    ctx.roundRect(x, y, w, h, r);
+    return;
+  }
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.arcTo(x + w, y,     x + w, y + r,     r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+  ctx.lineTo(x + r, y + h);
+  ctx.arcTo(x,     y + h, x,     y + h - r, r);
+  ctx.lineTo(x,     y + r);
+  ctx.arcTo(x,     y,     x + r, y,         r);
+  ctx.closePath();
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
