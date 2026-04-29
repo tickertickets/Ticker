@@ -12,7 +12,7 @@ import {
   commentsTable,
 } from "@workspace/db/schema";
 import { eq, and, desc, isNull, count, max, inArray, ne, or, sql } from "drizzle-orm";
-import { hotScore } from "../lib/hot-score";
+import { hotScore, makeFreshBoost } from "../lib/hot-score";
 import { buildChain } from "./chains";
 import { buildTicketBatch } from "../services/tickets.service";
 
@@ -61,28 +61,12 @@ router.get("/", async (req, res) => {
     for (const r of privateRows) privateUserIds.add(r.id);
   }
 
-  // No permanent affinity multiplier — every post competes equally on hotScore
-  // once outside the fresh window. Followed users only get a head start via the
-  // fresh-post boost below.
-  const affinity = (_uid: string) => 1.0;
-
-  // Fresh-post boost: posts ≤ 60 min old from people you follow (or yourself)
-  // get a temporary multiplier that decays linearly from 15× → 1× over the
-  // window. After expiry they compete purely on hotScore — if they became
-  // popular during that window they stay up naturally.
-  //
-  // In ALL modes (including discover), own posts always receive the boost so
-  // a user sees their own freshly-created post at the top of every feed.
-  const FRESH_WINDOW_MS = 60 * 60 * 1000; // 60 minutes
-  const freshBoost = (userId: string, createdAt: Date): number => {
-    const isOwnPost = currentUserId && userId === currentUserId;
-    const isFollowedPost = mode === "home" || mode === "following" ? followedSet.has(userId) : false;
-    if (!isOwnPost && !isFollowedPost) return 1.0;
-    const ageMs = Date.now() - createdAt.getTime();
-    if (ageMs >= FRESH_WINDOW_MS) return 1.0;
-    const t = ageMs / FRESH_WINDOW_MS; // 0 = just posted, 1 = expired
-    return 1.0 + 14.0 * (1 - t);      // 15× at t=0, 1× at t=1
-  };
+  // freshBoost:
+  //   • discover mode → only own posts get the fresh window boost (fair ranking)
+  //   • home / following mode → followed users also get a boost (personal feed)
+  // Posts < 60 min old: 15× at creation, linearly decaying to 1× at 60 min.
+  const freshBoostFollowedSet = (mode === "home" || mode === "following") ? followedSet : null;
+  const freshBoost = makeFreshBoost(freshBoostFollowedSet, currentUserId);
 
   // ── Fetch ticket pool ────────────────────────────────────────────────────────
   let ticketPool: (typeof ticketsTable.$inferSelect)[] = [];
@@ -246,7 +230,7 @@ router.get("/", async (req, res) => {
         comments: commentMap.get(t.id) ?? 0,
         lastActivityAt,
       });
-      scoredItems.push({ type: "ticket", data: t, score: base * affinity(t.userId) * freshBoost(t.userId, t.createdAt) });
+      scoredItems.push({ type: "ticket", data: t, score: base * freshBoost(t.userId, t.createdAt) });
     }
   }
 
@@ -309,12 +293,12 @@ router.get("/", async (req, res) => {
         .filter((d): d is Date => d instanceof Date)
         .reduce((a, b) => (a > b ? a : b), c.createdAt);
       const base = hotScore({
-        likes: likeMap.get(c.id) ?? 0,
+        likes:    likeMap.get(c.id) ?? 0,
         comments: commentMap.get(c.id) ?? 0,
-        bonus: runMap.get(c.id) ?? c.chainCount,
+        bonus:    runMap.get(c.id) ?? 0,   // actual run count; 0 if no runs yet
         lastActivityAt,
       });
-      scoredItems.push({ type: "chain", data: c, score: base * affinity(c.userId) * freshBoost(c.userId, c.createdAt) });
+      scoredItems.push({ type: "chain", data: c, score: base * freshBoost(c.userId, c.createdAt) });
     }
   }
 

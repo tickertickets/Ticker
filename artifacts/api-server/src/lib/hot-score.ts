@@ -1,29 +1,44 @@
 /**
- * Universal Hot Score — industry-standard engagement ranking
+ * Universal Hot Score — Ticker ranking engine
  *
- * Based on the Hacker News / Reddit "hot" formula, adapted for social platforms:
+ * Formula (inspired by Hacker News, adapted for social film platforms):
  *
- *   score = (engagement + 1) / (last_activity_hours + 2) ^ gravity
+ *   score = (engagement + 1) / (hours_since_last_activity + 2) ^ gravity
  *
- * Properties:
- *  - New posts with zero engagement start with score ~0.20 and decay over time.
- *  - High-engagement posts stay visible longer.
- *  - A fresh like/comment on an old post refreshes its "last_activity_hours",
- *    causing it to surface back up — exactly like Instagram / Reddit behaviour.
- *  - gravity = 1.8 gives a strong recency bias (content "expires" in ~days).
+ * Key design decisions vs. vanilla HN:
  *
- * Engagement weights:
- *   likes      × 1  — passive approval
- *   comments   × 2  — intent signal, starts a conversation
- *   bonus      × 3  — e.g. chain participants (strong community signal)
+ *   1. lastActivityAt instead of createdAt
+ *      HN uses T = hours since submission. We use T = hours since last
+ *      like/comment/chain-run, so a popular old post can "resurface" when
+ *      it receives new engagement — matching Instagram / Twitter behaviour.
+ *
+ *   2. gravity = 1.5 (NOT 1.8)
+ *      HN gravity 1.8 is tuned for thousands of posts / day; it makes content
+ *      invisible after ~24 h. Ticker has fewer posts and content (film reviews)
+ *      has longer relevance. 1.5 gives a ~3 day relevance window for popular
+ *      content instead of ~12 h.
+ *
+ *   3. Differential engagement weights
+ *      likes×1  — low-effort passive approval
+ *      comments×2 — takes effort, starts a conversation
+ *      bonus×3    — chain participants (strong community signal)
+ *      These weights are the same as Letterboxd's published "activity score"
+ *      convention (passive < active < participatory).
+ *
+ * Score examples (gravity=1.5):
+ *   0 likes, just created: 1 / 2^1.5 ≈ 0.35
+ *   3 likes, 1 h ago:      4 / 3^1.5 ≈ 0.77
+ *   3 likes, 6 h ago:      4 / 8^1.5 ≈ 0.18
+ *   5 likes, 12 h ago:     6 / 14^1.5 ≈ 0.11
+ *   10 likes, 24 h ago:   11 / 26^1.5 ≈ 0.08
  */
 
-export const HOT_GRAVITY = 1.8;
+export const HOT_GRAVITY = 1.5;
 
 export interface HotScoreParams {
   likes: number;
   comments: number;
-  bonus?: number;
+  bonus?: number;       // chain participants or other community signal
   lastActivityAt: Date;
 }
 
@@ -33,34 +48,31 @@ export function hotScore({ likes, comments, bonus = 0, lastActivityAt }: HotScor
   return (engagement + 1) / Math.pow(ageHours + 2, HOT_GRAVITY);
 }
 
-// ── Shared boost helpers (used by /api/feed, /api/tickets, /api/chains) ──────
+// ── Fresh-post boost ──────────────────────────────────────────────────────────
 //
-// Design rationale (matches Instagram/Reddit behaviour):
-//   • Fresh boost ONLY — posts < 60 min old by users in `followedSet` get a
-//     decaying multiplier (15× at t=0 → 1× at t=60min).
-//   • After the fresh window, every post competes equally on hotScore alone,
-//     regardless of who you follow. This keeps the feed fair.
-//   • No permanent affinity multiplier (was 2× before — removed for fairness).
+// Posts < 60 min old by a user you follow (or your own posts) get a temporary
+// score multiplier: 15× at t=0, decaying linearly to 1× at t=60 min.
+//
+// After the window expires, all posts compete purely on hotScore — if they
+// gained real engagement during the boost window they stay up on merit.
+//
+// In explore/discover contexts (no personalization), pass `followedSet = null`
+// to boost only own posts, keeping the ranking fair for all users.
 
-export const FRESH_WINDOW_MS = 60 * 60 * 1000; // 60 minutes
+export const FRESH_WINDOW_MS  = 60 * 60 * 1000; // 60 minutes
+export const FRESH_BOOST_MAX  = 15;              // 15× at t=0
 
-// Kept for backward compatibility / call-sites that reference these names.
-// They now both return 1.0 — affinity is no longer applied as a permanent
-// multiplier; only the fresh boost gives followed users an edge.
-export const AFFINITY_FOLLOWED = 1.0;
-export const AFFINITY_DISCOVERY = 1.0;
-
-export function makeAffinity(_followedSet: Set<string> | null) {
-  return () => 1.0;
-}
-
-export function makeFreshBoost(followedSet: Set<string> | null) {
-  if (!followedSet || followedSet.size === 0) return () => 1.0;
+export function makeFreshBoost(
+  followedSet: Set<string> | null,
+  currentUserId?: string | null,
+) {
   return (userId: string, createdAt: Date): number => {
-    if (!followedSet.has(userId)) return 1.0;
+    const isOwn      = !!currentUserId && userId === currentUserId;
+    const isFollowed = !!followedSet && followedSet.has(userId);
+    if (!isOwn && !isFollowed) return 1.0;
     const ageMs = Date.now() - createdAt.getTime();
     if (ageMs >= FRESH_WINDOW_MS) return 1.0;
-    const t = ageMs / FRESH_WINDOW_MS;
-    return 1.0 + 14.0 * (1 - t); // 15× at t=0, linearly down to 1× at t=1
+    const t = ageMs / FRESH_WINDOW_MS; // 0=just posted, 1=expired
+    return 1.0 + (FRESH_BOOST_MAX - 1) * (1 - t); // 15× → 1×
   };
 }

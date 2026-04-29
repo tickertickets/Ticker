@@ -17,7 +17,7 @@ import {
 import { eq, and, desc, isNull, isNotNull, count, max, asc, sql, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { sanitize } from "../lib/sanitize";
-import { hotScore, makeAffinity, makeFreshBoost } from "../lib/hot-score";
+import { hotScore, makeFreshBoost } from "../lib/hot-score";
 import { tmdbFetch } from "../lib/tmdb-client";
 import { awardXp } from "../services/badge.service";
 import { notifyFollowersNewPost, createNotification } from "../services/notify.service";
@@ -315,23 +315,24 @@ router.get("/", async (req, res) => {
       const cmtLastAt  = new Map(commentRows.map(r => [r.chainId, r.lastAt ? new Date(r.lastAt) : null]));
       const runLastAt  = new Map(runRows.map(r => [r.chainId, r.lastAt ? new Date(r.lastAt) : null]));
 
-      // Affinity + fresh boost: same treatment as /api/feed and /api/tickets (home).
-      // Followed users (and own posts) get 2× score, with up to 15× decaying boost
-      // for posts < 30 min old.
+      // Explore mode: own fresh posts get a temporary boost (15×→1× over 60 min).
+      // Followed users' posts are NOT boosted here — this is a discovery/explore
+      // context and merit-based ranking should be fair across all creators.
       const followedSet = currentUserId
         ? new Set<string>([...followRows.map(r => r.followingId), currentUserId])
         : null;
-      const affinityFn = makeAffinity(followedSet);
-      const freshBoostFn = makeFreshBoost(followedSet);
+      const freshBoostFn = makeFreshBoost(followedSet, currentUserId);
 
       const scored = poolChains.map(c => {
         const lastActivityAt = [c.createdAt, likeLastAt.get(c.id), cmtLastAt.get(c.id), runLastAt.get(c.id)]
           .filter((d): d is Date => d instanceof Date)
           .reduce((a, b) => (a > b ? a : b), c.createdAt);
-        const base = hotScore({ likes: likeMap.get(c.id) ?? 0, comments: commentMap.get(c.id) ?? 0, bonus: runMap.get(c.id) ?? c.chainCount, lastActivityAt });
+        // bonus = actual chain_runs count (0 if none). Never fall back to the
+        // denormalized chainCount column — it may be stale.
+        const base = hotScore({ likes: likeMap.get(c.id) ?? 0, comments: commentMap.get(c.id) ?? 0, bonus: runMap.get(c.id) ?? 0, lastActivityAt });
         return {
           chain: c,
-          score: base * affinityFn(c.userId) * freshBoostFn(c.userId, c.createdAt),
+          score: base * freshBoostFn(c.userId, c.createdAt),
         };
       });
       scored.sort((a, b) => {
@@ -552,30 +553,28 @@ router.get("/hot", async (req, res) => {
   const cmtLastAt    = new Map(commentRows.map((r) => [r.chainId, r.lastAt ? new Date(r.lastAt) : null]));
   const runLastAt    = new Map(runRows.map((r) => [r.chainId, r.lastAt ? new Date(r.lastAt) : null]));
 
-  // Affinity + fresh boost: same treatment as /api/feed and /api/tickets (home).
-  // Followed users (and own posts) get 2× score, with up to 15× decaying boost
-  // for posts < 30 min old.
+  // Hot endpoint: own fresh posts get a boost (15×→1× over 60 min).
+  // Followed users are NOT boosted — this is a global ranking, not a personal feed.
   const followedSet = currentUserId
     ? new Set<string>([...followRows.map(r => r.followingId), currentUserId])
     : null;
-  const affinityFn = makeAffinity(followedSet);
-  const freshBoostFn = makeFreshBoost(followedSet);
+  const freshBoostFn = makeFreshBoost(followedSet, currentUserId);
 
-  // Universal hot score — chain participants (runs) count as "bonus × 3"
-  //   lastActivityAt = most recent like, comment, new run, or creation
+  // hotScore: likes×1 + comments×2 + chainRuns×3, decayed by lastActivityAt.
+  // bonus = actual chain_runs count. Never fall back to denormalized chainCount.
   const scored = rawChains.map((c) => {
     const lastActivityAt = [c.createdAt, likeLastAt.get(c.id), cmtLastAt.get(c.id), runLastAt.get(c.id)]
       .filter((d): d is Date => d instanceof Date)
       .reduce((a, b) => (a > b ? a : b), c.createdAt);
     const base = hotScore({
-      likes:          likeMap.get(c.id) ?? 0,
-      comments:       commentMap.get(c.id) ?? 0,
-      bonus:          runMap.get(c.id) ?? c.chainCount,
+      likes:    likeMap.get(c.id) ?? 0,
+      comments: commentMap.get(c.id) ?? 0,
+      bonus:    runMap.get(c.id) ?? 0,
       lastActivityAt,
     });
     return {
       chain: c,
-      score: base * affinityFn(c.userId) * freshBoostFn(c.userId, c.createdAt),
+      score: base * freshBoostFn(c.userId, c.createdAt),
     };
   });
 
