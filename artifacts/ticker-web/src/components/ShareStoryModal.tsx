@@ -12,7 +12,6 @@ import {
   PosterCardFront,
   ClassicCardFront,
   CardBackFace,
-  POSTER_BG,
 } from "./CardFaceComponents";
 
 // ── Sizes ──────────────────────────────────────────────────────────────────────
@@ -135,47 +134,25 @@ async function buildCombinedPng(
   await document.fonts.ready;
   await new Promise<void>(r => requestAnimationFrame(() => r()));
 
-  // ── iOS: composite approach ──────────────────────────────────────────────
-  // iOS/iPadOS WebKit will not paint <img> or CSS background-image inside an
-  // SVG <foreignObject> — not even when they are replaced with <canvas>
-  // elements. Compositing is the only reliable fix:
+  // ── Capture ──────────────────────────────────────────────────────────────
+  // Two html2canvas modes:
   //
-  //  1. Strip the opaque card background + poster image from the live DOM so
-  //     html2canvas captures a TRANSPARENT image area with the correct layout
-  //     (text, gradient, flexbox, borders) around it.
-  //  2. Manually draw the poster image onto a fresh canvas using the 2D API
-  //     (canvas drawImage always works, even on iOS).
-  //  3. Overlay the html2canvas layout result on top.
+  //   • foreignObjectRendering: true  → uses <foreignObject> in SVG. Renders
+  //     text/CSS perfectly on Android/Chrome but iOS WebKit refuses to paint
+  //     <img> / background-image inside foreignObject (transparent image area).
   //
-  // Card geometry (DOM px → canvas px at scale S=3):
-  //   Front card:      x=PAD_W*S=60,  y=PAD_W*S=60,  w=SEED_W*S=570, h=SEED_H*S=855
-  //   Poster img sq:   x=(PAD_W+5)*S=75, y=(PAD_W+5)*S=75, side=(SEED_W-10)*S=540
+  //   • foreignObjectRendering: false → uses html2canvas's own DOM-walking
+  //     rasterizer. Paints images correctly on every browser including iOS,
+  //     and respects the actual rendered borders / radii / outlines pixel-
+  //     perfectly (no compositing math required).
+  //
+  // We use the rasterizer on iOS so the image ALWAYS sits inside the rendered
+  // frame, and foreignObject elsewhere so text rendering stays crisp.
+  //
+  // The rasterizer mis-handles `display: -webkit-box` + `-webkit-line-clamp`
+  // on iOS (clips at half-letter height), so we pre-rewrite line-clamp into
+  // an explicit `max-height` block — the rasterizer renders that correctly.
   if (isIOS()) {
-    // Load the poster image from the data URL
-    let posterImg: HTMLImageElement | null = null;
-    if (dataUrl) {
-      const img = new Image();
-      img.src = dataUrl;
-      await new Promise<void>(r => {
-        if (img.complete && img.naturalWidth > 0) { r(); return; }
-        img.onload = () => r(); img.onerror = () => r(); setTimeout(r, 2_000);
-      });
-      if (img.naturalWidth > 0) posterImg = img;
-    }
-
-    // Strip backgrounds / image from the front card so html2canvas gets
-    // a transparent image area but keeps all text / overlay layers intact.
-    const frontDiv = wrap.children[0] as HTMLElement;
-
-    // Neutralize `display: -webkit-box` + `-webkit-line-clamp` on every
-    // descendant. iOS WebKit renders these incorrectly inside an SVG
-    // <foreignObject>: the line-box height is mis-measured and overflow:hidden
-    // ends up clipping text at roughly half-letter height.
-    //
-    // Replace with a regular block + an explicit `max-height` equal to
-    // `lineHeight × clampLines` (+2px buffer for iOS rounding). This preserves
-    // the original "clamp to N lines" intent without triggering the
-    // half-letter clip bug.
     const neutralizeLineClamp = (el: HTMLElement) => {
       const cs = el.style;
       const lineClampStr = cs.webkitLineClamp;
@@ -195,144 +172,18 @@ async function buildCombinedPng(
       cs.overflow        = "hidden";
     };
 
-    if (isPoster) {
-      // PosterCardFront root has background: POSTER_BG — remove it.
-      const root0 = frontDiv.firstElementChild as HTMLElement | null;
-      if (root0) { root0.style.background = "transparent"; root0.style.backgroundColor = "transparent"; }
-      // Also remove the backdrop div's backgroundImage (the actual image source).
-      for (const el of Array.from(frontDiv.querySelectorAll<HTMLElement>("*"))) {
-        if (el.style.backgroundImage && el.style.backgroundImage !== "none") {
-          el.style.backgroundImage = "none";
-        }
-        neutralizeLineClamp(el);
-      }
-    } else {
-      // ClassicCardFront root has background: "#18181b" — remove it.
-      const root0 = frontDiv.firstElementChild as HTMLElement | null;
-      if (root0) { root0.style.background = "transparent"; root0.style.backgroundColor = "transparent"; }
-      // Hide the <img> (it won't paint anyway, but makes the area transparent).
-      for (const img of Array.from(frontDiv.querySelectorAll<HTMLImageElement>("img"))) {
-        img.style.display = "none";
-      }
-      for (const el of Array.from(frontDiv.querySelectorAll<HTMLElement>("*"))) {
-        neutralizeLineClamp(el);
-      }
+    for (const el of Array.from(wrap.querySelectorAll<HTMLElement>("*"))) {
+      neutralizeLineClamp(el);
     }
-
-    // Also neutralize on the back card (CardBackFace uses line-clamp on the
-    // private-memory text and other long fields).
-    const backDiv = wrap.children[1] as HTMLElement | undefined;
-    if (backDiv) {
-      for (const el of Array.from(backDiv.querySelectorAll<HTMLElement>("*"))) {
-        neutralizeLineClamp(el);
-      }
-    }
-
-    // Capture layout with correct text / gradient / flexbox positions.
-    const layoutCanvas = await html2canvas(wrap, {
-      scale: S,
-      useCORS: true,
-      allowTaint: true,
-      backgroundColor: null,
-      logging: false,
-      foreignObjectRendering: true,
-    });
-
-    // Composite
-    const comp = document.createElement("canvas");
-    comp.width  = layoutCanvas.width;
-    comp.height = layoutCanvas.height;
-    const ctx   = comp.getContext("2d")!;
-
-    if (posterImg) {
-      // Measure the ACTUAL on-screen rect of the image area (poster) or card
-      // (classic) instead of trusting hard-coded math. iOS may render padding
-      // / aspect-ratio with sub-pixel rounding, which would offset the drawn
-      // image relative to the layoutCanvas overlay (the visible "frame"). Using
-      // getBoundingClientRect guarantees exact alignment with the captured
-      // layout.
-      const wrapRect = wrap.getBoundingClientRect();
-      // Honour the user-chosen horizontal crop position (background-position
-      // `${offsetX}% center` in PosterCardFront). 50 = centred.
-      const offsetX = ((t["cardBackdropOffsetX"] as number | null | undefined) ?? 50) / 100;
-
-      if (isPoster) {
-        // The image area is the descendant <div style="aspect-ratio:1/1">
-        let imageAreaEl: HTMLElement | null = null;
-        for (const el of Array.from(frontDiv.querySelectorAll<HTMLElement>("*"))) {
-          // style.aspectRatio is normalised to "1 / 1" in WebKit.
-          const ar = el.style.aspectRatio.replace(/\s+/g, "");
-          if (ar === "1/1") { imageAreaEl = el; break; }
-        }
-
-        const r       = (imageAreaEl ?? frontDiv).getBoundingClientRect();
-        const imgX    = (r.left - wrapRect.left) * S;
-        const imgY    = (r.top  - wrapRect.top ) * S;
-        const imgW    = r.width  * S;
-        const imgH    = r.height * S;
-
-        // Fill POSTER_BG over the entire FRONT-card area (measured)
-        const fr   = frontDiv.getBoundingClientRect();
-        const fX   = (fr.left - wrapRect.left) * S;
-        const fY   = (fr.top  - wrapRect.top ) * S;
-        const fW   = fr.width  * S;
-        const fH   = fr.height * S;
-        ctx.fillStyle = POSTER_BG;
-        ctx.fillRect(fX, fY, fW, fH);
-
-        const sc = Math.max(imgW / posterImg.naturalWidth, imgH / posterImg.naturalHeight);
-        const dw = posterImg.naturalWidth  * sc;
-        const dh = posterImg.naturalHeight * sc;
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(imgX, imgY, imgW, imgH);
-        ctx.clip();
-        ctx.drawImage(
-          posterImg,
-          imgX + (imgW - dw) * offsetX,   // honour user offsetX (0..1)
-          imgY + (imgH - dh) * 0.5,       // vertical: always centred
-          dw,
-          dh,
-        );
-        ctx.restore();
-      } else {
-        // Classic: image fills the entire FRONT card (measured), clipped to
-        // border radius.
-        const fr = frontDiv.getBoundingClientRect();
-        const fX = (fr.left - wrapRect.left) * S;
-        const fY = (fr.top  - wrapRect.top ) * S;
-        const fW = fr.width  * S;
-        const fH = fr.height * S;
-        const sc = Math.max(fW / posterImg.naturalWidth, fH / posterImg.naturalHeight);
-        const dw = posterImg.naturalWidth  * sc;
-        const dh = posterImg.naturalHeight * sc;
-        ctx.save();
-        ctx.beginPath();
-        roundRectPath(ctx, fX, fY, fW, fH, radius * S);
-        ctx.clip();
-        ctx.drawImage(posterImg, fX + (fW - dw) / 2, fY + (fH - dh) / 2, dw, dh);
-        ctx.restore();
-      }
-    }
-
-    // ③ Overlay the layout (text, gradient overlay, back card, everything)
-    ctx.drawImage(layoutCanvas, 0, 0);
-
-    root.unmount();
-    document.body.removeChild(wrap);
-    return new Promise<Blob>((resolve, reject) => {
-      comp.toBlob(b => (b ? resolve(b) : reject(new Error("toBlob failed"))), "image/png");
-    });
   }
 
-  // ── Non-iOS: foreignObjectRendering: true works correctly ─────────────────
   const canvas = await html2canvas(wrap, {
     scale: S,
     useCORS: true,
     allowTaint: true,
     backgroundColor: null,
     logging: false,
-    foreignObjectRendering: true,
+    foreignObjectRendering: !isIOS(),
   });
 
   root.unmount();
@@ -352,26 +203,6 @@ function isIOS() {
     /iPad|iPhone|iPod/.test(navigator.userAgent) ||
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
   );
-}
-
-function roundRectPath(
-  ctx: CanvasRenderingContext2D,
-  x: number, y: number, w: number, h: number, r: number,
-) {
-  if (typeof ctx.roundRect === "function") {
-    ctx.roundRect(x, y, w, h, r);
-    return;
-  }
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y);
-  ctx.arcTo(x + w, y,     x + w, y + r,     r);
-  ctx.lineTo(x + w, y + h - r);
-  ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
-  ctx.lineTo(x + r, y + h);
-  ctx.arcTo(x,     y + h, x,     y + h - r, r);
-  ctx.lineTo(x,     y + r);
-  ctx.arcTo(x,     y,     x + r, y,         r);
-  ctx.closePath();
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
