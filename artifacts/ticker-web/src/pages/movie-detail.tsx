@@ -4,7 +4,6 @@ import { VerifiedBadge, isVerified } from "@/components/VerifiedBadge";
 import { BadgeIcon } from "@/components/BadgeIcon";
 import { MovieBadges, BADGE_DESC_TH, BADGE_DESC_EN } from "@/components/MovieBadges";
 import { computeCardTier, computeEffectTags, TIER_VISUAL } from "@/lib/ranks";
-import type { EffectTag } from "@/lib/ranks";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { ChevronLeft, Film, Star, Users, Bookmark, ChevronDown, ChevronUp, Tv, Flag } from "lucide-react";
 import { useState, useRef, useEffect, useMemo } from "react";
@@ -122,7 +121,11 @@ export default function MovieDetail() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [, navigate] = useLocation();
   const qc = useQueryClient();
-  const [badgeTooltip, setBadgeTooltip] = useState<string | null>(null);
+  // Open badge popup — tracks key + visual index so we can position the popup
+  // directly under the specific badge that was tapped, regardless of scroll.
+  const [openBadge, setOpenBadge] = useState<{ key: string; idx: number; text: string } | null>(null);
+  const badgeColRef = useRef<HTMLDivElement>(null);
+  const badgePopupRef = useRef<HTMLDivElement>(null);
   const [expandedSeason, setExpandedSeason] = useState<number | null>(null);
   const communityScrollRef = useRef<HTMLDivElement>(null);
   const communityScrollKey = `community-${movieId}`;
@@ -382,6 +385,21 @@ export default function MovieDetail() {
 
   const isBookmarked = bookmarkData?.isBookmarked ?? false;
 
+  // Close the badge popup when tapping anywhere outside the badge column
+  // and outside the popup itself. Tapping a badge is handled by its own
+  // onClick (toggle / switch) so we exclude the badge column from this check.
+  useEffect(() => {
+    if (!openBadge) return;
+    const handler = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (badgeColRef.current?.contains(t))   return;
+      if (badgePopupRef.current?.contains(t)) return;
+      setOpenBadge(null);
+    };
+    document.addEventListener("pointerdown", handler, true);
+    return () => document.removeEventListener("pointerdown", handler, true);
+  }, [openBadge]);
+
   const community = communityData?.tickets ?? [];
   useEffect(() => {
     if (community.length === 0) return;
@@ -480,6 +498,7 @@ export default function MovieDetail() {
         {/* so flexbox centering always aligns badge center to button center. */}
         {movie && (
           <div
+            ref={badgeColRef}
             className="absolute"
             style={{
               top:            "calc(max(1rem, env(safe-area-inset-top, 0px)) + 2.75rem)",
@@ -495,19 +514,37 @@ export default function MovieDetail() {
               size="md"
               layout="col"
               asButton
-              onRankClick={() => setBadgeTooltip(t => t ? null : ((lang === "en" ? BADGE_DESC_EN : BADGE_DESC_TH)[_rank] ?? _rank))}
-              onEffectClick={(tag: EffectTag) => setBadgeTooltip(t => t ? null : ((lang === "en" ? BADGE_DESC_EN : BADGE_DESC_TH)[tag] ?? tag))}
+              onBadgeClick={(key, idx) => {
+                setOpenBadge(prev => {
+                  if (prev && prev.key === key) return null; // re-tap same badge → close
+                  const text = (lang === "en" ? BADGE_DESC_EN : BADGE_DESC_TH)[key] ?? key;
+                  return { key, idx, text };                  // new / different badge → open
+                });
+              }}
             />
           </div>
         )}
 
-        {/* Badge tooltip */}
-        {badgeTooltip && (
+        {/* Badge popup — positioned directly below the tapped badge.
+            Each badge has a fixed designated spot in this container's coord
+            system, so the popup always lands at the same offset for a given
+            badge regardless of how the page has been scrolled. */}
+        {openBadge && (
           <div
-            className="absolute top-16 right-16 z-50 bg-zinc-900/95 text-white text-xs rounded-xl px-3 py-2 max-w-[200px] whitespace-pre-line shadow-xl leading-relaxed"
-            onClick={() => setBadgeTooltip(null)}
+            ref={badgePopupRef}
+            className="absolute z-50 bg-zinc-900/95 text-white text-xs rounded-xl px-3 py-2 shadow-xl leading-relaxed text-center"
+            style={{
+              // Badge container starts at: max(1rem, safe-area) + 2.75rem
+              // Inside the container (size="md"): PAD(3) + idx*(side+gap=24) + side(20) = 23 + 24*idx
+              // + 6px breathing gap below the badge
+              top:           `calc(max(1rem, env(safe-area-inset-top, 0px)) + 2.75rem + ${29 + 24 * openBadge.idx}px)`,
+              right:         16,
+              whiteSpace:    "pre",
+              pointerEvents: "auto",
+            }}
+            onClick={() => setOpenBadge(null)}
           >
-            {badgeTooltip}
+            {openBadge.text}
           </div>
         )}
 

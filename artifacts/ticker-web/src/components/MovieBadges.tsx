@@ -2,33 +2,38 @@ import { TIER_VISUAL, EFFECT_CONFIG } from "@/lib/ranks";
 import type { CardTier, EffectTag } from "@/lib/ranks";
 
 // ── Descriptions ──────────────────────────────────────────────────
+// Format ทุก badge: 3 บรรทัด
+//   บรรทัด 1: ชื่อย่อ Badge
+//   บรรทัด 2: คะแนน หรือ เงื่อนไข
+//   บรรทัด 3: คำอธิบายสั้น
+// ใช้ได้เฉพาะอักขระพิเศษ + - . (จุดเฉพาะทศนิยม)
 
 export const BADGE_DESC_TH: Record<string, string> = {
-  legendary:    "LEGENDARY\nMP + อายุ 20+ ปี\nระดับตำนาน ผ่านการพิสูจน์จากเวลา",
-  cult_classic: "CULT CLASSIC\nP + อายุ 20+ ปี\nโลกมองข้าม แต่คอหนังไม่มีวันลืม",
-  ultra_rare:   "Masterpiece · 8.3–10.0\nหนังคุณภาพสูงสุด ได้รับการยอมรับอย่างล้นหลาม",
-  super_rare:   "Excellent · 7.6–8.2\nหนังดีมาก เหนือค่าเฉลี่ยอย่างชัดเจน",
-  rare:         "Good · 6.6–7.5\nหนังดี คุณภาพแน่นอน ดูแล้วไม่เสียดาย",
-  uncommon:     "Average · 5.1–6.5\nหนังธรรมดา ไม่แย่ แต่ไม่โดดเด่น",
-  common:       "Poor · 1.0–5.0\nหนังทั่วไป ต่ำกว่าค่าเฉลี่ย",
-  N:   "New · ออกใหม่ภายใน 1 ปี\nคะแนนยังอาจเปลี่ยนแปลงได้",
-  FR:  "Franchise · ภาพยนตร์ในแฟรนไชส์ต่อเนื่อง",
-  FS:  "Fan Service · ชีวประวัติ, หนังดนตรี\nหรือสารคดีสำหรับกลุ่มแฟนโดยเฉพาะ",
-  LGC: "Legacy · อายุ 20+ ปี",
+  common:       "P\n1.0 - 5.0\nหนังต่ำกว่าค่าเฉลี่ย",
+  uncommon:     "A\n5.1 - 6.5\nหนังธรรมดาทั่วไป",
+  rare:         "G\n6.6 - 7.5\nหนังดี ดูแล้วคุ้ม",
+  super_rare:   "EX\n7.6 - 8.2\nหนังเหนือค่าเฉลี่ย",
+  ultra_rare:   "MP\n8.3 - 10.0\nหนังคุณภาพระดับเยี่ยม",
+  legendary:    "LEGENDARY\nMP + อายุ 20+ ปี\nหนังระดับตำนาน",
+  cult_classic: "CULT CLASSIC\nP + อายุ 20+ ปี\nโลกมองข้าม คอหนังจดจำ",
+  N:   "N\nออกใหม่ภายใน 1 ปี\nคะแนนยังเปลี่ยนได้",
+  FR:  "FR\nหนังมีภาคต่อ\nส่วนหนึ่งของแฟรนไชส์",
+  FS:  "FS\nหนังเฉพาะกลุ่มแฟน\nชีวประวัติ ดนตรี สารคดี",
+  LGC: "LGC\nอายุ 20+ ปี\nผ่านบททดสอบของเวลา",
 };
 
 export const BADGE_DESC_EN: Record<string, string> = {
-  legendary:    "LEGENDARY\nMP + 20+ years old\nProven by time — a true legend",
-  cult_classic: "CULT CLASSIC\nP + 20+ years old\nOverlooked, but never forgotten",
-  ultra_rare:   "Masterpiece · 8.3–10.0\nOutstanding film with exceptional acclaim",
-  super_rare:   "Excellent · 7.6–8.2\nClearly above average — very strong",
-  rare:         "Good · 6.6–7.5\nSolid film, well worth your time",
-  uncommon:     "Average · 5.1–6.5\nAverage — nothing remarkable",
-  common:       "Poor · 1.0–5.0\nBelow-average film",
-  N:   "New · Released within the past year\nScore may still change",
-  FR:  "Franchise · Part of a continuing franchise",
-  FS:  "Fan Service · Biopics, music films,\nor niche documentaries",
-  LGC: "Legacy · 20+ years old",
+  common:       "P\n1.0 - 5.0\nBelow average film",
+  uncommon:     "A\n5.1 - 6.5\nAverage film",
+  rare:         "G\n6.6 - 7.5\nGood and worth watching",
+  super_rare:   "EX\n7.6 - 8.2\nClearly above average",
+  ultra_rare:   "MP\n8.3 - 10.0\nOutstanding quality film",
+  legendary:    "LEGENDARY\nMP + 20+ years old\nA true legend",
+  cult_classic: "CULT CLASSIC\nP + 20+ years old\nOverlooked but unforgettable",
+  N:   "N\nReleased within 1 year\nScore may still change",
+  FR:  "FR\nHas sequels or prequels\nPart of a franchise",
+  FS:  "FS\nFor a niche fanbase\nBiopics music documentaries",
+  LGC: "LGC\n20+ years old\nStood the test of time",
 };
 
 // ── Pixel constants ────────────────────────────────────────────────
@@ -67,6 +72,13 @@ interface MovieBadgesProps {
   asButton?:      boolean;
   onRankClick?:   () => void;
   onEffectClick?: (tag: EffectTag) => void;
+  /**
+   * Unified click handler — receives the badge key and its visual index in the
+   * stack (0 = top, 1 = below it, etc.). Use this when the parent needs to
+   * position a popup relative to the specific badge that was tapped.
+   * Takes precedence over onRankClick / onEffectClick when provided.
+   */
+  onBadgeClick?:  (key: string, index: number) => void;
   className?:     string;
 }
 
@@ -160,6 +172,7 @@ export function MovieBadges({
   asButton  = false,
   onRankClick,
   onEffectClick,
+  onBadgeClick,
   className,
 }: MovieBadgesProps) {
   const tv        = TIER_VISUAL[tier];
@@ -170,23 +183,36 @@ export function MovieBadges({
   const hasN    = !isSpecial && effects.includes("N");
   const otherFx = !isSpecial ? effects.filter((t) => t !== "N") : [];
 
-  const items: BadgeItem[] = [
-    ...(hasN ? [{
-      key: "N", label: EFFECT_CONFIG.N.label, colorCls: EFFECT_CONFIG.N.badge,
-      isWide: false,
-      onClick: onEffectClick ? () => onEffectClick("N") : undefined,
-    }] : []),
-    {
-      key: tier, label: tv.abbr, colorCls: tv.badge,
-      isWide: isSpecial,
-      onClick: onRankClick,
-    },
-    ...otherFx.map((tag) => ({
-      key: tag, label: EFFECT_CONFIG[tag].label, colorCls: EFFECT_CONFIG[tag].badge,
-      isWide: false,
-      onClick: onEffectClick ? () => onEffectClick(tag) : undefined,
-    })),
+  // Build raw key list first so we can compute each badge's visual index up-front
+  const keys: string[] = [
+    ...(hasN ? ["N"] : []),
+    tier,
+    ...otherFx,
   ];
+
+  // Resolve onClick for a given key+index — onBadgeClick wins when provided
+  const clickFor = (key: string, idx: number): (() => void) | undefined => {
+    if (onBadgeClick) return () => onBadgeClick(key, idx);
+    if (key === tier && onRankClick) return onRankClick;
+    if (key !== tier && onEffectClick) return () => onEffectClick(key as EffectTag);
+    return undefined;
+  };
+
+  const items: BadgeItem[] = keys.map((key, idx) => {
+    if (key === tier) {
+      return {
+        key, label: tv.abbr, colorCls: tv.badge,
+        isWide:  isSpecial,
+        onClick: clickFor(key, idx),
+      };
+    }
+    const cfg = EFFECT_CONFIG[key as EffectTag];
+    return {
+      key, label: cfg.label, colorCls: cfg.badge,
+      isWide:  false,
+      onClick: clickFor(key, idx),
+    };
+  });
 
   // ── Special (Legendary / Cult Classic) in col layout — wide badge + dark container ──
   // display:flex avoids inline formatting-context (no strut / line-height gap),
