@@ -185,9 +185,9 @@ export default function Following() {
           "transition-transform duration-300 ease-in-out",
           headerHidden && "-translate-y-full"
         )}
-        style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 4px)" }}
+        style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
       >
-        <div className="flex items-center px-4 pb-3">
+        <div className="flex items-center px-4 pt-4 pb-3">
           {user ? (
             <Link href="/chat">
               <button className="relative flex items-center justify-center w-9 h-9">
