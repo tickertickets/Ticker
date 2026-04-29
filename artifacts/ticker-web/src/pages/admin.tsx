@@ -462,14 +462,15 @@ export default function AdminPanel() {
             {tab === "supporter" && "ตรวจสอบคำขอ Supporter Badge"}
             {tab === "verify" && "ตรวจสอบคำขอ Badge ถังป็อปคอร์น"}
             {tab === "broadcast" && "ส่งประกาศถึงผู้ใช้"}
+            {tab === "settings" && "ตั้งค่าระบบ"}
           </p>
         </div>
       </div>
 
       {/* Section tabs */}
-      <div className="flex gap-1 px-4 py-3 border-b border-border">
-        {([["supporter", <CheckCircle className="w-3.5 h-3.5" />, "Supporter"], ["verify", <Popcorn className="w-3.5 h-3.5" />, "Verify"], ["broadcast", <Megaphone className="w-3.5 h-3.5" />, "ประกาศ"]] as [Tab, ReactNode, string][]).map(([id, icon, label]) => (
-          <button key={id} onClick={() => setTab(id)} className={`flex-1 h-9 rounded-xl text-[12px] font-bold transition-all flex items-center justify-center gap-1.5 ${tab === id ? "bg-foreground text-background" : "bg-secondary text-muted-foreground"}`}>
+      <div className="flex gap-1 px-4 py-3 border-b border-border overflow-x-auto">
+        {([["supporter", <CheckCircle className="w-3.5 h-3.5" />, "Supporter"], ["verify", <Popcorn className="w-3.5 h-3.5" />, "Verify"], ["broadcast", <Megaphone className="w-3.5 h-3.5" />, "ประกาศ"], ["settings", <Settings className="w-3.5 h-3.5" />, "ตั้งค่า"]] as [Tab, ReactNode, string][]).map(([id, icon, label]) => (
+          <button key={id} onClick={() => setTab(id)} className={`flex-shrink-0 flex-1 h-9 rounded-xl text-[12px] font-bold transition-all flex items-center justify-center gap-1.5 ${tab === id ? "bg-foreground text-background" : "bg-secondary text-muted-foreground"}`}>
             {icon}{label}
           </button>
         ))}
@@ -479,6 +480,8 @@ export default function AdminPanel() {
         <div className="flex-1 overflow-y-auto"><BroadcastPanel /></div>
       ) : tab === "verify" ? (
         <VerifyPanel />
+      ) : tab === "settings" ? (
+        <SettingsPanel />
       ) : (
         <>
           <FilterBar filter={filter} setFilter={setFilter} />

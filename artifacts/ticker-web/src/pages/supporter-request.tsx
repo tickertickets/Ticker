@@ -9,6 +9,14 @@ import { useLang } from "@/lib/i18n";
 
 const SUPPORTER_AMOUNT = import.meta.env.VITE_SUPPORTER_AMOUNT ?? "99";
 
+function usePromptPayQr() {
+  return useQuery<{ objectPath: string | null }>({
+    queryKey: ["settings-promptpay-qr"],
+    queryFn: () => fetch("/api/settings/promptpay-qr").then(r => r.json()),
+    staleTime: 5 * 60_000,
+  });
+}
+
 interface SupporterRequest {
   id: string;
   status: "pending" | "approved" | "rejected";
@@ -35,6 +43,11 @@ export default function SupporterRequest() {
   const qc = useQueryClient();
   const { data, isLoading } = useMyRequest();
   const request = data?.request;
+
+  const { data: qrData } = usePromptPayQr();
+  const qrSrc = qrData?.objectPath?.startsWith("/objects/")
+    ? `/api/storage${qrData.objectPath}`
+    : (qrData?.objectPath ?? null);
 
   const [slipImagePath, setSlipImagePath] = useState<string | null>(null);
   const [slipPreview, setSlipPreview] = useState<string | null>(null);
@@ -205,17 +218,19 @@ export default function SupporterRequest() {
                   <span className="text-[11px] font-bold text-foreground">฿{SUPPORTER_AMOUNT}</span>
                 </div>
               </div>
-              <div className="flex flex-col items-center gap-2 py-1">
-                <div className="w-44 h-44 rounded-2xl overflow-hidden bg-white p-2 border border-border">
-                  <img
-                    src="/promptpay-qr.png"
-                    alt="PromptPay QR"
-                    className="w-full h-full object-contain"
-                    draggable={false}
-                  />
+              {qrSrc && (
+                <div className="flex flex-col items-center gap-2 py-1">
+                  <div className="w-44 h-44 rounded-2xl overflow-hidden bg-white p-2 border border-border">
+                    <img
+                      src={qrSrc}
+                      alt="PromptPay QR"
+                      className="w-full h-full object-contain"
+                      draggable={false}
+                    />
+                  </div>
+                  <p className="text-[11px] text-muted-foreground font-medium">{t.scanQrToPay}</p>
                 </div>
-                <p className="text-[11px] text-muted-foreground font-medium">{t.scanQrToPay}</p>
-              </div>
+              )}
               <p className="text-[10px] text-muted-foreground text-center">
                 {t.attachSlipNote}
               </p>
