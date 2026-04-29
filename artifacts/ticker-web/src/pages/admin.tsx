@@ -1,7 +1,7 @@
-import { useState, type ReactNode } from "react";
+import { useState, useRef, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, CheckCircle, XCircle, Trash2, ExternalLink, Clock, Megaphone, Send, Popcorn } from "lucide-react";
+import { ArrowLeft, CheckCircle, XCircle, Trash2, ExternalLink, Clock, Megaphone, Send, Popcorn, Settings, QrCode, Upload } from "lucide-react";
 import { Loader2 } from "lucide-react";
 import { navBack } from "@/lib/nav-back";
 import { useAuth } from "@/hooks/use-auth";
@@ -24,7 +24,7 @@ interface SupporterRequestRow {
 }
 
 type FilterStatus = "pending" | "approved" | "rejected" | "all";
-type Tab = "supporter" | "verify" | "broadcast";
+type Tab = "supporter" | "verify" | "broadcast" | "settings";
 
 class AdminForbiddenError extends Error {
   constructor() { super("forbidden"); }
@@ -297,6 +297,105 @@ function BroadcastPanel() {
       </div>
       <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-2">
         <p className="text-[11px] text-amber-400 whitespace-nowrap overflow-x-auto">ประกาศจะถูกบันทึกในการแจ้งเตือนของผู้รับ และส่ง push ถึงเครื่องที่เปิดการแจ้งเตือนไว้</p>
+      </div>
+    </div>
+  );
+}
+
+function SettingsPanel() {
+  const qc = useQueryClient();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const { data, isLoading } = useQuery<{ key: string; value: string | null }>({
+    queryKey: ["admin-settings-qr"],
+    queryFn: () => fetch("/api/admin/settings/promptpay_qr_url", { credentials: "include" }).then(r => r.json()),
+    staleTime: 0,
+  });
+
+  const currentPath = data?.value ?? null;
+  const previewUrl = currentPath?.startsWith("/objects/") ? `/api/storage${currentPath}` : currentPath;
+
+  async function handleFile(file: File) {
+    setUploading(true);
+    setMsg(null);
+    try {
+      const uploadRes = await fetch("/api/storage/uploads/proxy", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": file.type || "image/png" },
+        body: file,
+      });
+      if (!uploadRes.ok) throw new Error(`upload_failed:${uploadRes.status}`);
+      const { objectPath } = await uploadRes.json() as { objectPath: string };
+
+      const saveRes = await fetch("/api/admin/settings", {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: "promptpay_qr_url", value: objectPath }),
+      });
+      if (!saveRes.ok) throw new Error(`save_failed:${saveRes.status}`);
+
+      await qc.invalidateQueries({ queryKey: ["admin-settings-qr"] });
+      setMsg("อัปเดต QR สำเร็จ");
+    } catch (e: unknown) {
+      setMsg(`ผิดพลาด: ${e instanceof Error ? e.message : "unknown"}`);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+      <div className="bg-secondary rounded-2xl border border-border p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <QrCode className="w-4 h-4 text-muted-foreground" />
+          <p className="text-[13px] font-bold">QR PromptPay</p>
+        </div>
+
+        {isLoading ? (
+          <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+        ) : previewUrl ? (
+          <div className="flex flex-col items-center gap-2 py-2">
+            <div className="w-44 h-44 rounded-2xl overflow-hidden bg-white p-2 border border-border">
+              <img src={previewUrl} alt="PromptPay QR" className="w-full h-full object-contain" />
+            </div>
+            <p className="text-[11px] text-green-400">QR ปัจจุบัน</p>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-2 py-6 text-muted-foreground">
+            <QrCode className="w-8 h-8 opacity-30" />
+            <p className="text-[12px]">ยังไม่มี QR</p>
+          </div>
+        )}
+
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ""; }}
+        />
+        <button
+          onClick={() => fileRef.current?.click()}
+          disabled={uploading}
+          className="w-full h-11 rounded-xl font-bold text-sm bg-foreground text-background hover:opacity-90 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+        >
+          {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+          {previewUrl ? "เปลี่ยน QR" : "อัปโหลด QR"}
+        </button>
+
+        {msg && (
+          <div className={`text-[12px] px-3 py-2 rounded-xl ${msg.startsWith("ผิด") ? "bg-red-500/10 text-red-400" : "bg-green-500/10 text-green-400"}`}>
+            {msg}
+          </div>
+        )}
+      </div>
+
+      <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-2">
+        <p className="text-[11px] text-amber-400">รูป QR จะแสดงในหน้า Supporter ทันทีหลังอัปเดต</p>
       </div>
     </div>
   );

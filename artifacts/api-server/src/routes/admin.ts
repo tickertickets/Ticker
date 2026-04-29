@@ -1,8 +1,8 @@
 import { Router, type IRouter } from "express";
 import { nanoid } from "nanoid";
 import { db } from "@workspace/db";
-import { usersTable } from "@workspace/db/schema";
-import { inArray } from "drizzle-orm";
+import { usersTable, siteSettingsTable } from "@workspace/db/schema";
+import { inArray, eq } from "drizzle-orm";
 import { createNotification } from "../services/notify.service";
 import { sendPushToUser } from "../services/push.service";
 
@@ -97,6 +97,35 @@ router.post("/broadcast", async (req, res) => {
 
   // `pushed` mirrors recipients since push is fire-and-forget per user.
   res.json({ ok: true, recipients, pushed: recipients });
+});
+
+/**
+ * GET /api/admin/settings/:key
+ * Returns the value of a site setting. Admin only.
+ */
+router.get("/settings/:key", async (req, res) => {
+  const userId = req.session?.userId;
+  if (!isAdmin(userId)) { res.status(403).json({ error: "forbidden" }); return; }
+  const { key } = req.params;
+  const rows = await db.select().from(siteSettingsTable).where(eq(siteSettingsTable.key, key)).limit(1);
+  res.json({ key, value: rows[0]?.value ?? null });
+});
+
+/**
+ * PUT /api/admin/settings
+ * Body: { key: string, value: string }
+ * Upserts a site setting. Admin only.
+ */
+router.put("/settings", async (req, res) => {
+  const userId = req.session?.userId;
+  if (!isAdmin(userId)) { res.status(403).json({ error: "forbidden" }); return; }
+  const key = String(req.body?.key ?? "").trim();
+  const value = String(req.body?.value ?? "").trim();
+  if (!key) { res.status(400).json({ error: "missing_key" }); return; }
+  await db.insert(siteSettingsTable)
+    .values({ key, value, updatedAt: new Date() })
+    .onConflictDoUpdate({ target: siteSettingsTable.key, set: { value, updatedAt: new Date() } });
+  res.json({ ok: true });
 });
 
 /**
