@@ -7,7 +7,8 @@ import { navBack } from "@/lib/nav-back";
 import { compressImage } from "@/lib/image-compress";
 import { useLang } from "@/lib/i18n";
 
-const PROMPTPAY_NUMBER = "0925375441";
+const PROMPTPAY_NUMBER = import.meta.env.VITE_PROMPTPAY_NUMBER ?? "0925375441";
+const SUPPORTER_AMOUNT = import.meta.env.VITE_SUPPORTER_AMOUNT ?? "99";
 
 interface SupporterRequest {
   id: string;
@@ -206,7 +207,7 @@ export default function SupporterRequest() {
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-[12px] text-muted-foreground">{t.paymentAmount}</span>
-                  <span className="text-[11px] font-bold text-foreground">-</span>
+                  <span className="text-[11px] font-bold text-foreground">฿{SUPPORTER_AMOUNT}</span>
                 </div>
               </div>
               <p className="text-[10px] text-muted-foreground text-center">
