@@ -90,6 +90,12 @@ export async function loadCardFonts(): Promise<SatoriFont[]> {
     ),
   ]);
 
+  // @fontsource/noto-sans-thai ships only `normal` style (no real italic).
+  // We register the same data ALSO under style: "italic" so Satori has a
+  // glyph source when fontStyle: "italic" is requested on Thai text — without
+  // this, italic Thai falls through to DM Sans (which has no Thai glyphs)
+  // and the characters render as tofu / get dropped. Synthetic slanting is
+  // applied at the call-site via `transform: skewX(...)` on the wrapper.
   cachedFonts = [
     { name: "DM Sans", data: dmSans400, weight: 400, style: "normal" },
     { name: "DM Sans", data: dmSans400Italic, weight: 400, style: "italic" },
@@ -102,8 +108,11 @@ export async function loadCardFonts(): Promise<SatoriFont[]> {
       style: "normal",
     },
     { name: "Noto Sans Thai", data: notoThai400, weight: 400, style: "normal" },
+    { name: "Noto Sans Thai", data: notoThai400, weight: 400, style: "italic" },
     { name: "Noto Sans Thai", data: notoThai700, weight: 700, style: "normal" },
+    { name: "Noto Sans Thai", data: notoThai700, weight: 700, style: "italic" },
     { name: "Noto Sans Thai", data: notoThai900, weight: 900, style: "normal" },
+    { name: "Noto Sans Thai", data: notoThai900, weight: 900, style: "italic" },
   ];
   return cachedFonts;
 }
@@ -163,6 +172,100 @@ const STR = {
   },
 } as const;
 
+// ── Genre localization (mirrors artifacts/ticker-web/src/lib/tmdb-genres.ts) ─
+type GenreLabel = { th: string; en: string };
+
+const MOVIE_GENRES: Record<number, GenreLabel> = {
+  28:    { en: "Action",          th: "แอ็คชัน" },
+  12:    { en: "Adventure",       th: "ผจญภัย" },
+  16:    { en: "Animation",       th: "แอนิเมชัน" },
+  35:    { en: "Comedy",          th: "ตลก" },
+  80:    { en: "Crime",           th: "อาชญากรรม" },
+  99:    { en: "Documentary",     th: "สารคดี" },
+  18:    { en: "Drama",           th: "ดราม่า" },
+  10751: { en: "Family",          th: "ครอบครัว" },
+  14:    { en: "Fantasy",         th: "แฟนตาซี" },
+  36:    { en: "History",         th: "ประวัติศาสตร์" },
+  27:    { en: "Horror",          th: "สยองขวัญ" },
+  10402: { en: "Music",           th: "เพลง" },
+  9648:  { en: "Mystery",         th: "ลึกลับ" },
+  10749: { en: "Romance",         th: "โรแมนติก" },
+  878:   { en: "Science Fiction", th: "นิยายวิทยาศาสตร์" },
+  10770: { en: "TV Movie",        th: "ภาพยนตร์โทรทัศน์" },
+  53:    { en: "Thriller",        th: "ระทึกขวัญ" },
+  10752: { en: "War",             th: "สงคราม" },
+  37:    { en: "Western",         th: "ตะวันตก" },
+};
+
+const TV_GENRES: Record<number, GenreLabel> = {
+  10759: { en: "Action & Adventure", th: "แอ็คชั่น & ผจญภัย" },
+  16:    { en: "Animation",          th: "แอนิเมชัน" },
+  35:    { en: "Comedy",             th: "ตลก" },
+  80:    { en: "Crime",              th: "อาชญากรรม" },
+  99:    { en: "Documentary",        th: "สารคดี" },
+  18:    { en: "Drama",              th: "ดราม่า" },
+  10751: { en: "Family",             th: "ครอบครัว" },
+  10762: { en: "Kids",               th: "เด็ก" },
+  9648:  { en: "Mystery",            th: "ลึกลับ" },
+  10763: { en: "News",               th: "ข่าว" },
+  10764: { en: "Reality",            th: "เรียลลิตี้" },
+  10765: { en: "Sci-Fi & Fantasy",   th: "นิยายวิทยาศาสตร์ & แฟนตาซี" },
+  10766: { en: "Soap",               th: "ละครชุด" },
+  10767: { en: "Talk",               th: "รายการสนทนา" },
+  10768: { en: "War & Politics",     th: "สงคราม & การเมือง" },
+  37:    { en: "Western",            th: "ตะวันตก" },
+};
+
+function translateGenreName(name: string, lang: Lang): string | null {
+  const n = name.toLowerCase();
+  for (const map of [MOVIE_GENRES, TV_GENRES]) {
+    for (const id in map) {
+      const e = map[id as unknown as number];
+      if (e.en.toLowerCase() === n || e.th === name) return e[lang];
+    }
+  }
+  return null;
+}
+
+function localizeTicketGenre(ticket: RenderableTicket, lang: Lang): string {
+  const isTv = typeof ticket.imdbId === "string" && ticket.imdbId.startsWith("tmdb_tv:");
+
+  // Prefer TMDB genre IDs (language-independent) over the legacy `genre` string.
+  const liveIds = ticket.movieLiveSnapshot?.genreIds ?? null;
+  const snapIds = (() => {
+    const raw = ticket.tmdbSnapshot;
+    if (!raw) return null;
+    if (typeof raw === "object" && raw !== null && "genreIds" in raw) {
+      const v = (raw as { genreIds?: unknown }).genreIds;
+      return Array.isArray(v) ? (v as number[]) : null;
+    }
+    if (typeof raw === "string") {
+      try {
+        const parsed = JSON.parse(raw) as { genreIds?: number[] };
+        return Array.isArray(parsed.genreIds) ? parsed.genreIds : null;
+      } catch { return null; }
+    }
+    return null;
+  })();
+
+  const ids = liveIds ?? snapIds ?? [];
+  if (ids.length > 0) {
+    const map = isTv ? TV_GENRES : MOVIE_GENRES;
+    const labels: string[] = [];
+    for (const id of ids) {
+      const entry = map[id] ?? MOVIE_GENRES[id] ?? TV_GENRES[id];
+      if (entry) labels.push(entry[lang]);
+    }
+    if (labels.length > 0) return labels.join(", ");
+  }
+
+  // Legacy fallback — translate stored genre string parts.
+  const stored = (ticket.genre ?? "").trim();
+  if (!stored) return "";
+  const parts = stored.split(/[,/]| & /).map((s) => s.trim()).filter(Boolean);
+  return parts.map((p) => translateGenreName(p, lang) ?? p).join(", ");
+}
+
 // ── Ticket shape (subset we need) ───────────────────────────────────────────
 export type RenderableTicket = {
   movieTitle: string;
@@ -183,6 +286,11 @@ export type RenderableTicket = {
   ratingType?: string | null;
   isPrivateMemory?: boolean | null;
   partySeatNumber?: number | null;
+
+  // TMDB context used to localize the genre label client-/server-side.
+  imdbId?: string | null;
+  tmdbSnapshot?: { genreIds?: number[] | null } | string | null;
+  movieLiveSnapshot?: { genreIds?: number[] | null } | null;
 };
 
 // ── Star icon (used for both empty-state and filled rating row) ─────────────
@@ -419,26 +527,30 @@ function ClassicFront({
           flexDirection: "column",
         }}
       >
-        {ticket.genre ? (
-          <div
-            style={{
-              fontSize: 7 * SCALE,
-              fontWeight: 600,
-              textTransform: "uppercase",
-              letterSpacing: 1.2,
-              color:
-                ticket.rating != null && ticket.rating >= 4
-                  ? "#f59e0b"
-                  : "rgba(255,255,255,0.55)",
-              overflow: "hidden",
-              whiteSpace: "nowrap",
-              textOverflow: "ellipsis",
-              fontFamily: "DM Sans, Noto Sans Thai",
-            }}
-          >
-            {ticket.genre}
-          </div>
-        ) : null}
+        {(() => {
+          const genreLabel = localizeTicketGenre(ticket, lang);
+          if (!genreLabel) return null;
+          return (
+            <div
+              style={{
+                fontSize: 7 * SCALE,
+                fontWeight: 600,
+                textTransform: "uppercase",
+                letterSpacing: 1.2,
+                color:
+                  ticket.rating != null && ticket.rating >= 4
+                    ? "#f59e0b"
+                    : "rgba(255,255,255,0.55)",
+                overflow: "hidden",
+                whiteSpace: "nowrap",
+                textOverflow: "ellipsis",
+                fontFamily: "DM Sans, Noto Sans Thai",
+              }}
+            >
+              {genreLabel}
+            </div>
+          );
+        })()}
 
         <div
           style={{
@@ -617,7 +729,9 @@ function PosterFront({
             fontSize: 11.5 * SCALE,
             fontWeight: 900,
             textTransform: "uppercase",
-            letterSpacing: -0.115,
+            // CSS spec: -0.01em ≈ -0.115px relative to a 11.5px font.
+            // The PNG is 3× scaled, so the value must scale too: -0.115 * SCALE.
+            letterSpacing: -0.115 * SCALE,
             lineHeight: 1.1,
             color: POSTER_DARK,
             display: "block",
@@ -709,6 +823,13 @@ function CardBack({
         flexDirection: "column",
         background: isPoster ? POSTER_BG : "#ffffff",
         overflow: "hidden",
+        // Match the outer cardWrap radius so the inset boxShadow border line
+        // follows the rounded corners. Without this, the inset shadow draws
+        // a sharp rectangular border that the outer rounded clip slices off
+        // at the corners — producing the "ขอบที่ตัดไม่หมด" / faded-edge effect
+        // visible in saved PNGs. Poster theme is square (radius 0) so its
+        // 1.5px inset border already aligns naturally.
+        borderRadius: isPoster ? 0 : 12 * SCALE,
         ...(isPoster
           ? { boxShadow: "inset 0 0 0 1.5px rgba(0,0,0,0.18)" }
           : { boxShadow: "inset 0 0 0 3px #e4e4e7" }),
