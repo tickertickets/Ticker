@@ -732,7 +732,7 @@ function PosterFront({
             // CSS spec: -0.01em ≈ -0.115px relative to a 11.5px font.
             // The PNG is 3× scaled, so the value must scale too: -0.115 * SCALE.
             letterSpacing: -0.115 * SCALE,
-            lineHeight: 1.1,
+            lineHeight: 1.45,
             color: POSTER_DARK,
             display: "block",
             overflow: "hidden",
@@ -894,6 +894,7 @@ function CardBack({
           <div
             style={{
               fontSize: 11 * SCALE,
+              fontWeight: 400,
               lineHeight: 1.625,
               fontStyle: "italic",
               color: memoryColor,
