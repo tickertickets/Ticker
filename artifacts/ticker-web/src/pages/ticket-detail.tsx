@@ -173,7 +173,7 @@ export default function TicketDetail() {
   const invalidateTicketCaches = (id: string) => {
     queryClient.invalidateQueries({ queryKey: [`/api/tickets/${id}`] });
     queryClient.invalidateQueries({ queryKey: [`/api/tickets/${id}/comments`] });
-    queryClient.invalidateQueries({ queryKey: ["home-mixed-feed"] });
+    queryClient.invalidateQueries({ queryKey: ["mixed-feed"] });
     // Profile tickets (keyed as /api/users/:username/tickets)
     if (ticket?.user?.username) {
       queryClient.invalidateQueries({ queryKey: [`/api/users/${ticket.user.username}/tickets`] });

@@ -927,7 +927,7 @@ function CommentModal({ ticket, onClose }: { ticket: Ticket; onClose: () => void
                             try {
                               await fetch(`/api/tickets/${ticket.id}/comments/${c.id}`, { method: "DELETE", credentials: "include" });
                               qc.invalidateQueries({ queryKey: [`/api/tickets/${ticket.id}/comments`] });
-                              qc.invalidateQueries({ queryKey: ["home-mixed-feed"] });
+                              qc.invalidateQueries({ queryKey: ["mixed-feed"] });
                             } catch {
                               refetch();
                             }

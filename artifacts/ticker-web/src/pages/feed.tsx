@@ -31,7 +31,7 @@ function useUpcomingMovies() {
   });
 }
 
-export default function Following() {
+export default function Feed() {
   const { t } = useLang();
   const scrollRef   = useRef<HTMLDivElement>(null);
   const headerRef   = useRef<HTMLDivElement>(null);
@@ -46,7 +46,7 @@ export default function Following() {
     if (el) el.scrollTo({ top: 0, behavior: "smooth" });
     setHeaderHidden(false);
     setIsRefreshing(true);
-    qc.invalidateQueries({ queryKey: ["home-mixed-feed"] }).then(() => {
+    qc.invalidateQueries({ queryKey: ["mixed-feed"] }).then(() => {
       setTimeout(() => setIsRefreshing(false), 400);
     });
   };
@@ -55,14 +55,11 @@ export default function Following() {
   useSocketFeedUpdates();
   const unreadCount = useNotificationCount();
 
-  // ── Unified mixed feed ────────────────────────────────────────────────────────
-  // Authenticated: mode=home (affinity boost for followed users)
-  // Guest: mode=discover (public, no auth required)
-  const feedMode = user ? "home" : "discover";
+  // ── Unified mixed feed — discover mode (all public users, hotScore ranked) ──
   const { data: feedData, isLoading } = useQuery<{ items: FeedItem[]; hasMore: boolean }>({
-    queryKey: ["home-mixed-feed", feedMode],
+    queryKey: ["mixed-feed"],
     queryFn: async () => {
-      const res = await fetch(`/api/feed?mode=${feedMode}&limit=20`, { credentials: "include" });
+      const res = await fetch(`/api/feed?mode=discover&limit=20`, { credentials: "include" });
       if (!res.ok) throw new Error("failed");
       return res.json();
     },
@@ -107,7 +104,6 @@ export default function Following() {
       firstLoadDone.current = true;
       const el = scrollRef.current;
       if (!el) return;
-      // Tiny forced assignment wakes up Android PWA scroll tracking
       requestAnimationFrame(() => {
         if (el.isConnected) el.scrollTop = el.scrollTop;
       });
@@ -118,12 +114,12 @@ export default function Following() {
     const el = scrollRef.current;
     if (!el) return;
 
-    const saved = scrollStore.get("following") ?? 0;
+    const saved = scrollStore.get("feed") ?? 0;
     let lastY = saved;
     if (saved > 0) requestAnimationFrame(() => { if (el.isConnected) el.scrollTop = saved; });
     const onScroll = () => {
       const y = el.scrollTop;
-      scrollStore.set("following", y);
+      scrollStore.set("feed", y);
       if (y <= 0) {
         setHeaderHidden(false);
       } else if (y > lastY && y > headerH) {
@@ -137,7 +133,7 @@ export default function Following() {
     el.addEventListener("scroll", onScroll, { passive: true });
     return () => {
       el.removeEventListener("scroll", onScroll);
-      scrollStore.set("following", el.scrollTop);
+      scrollStore.set("feed", el.scrollTop);
     };
   }, [headerH]);
 

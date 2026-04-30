@@ -386,14 +386,14 @@ export default function EditChain() {
       qc.setQueryData(["chains-hot"], patchList);
       qc.setQueriesData({ queryKey: ["chains-own-following"] }, patchList);
       qc.setQueryData(["chains-hot-following"], patchList);
-      qc.setQueriesData({ queryKey: ["home-mixed-feed"] }, patchMixed);
+      qc.setQueriesData({ queryKey: ["mixed-feed"] }, patchMixed);
       qc.setQueriesData({ queryKey: ["profile-chains-created"] }, patchList);
       qc.setQueryData(["/api/chains", chainId], (old: any) => old ? { ...old, ...updated } : updated);
 
       qc.invalidateQueries({ queryKey: ["chains-recent"] });
       qc.invalidateQueries({ queryKey: ["chains-hot"] });
       qc.invalidateQueries({ queryKey: ["chains-own-following"] });
-      qc.invalidateQueries({ queryKey: ["home-mixed-feed"] });
+      qc.invalidateQueries({ queryKey: ["mixed-feed"] });
       // NOT invalidating profile-chains-created — setQueriesData already patched it in-place
       // so the chain stays in its current position (no re-sort from server)
       qc.invalidateQueries({ queryKey: ["/api/chains", chainId] });

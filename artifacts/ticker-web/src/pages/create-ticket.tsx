@@ -737,7 +737,7 @@ export default function CreateTicket() {
       queryClient.invalidateQueries({ queryKey: ["chains-hot-following"] });
       queryClient.invalidateQueries({ queryKey: ["chains-own-following"] });
       // Force home feed to refetch so the new post appears immediately on return
-      queryClient.invalidateQueries({ queryKey: ["home-mixed-feed"] });
+      queryClient.invalidateQueries({ queryKey: ["mixed-feed"] });
 
       // Erase draft for this movie since it was successfully posted
       eraseDraft(draftKey, selectedMovieId, user?.id);

@@ -494,7 +494,7 @@ export default function CreateChain() {
       qc.invalidateQueries({ queryKey: ["profile-chains-created"] });
       if (user?.username) qc.invalidateQueries({ queryKey: [`/api/users/${user.username}`] });
       // Force home feed to refetch so the new chain appears immediately on return
-      qc.invalidateQueries({ queryKey: ["home-mixed-feed"] });
+      qc.invalidateQueries({ queryKey: ["mixed-feed"] });
       scrollStore.set("following", 0);
       setLocation("/");
       requestAnimationFrame(() => {

@@ -113,7 +113,7 @@ export function useSocketFeedUpdates() {
     const handleFeedNew = () => {
       qc.invalidateQueries({ queryKey: ["/api/tickets"] });
       qc.invalidateQueries({ queryKey: ["mixed-feed-discover"] });
-      qc.invalidateQueries({ queryKey: ["home-mixed-feed"] });
+      qc.invalidateQueries({ queryKey: ["mixed-feed"] });
     };
 
     socket.on("feed:new", handleFeedNew);

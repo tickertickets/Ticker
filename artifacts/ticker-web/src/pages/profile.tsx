@@ -466,7 +466,7 @@ function ChainContextMenu({
     try {
       await fetch(`/api/chains/${chain.id}/privacy`, { method: "PATCH", credentials: "include" });
       qc.invalidateQueries({ queryKey: ["profile-chains-created", profileUserId] });
-      qc.invalidateQueries({ queryKey: ["home-mixed-feed"] });
+      qc.invalidateQueries({ queryKey: ["mixed-feed"] });
       qc.invalidateQueries({ queryKey: ["chains-recent"] });
       qc.invalidateQueries({ queryKey: ["chains-hot"] });
       qc.invalidateQueries({ queryKey: ["chains-own-following"] });
@@ -514,7 +514,7 @@ function ChainContextMenu({
     qc.setQueryData(["chains-recent"], removeChain);
     qc.setQueryData(["chains-hot"], removeChain);
     qc.setQueriesData({ queryKey: ["chains-own-following"] }, removeChain);
-    qc.setQueriesData({ queryKey: ["home-mixed-feed"] }, removeFromMixed);
+    qc.setQueriesData({ queryKey: ["mixed-feed"] }, removeFromMixed);
     handleClose();
     try {
       await fetch(`/api/chains/${chain.id}`, { method: "DELETE", credentials: "include" });
@@ -745,7 +745,7 @@ function ProfileChainCard({
     };
     qc.setQueryData(["chains-recent"], patchChainList);
     qc.setQueryData(["chains-hot"], patchChainList);
-    qc.setQueriesData({ queryKey: ["home-mixed-feed"] }, patchMixedFeed);
+    qc.setQueriesData({ queryKey: ["mixed-feed"] }, patchMixedFeed);
     qc.setQueriesData({ queryKey: ["profile-chains-created"], exact: false }, patchChainList);
     qc.setQueriesData({ queryKey: ["profile-chains-played"], exact: false }, patchRunsList);
     try {

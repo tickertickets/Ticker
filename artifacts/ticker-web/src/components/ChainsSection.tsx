@@ -88,7 +88,7 @@ export function ChainCommentSheet({ chainId, onClose, commentCount: initialComme
       // Invalidate feed caches so counts refresh when sheet is closed
       qc.invalidateQueries({ queryKey: ["chains-recent"] });
       qc.invalidateQueries({ queryKey: ["chains-hot"] });
-      qc.invalidateQueries({ queryKey: ["home-mixed-feed"] });
+      qc.invalidateQueries({ queryKey: ["mixed-feed"] });
       qc.invalidateQueries({ queryKey: ["profile-chains-created"] });
       qc.invalidateQueries({ queryKey: ["profile-chains-played"] });
     } finally {
@@ -160,7 +160,7 @@ export function ChainCommentSheet({ chainId, onClose, commentCount: initialComme
                               await fetch(`/api/chains/${chainId}/comments/${c.id}`, { method: "DELETE", credentials: "include" });
                               qc.invalidateQueries({ queryKey: ["chains-recent"] });
                               qc.invalidateQueries({ queryKey: ["chains-hot"] });
-                              qc.invalidateQueries({ queryKey: ["home-mixed-feed"] });
+                              qc.invalidateQueries({ queryKey: ["mixed-feed"] });
                               qc.invalidateQueries({ queryKey: ["profile-chains-created"] });
                               qc.invalidateQueries({ queryKey: ["profile-chains-played"] });
                             } catch {
@@ -811,7 +811,7 @@ export function ChainCard({ chain }: { chain: ChainItem }) {
     };
     qc.setQueryData(["chains-recent"], patchChainList);
     qc.setQueryData(["chains-hot"], patchChainList);
-    qc.setQueriesData({ queryKey: ["home-mixed-feed"] }, patchMixedFeed);
+    qc.setQueriesData({ queryKey: ["mixed-feed"] }, patchMixedFeed);
     qc.invalidateQueries({ queryKey: ["profile-chains-created"] });
     qc.invalidateQueries({ queryKey: ["profile-chains-played"] });
     try {
@@ -863,7 +863,7 @@ export function ChainCard({ chain }: { chain: ChainItem }) {
       qc.setQueryData(["chains-hot"], removeChain);
       qc.invalidateQueries({ queryKey: ["chains-own-following"] });
       qc.invalidateQueries({ queryKey: ["chains-hot-following"] });
-      qc.invalidateQueries({ queryKey: ["home-mixed-feed"] });
+      qc.invalidateQueries({ queryKey: ["mixed-feed"] });
     } catch {}
     setDeleting(false);
   };

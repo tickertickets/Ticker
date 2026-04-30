@@ -1092,7 +1092,7 @@ export default function Settings() {
       queryClient.invalidateQueries({ queryKey: ["chain-trash"] });
       queryClient.invalidateQueries({ queryKey: ["chains-recent"] });
       queryClient.invalidateQueries({ queryKey: ["chains-hot"] });
-      queryClient.invalidateQueries({ queryKey: ["home-mixed-feed"] });
+      queryClient.invalidateQueries({ queryKey: ["mixed-feed"] });
     },
   });
 

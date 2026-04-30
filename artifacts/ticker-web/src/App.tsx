@@ -13,7 +13,7 @@ import { navPush } from "@/lib/nav-back";
 
 // ── All pages eagerly imported — no lazy chunks, no URL bar spinner ─────────
 import Home             from "@/pages/home";
-import Following        from "@/pages/following";
+import Feed             from "@/pages/feed";
 import Search           from "@/pages/search";
 import TermsPage        from "@/pages/terms";
 import PrivacyPage      from "@/pages/privacy";
@@ -128,7 +128,7 @@ function ShimmerActiveWrapper({ children, className }: { children: ReactNode; cl
 // ── Always-mounted guest tab shells ──────────────────────────────────────
 function GuestPersistentTabs({ activeTab, subPageOpen }: { activeTab: string; subPageOpen: boolean }) {
   const tabs = [
-    { path: "/",       Component: Following },
+    { path: "/",       Component: Feed },
     { path: "/search", Component: Search },
   ] as const;
 
@@ -149,7 +149,7 @@ function GuestPersistentTabs({ activeTab, subPageOpen }: { activeTab: string; su
 // ── Always-mounted tab shells ─────────────────────────────────────────────
 function PersistentTabs({ activeTab, subPageOpen }: { activeTab: string; subPageOpen: boolean }) {
   const tabs = [
-    { path: "/",          Component: Following },
+    { path: "/",          Component: Feed },
     { path: "/following", Component: Home },
     { path: "/search",    Component: Search },
   ] as const;

@@ -211,7 +211,7 @@ export default function ChainDetail() {
       qc.setQueryData(["/api/chains", chainId], data);
       qc.invalidateQueries({ queryKey: ["chains-recent"] });
       qc.invalidateQueries({ queryKey: ["chains-hot"] });
-      qc.invalidateQueries({ queryKey: ["home-mixed-feed"] });
+      qc.invalidateQueries({ queryKey: ["mixed-feed"] });
     },
   });
 
@@ -295,7 +295,7 @@ export default function ChainDetail() {
     qc.invalidateQueries({ queryKey: ["chains-recent"] });
     qc.invalidateQueries({ queryKey: ["chains-hot"] });
     qc.invalidateQueries({ queryKey: ["profile-chains-played"] });
-    qc.invalidateQueries({ queryKey: ["home-mixed-feed"] });
+    qc.invalidateQueries({ queryKey: ["mixed-feed"] });
   }, [chain, chainId, itemStartMs, qc]);
 
   // One-shot scroll restoration — only when navigating back from movie-detail.
