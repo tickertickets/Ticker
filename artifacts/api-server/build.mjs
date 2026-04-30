@@ -53,6 +53,16 @@ async function buildAll() {
       "isomorphic-dompurify",
       "@supabase/supabase-js",
       "resend",
+      "satori",
+      "@resvg/resvg-js",
+      "react",
+      "react/*",
+      "@fontsource/dm-sans",
+      "@fontsource/dm-sans/*",
+      "@fontsource/space-grotesk",
+      "@fontsource/space-grotesk/*",
+      "@fontsource/noto-sans-thai",
+      "@fontsource/noto-sans-thai/*",
 
       // ── Native / non-bundleable ─────────────────────────────────────────
       "*.node",

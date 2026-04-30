@@ -1,10 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { createRoot } from "react-dom/client";
 import { createPortal } from "react-dom";
-import html2canvas from "html2canvas";
 import { X, MessageCircle, Loader2, Link2, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useLang, LangProvider } from "@/lib/i18n";
+import { useLang } from "@/lib/i18n";
 import { useModalBackButton } from "@/hooks/use-modal-back-button";
 import type { Ticket } from "@workspace/api-client-react";
 import {
@@ -14,18 +12,11 @@ import {
   CardBackFace,
 } from "./CardFaceComponents";
 
-// ── Sizes ──────────────────────────────────────────────────────────────────────
-const SEED_W = 190;   // card DOM width (px) — matches create-ticket preview seed
-const SEED_H = 285;   // card DOM height (px)
-const S      = 3;     // html2canvas scale → 480×720 per card
-const GAP_W  = 16;    // gap between cards in DOM px (=C_GAP/S rounded)
-const PAD_W  = 20;    // outer padding in DOM px
-
-// Preview size inside modal
+const SEED_W = 190;
+const SEED_H = 285;
 const PREV_W = 120;
 const PREV_H = 180;
 
-// ── Fetch poster as same-origin blob URL ──────────────────────────────────────
 async function fetchBlob(url: string): Promise<string | null> {
   for (const src of [
     `/api/storage/proxy-image?url=${encodeURIComponent(url)}`,
@@ -39,211 +30,22 @@ async function fetchBlob(url: string): Promise<string | null> {
   return null;
 }
 
-// ── Convert blob URL → data URL (base64) ─────────────────────────────────────
-// html2canvas supports data URLs for both <img> src AND css background-image.
-// Blob URLs work for <img> but NOT for css background-image inside html2canvas.
-async function blobToDataUrl(blobUrl: string): Promise<string | null> {
-  try {
-    const res  = await fetch(blobUrl);
-    const blob = await res.blob();
-    return await new Promise<string>(resolve => {
-      const reader    = new FileReader();
-      reader.onload  = () => resolve(reader.result as string);
-      reader.onerror = () => resolve("");
-      reader.readAsDataURL(blob);
-    });
-  } catch {
-    return null;
-  }
-}
-
-// ── Capture the actual React components with html2canvas ─────────────────────
-async function buildCombinedPng(
-  ticket: Ticket,
-  dataUrl: string | null,   // base64 data URL of the poster image
-  ratingType: string,
+async function fetchServerCardPng(
+  ticketId: string,
+  lang: "th" | "en",
 ): Promise<Blob> {
-  const t        = ticket as unknown as Record<string, unknown>;
-  const isPoster = (t["cardTheme"] as string | undefined) === "poster";
-  const rStyle   = getRatingCardStyle(ticket.rating, ratingType);
-  const radius   = isPoster ? 0 : 12;
-
-  // Hidden wrapper: positioned AT the viewport (top:0,left:0) but behind all content
-  // z-index:-1 hides it from the user while html2canvas can still capture it.
-  // Keeping it IN the viewport is critical — elements outside the viewport cause
-  // html2canvas to mis-compute layout (overflow clips, absolute positions, etc.)
-  const wrap = document.createElement("div");
-  wrap.style.cssText = [
-    "position:fixed",
-    "top:0",
-    "left:0",
-    "z-index:-1",
-    "pointer-events:none",
-    `padding:${PAD_W}px`,
-    `gap:${GAP_W}px`,
-    "display:flex",
-    "align-items:flex-start",
-    "background:transparent",
-  ].join(";");
-  document.body.appendChild(wrap);
-
-  const root = createRoot(wrap);
-  root.render(
-    <LangProvider>
-      {/* Front face */}
-      <div style={{
-        width: SEED_W, height: SEED_H, flexShrink: 0,
-        overflow: "hidden", borderRadius: radius,
-        position: "relative",
-      }}>
-        {isPoster ? (
-          <PosterCardFront
-            ticket={ticket}
-            imageSrc={dataUrl}
-            borderColorHex={rStyle.borderColorHex}
-          />
-        ) : (
-          <ClassicCardFront ticket={ticket} imageSrc={dataUrl} />
-        )}
-      </div>
-
-      {/* Back face */}
-      <div style={{
-        width: SEED_W, height: SEED_H, flexShrink: 0,
-        overflow: "hidden", borderRadius: radius,
-        position: "relative",
-      }}>
-        <CardBackFace ticket={ticket} />
-      </div>
-    </LangProvider>,
+  const res = await fetch(
+    `/api/tickets/${encodeURIComponent(ticketId)}/export-card.png?lang=${lang}`,
+    { credentials: "include" },
   );
-
-  // Wait for React to commit + all <img> to load/decode + fonts.
-  await new Promise<void>(r => setTimeout(r, 80));
-  const imgs = Array.from(wrap.querySelectorAll<HTMLImageElement>("img"));
-  await Promise.all(imgs.map(img => {
-    if (img.complete && img.naturalWidth > 0) return Promise.resolve();
-    return new Promise<void>(r => {
-      const done = () => r();
-      img.addEventListener("load", done, { once: true });
-      img.addEventListener("error", done, { once: true });
-      setTimeout(done, 2_500);
-    });
-  }));
-  await Promise.all(imgs.map(img => img.decode?.().catch(() => undefined)));
-  await document.fonts.ready;
-  await new Promise<void>(r => requestAnimationFrame(() => r()));
-
-  // ── Capture ──────────────────────────────────────────────────────────────
-  // Two html2canvas modes:
-  //
-  //   • foreignObjectRendering: true  → uses <foreignObject> in SVG. Renders
-  //     text/CSS perfectly on Android/Chrome but iOS WebKit refuses to paint
-  //     <img> / background-image inside foreignObject (transparent image area).
-  //
-  //   • foreignObjectRendering: false → uses html2canvas's own DOM-walking
-  //     rasterizer. Paints images correctly on every browser including iOS,
-  //     and respects the actual rendered borders / radii / outlines pixel-
-  //     perfectly (no compositing math required).
-  //
-  // We use the rasterizer on iOS so the image ALWAYS sits inside the rendered
-  // frame, and foreignObject elsewhere so text rendering stays crisp.
-  //
-  // The rasterizer mis-handles `display: -webkit-box` + `-webkit-line-clamp`
-  // on iOS (clips at half-letter height), so we pre-rewrite line-clamp into
-  // an explicit `max-height` block — the rasterizer renders that correctly.
-  if (isIOS()) {
-    // The iOS rasterizer mis-handles `display: -webkit-box` + `-webkit-line-clamp`
-    // (clips text vertically — only bottom half of glyphs visible). Convert to
-    // an explicit `display: block` with a generous max-height that includes a
-    // safety buffer for ascenders/descenders and font-metric quirks.
-    const neutralizeLineClamp = (el: HTMLElement) => {
-      const cs = el.style;
-      const lineClampStr = cs.webkitLineClamp;
-      if (cs.display !== "-webkit-box" && !lineClampStr) return;
-
-      const lines = Math.max(1, parseInt(lineClampStr || "1", 10) || 1);
-      const computed = window.getComputedStyle(el);
-      const fontSize = parseFloat(computed.fontSize) || 16;
-      const lhRaw    = computed.lineHeight;
-      const lineHeight =
-        !lhRaw || lhRaw === "normal" ? fontSize * 1.25 : parseFloat(lhRaw);
-
-      // Use a 1.35× safety multiplier on the line box plus a 6px buffer so
-      // tall glyphs (uppercase Latin, Thai with floating tone marks, etc.)
-      // don't get clipped by the rasterizer's tight bounding box.
-      const boxH = Math.ceil(lineHeight * lines * 1.35) + 6;
-
-      cs.display         = "block";
-      cs.webkitLineClamp = "";
-      cs.webkitBoxOrient = "";
-      cs.lineHeight      = `${Math.ceil(lineHeight)}px`;
-      cs.maxHeight       = `${boxH}px`;
-      cs.minHeight       = `${Math.ceil(lineHeight * lines)}px`;
-      cs.overflow        = "hidden";
-    };
-
-    // The iOS rasterizer also doesn't support the `aspect-ratio` CSS property
-    // — boxes that rely on it for sizing collapse or grow to fill their parent,
-    // letting their `background-image` / `<img>` content escape the visible
-    // frame (e.g. poster covers spilling over the title row). Replace it with
-    // an explicit pixel height computed from the live width.
-    const neutralizeAspectRatio = (el: HTMLElement) => {
-      const cs = el.style;
-      const arRaw = cs.aspectRatio || window.getComputedStyle(el).aspectRatio;
-      if (!arRaw || arRaw === "auto") return;
-
-      // Parse "W / H" or a plain number ("1.5")
-      let ratio = NaN;
-      const slashMatch = arRaw.match(/([\d.]+)\s*\/\s*([\d.]+)/);
-      if (slashMatch) {
-        const w = parseFloat(slashMatch[1]);
-        const h = parseFloat(slashMatch[2]);
-        if (w > 0 && h > 0) ratio = w / h;
-      } else {
-        ratio = parseFloat(arRaw);
-      }
-      if (!isFinite(ratio) || ratio <= 0) return;
-
-      const widthPx = el.getBoundingClientRect().width;
-      if (widthPx <= 0) return;
-
-      cs.aspectRatio = "auto";
-      cs.height      = `${Math.round(widthPx / ratio)}px`;
-    };
-
-    for (const el of Array.from(wrap.querySelectorAll<HTMLElement>("*"))) {
-      neutralizeLineClamp(el);
-      neutralizeAspectRatio(el);
-    }
-
-    // Force the browser to re-flow with the new heights before html2canvas
-    // walks the layout, otherwise it may snapshot stale geometry on iOS.
-    void wrap.getBoundingClientRect();
-    await new Promise<void>(r => requestAnimationFrame(() => r()));
+  if (!res.ok) {
+    throw new Error(`Card export failed (${res.status})`);
   }
-
-  const canvas = await html2canvas(wrap, {
-    scale: S,
-    useCORS: true,
-    allowTaint: true,
-    backgroundColor: null,
-    logging: false,
-    foreignObjectRendering: !isIOS(),
-  });
-
-  root.unmount();
-  document.body.removeChild(wrap);
-
-  return new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
-      b => (b ? resolve(b) : reject(new Error("toBlob failed"))),
-      "image/png",
-    );
-  });
+  const blob = await res.blob();
+  if (!blob.size) throw new Error("Empty card export");
+  return blob;
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 function isIOS() {
   return (
     /iPad|iPhone|iPod/.test(navigator.userAgent) ||
@@ -251,7 +53,6 @@ function isIOS() {
   );
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
 interface ShareStoryModalProps {
   ticket: Ticket;
   onClose: () => void;
@@ -259,7 +60,7 @@ interface ShareStoryModalProps {
 }
 
 export function ShareStoryModal({ ticket, onClose, onOpenChat }: ShareStoryModalProps) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const tk         = ticket as unknown as Record<string, unknown>;
   const isPoster   = (tk["cardTheme"] as string | undefined) === "poster";
   const ratingType = (tk["ratingType"] as string | undefined) ?? "star";
@@ -269,20 +70,16 @@ export function ShareStoryModal({ ticket, onClose, onOpenChat }: ShareStoryModal
     : (ticket.posterUrl ?? null);
 
   const [imageSrc,   setImageSrc]   = useState<string | null>(null);
-  const [dataUrl,    setDataUrl]    = useState<string | null>(null);
   const [visible,    setVisible]    = useState(false);
   const [saving,     setSaving]     = useState(false);
   const [saved,      setSaved]      = useState(false);
   const [pressing,   setPressing]   = useState(false);
   const [error,      setError]      = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [iosLongPressUrl, setIosLongPressUrl] = useState<string | null>(null);
 
   useModalBackButton(onClose);
 
-  const dataUrlRef = useRef<string | null>(null);
-  useEffect(() => { dataUrlRef.current = dataUrl; }, [dataUrl]);
-
-  // Slide-in animation
   useEffect(() => { requestAnimationFrame(() => setVisible(true)); }, []);
 
   // Lock background scroll while modal is open (body + html + touchmove for iOS)
@@ -301,9 +98,7 @@ export function ShareStoryModal({ ticket, onClose, onOpenChat }: ShareStoryModal
     };
   }, []);
 
-  // Pre-fetch image:
-  //   1. blob URL → used instantly for the live preview in the modal
-  //   2. convert to data URL → used at save time (works with html2canvas)
+  // Pre-fetch poster for the live preview only (server renders the export PNG).
   useEffect(() => {
     if (!rawImageUrl) return;
     let dead = false;
@@ -311,43 +106,31 @@ export function ShareStoryModal({ ticket, onClose, onOpenChat }: ShareStoryModal
       const blob = await fetchBlob(rawImageUrl);
       if (dead || !blob) return;
       setImageSrc(prev => { if (prev) URL.revokeObjectURL(prev); return blob; });
-
-      const data = await blobToDataUrl(blob);
-      if (dead || !data) return;
-      setDataUrl(data);
     })();
     return () => { dead = true; };
   }, [rawImageUrl]);
 
   useEffect(() => () => { if (imageSrc) URL.revokeObjectURL(imageSrc); }, [imageSrc]);
 
-  // iOS-only fallback: open the rendered image in a new tab so the user can
-  // long-press → "Save to Photos". Apple's WebKit forbids direct downloads to
-  // Photos from the web, so this is the only reliable path on older iOS that
-  // can't share Files via navigator.share.
-  const [iosLongPressUrl, setIosLongPressUrl] = useState<string | null>(null);
+  // Track the active iOS long-press URL so we can revoke it on unmount.
+  const iosUrlRef = useRef<string | null>(null);
+  useEffect(() => { iosUrlRef.current = iosLongPressUrl; }, [iosLongPressUrl]);
+  useEffect(() => () => {
+    if (iosUrlRef.current) URL.revokeObjectURL(iosUrlRef.current);
+  }, []);
 
   const handleSave = useCallback(async () => {
     setSaving(true);
     setError(null);
     try {
-      // Use already-prepared data URL; if not ready yet, build it now
-      let du = dataUrlRef.current;
-      if (!du && rawImageUrl) {
-        const blob = await fetchBlob(rawImageUrl);
-        if (blob) du = await blobToDataUrl(blob);
-      }
-
-      const blob     = await buildCombinedPng(ticket, du, ratingType);
+      const blob     = await fetchServerCardPng(ticket.id, lang);
       const filename = `ticker-${(ticket.movieTitle ?? "card").replace(/\s+/g, "-")}.png`;
 
       if (isIOS()) {
-        // iOS path — ALWAYS show the rendered image inline so the user can
-        // long-press → "Add to Photos". We deliberately do NOT call
-        // navigator.share here, because the iOS share sheet exposes
-        // unwanted "Copy / Save File / Delete File" options that confuse
-        // users. Long-press on the inline image gives the cleanest UX:
-        // a single "Add to Photos" / "Save Image" choice.
+        // iOS path — show the rendered PNG inline so the user can long-press
+        // → "Add to Photos". Direct downloads to Photos aren't allowed by
+        // WebKit, and the share sheet exposes confusing extra options, so the
+        // long-press menu is the cleanest UX.
         const url = URL.createObjectURL(blob);
         setIosLongPressUrl(url);
         setSaving(false);
@@ -367,12 +150,7 @@ export function ShareStoryModal({ ticket, onClose, onOpenChat }: ShareStoryModal
       setError(e instanceof Error ? e.message : t.errSaveCardFailed);
       setSaving(false);
     }
-  }, [ticket, onClose, rawImageUrl, ratingType, t.errSaveCardFailed]);
-
-  // Cleanup the long-press blob URL when the modal closes
-  useEffect(() => () => {
-    if (iosLongPressUrl) URL.revokeObjectURL(iosLongPressUrl);
-  }, [iosLongPressUrl]);
+  }, [ticket.id, ticket.movieTitle, lang, onClose, t.errSaveCardFailed]);
 
   const handleCopyLink = useCallback(async () => {
     const link = `${window.location.origin}/ticket/${ticket.id}`;
@@ -444,9 +222,7 @@ export function ShareStoryModal({ ticket, onClose, onOpenChat }: ShareStoryModal
           {iosLongPressUrl ? (
             // iOS long-press fallback: show the rendered card image directly
             // inside the sheet. The user long-presses on the image and picks
-            // "Add to Photos" from the iOS context menu. This is the only way
-            // to save to Photos on older iOS Safari versions that don't support
-            // navigator.share with files.
+            // "Add to Photos" from the iOS context menu.
             <div className="flex flex-col items-center gap-4 py-2">
               <img
                 src={iosLongPressUrl}

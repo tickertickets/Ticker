@@ -869,6 +869,43 @@ router.get(
   }),
 );
 
+// ── GET /tickets/:ticketId/export-card.png ───────────────────────────────────
+// Server-side card render — produces a deterministic PNG that is identical
+// across every device. Replaces the previous client-side html2canvas pipeline
+// (which produced inconsistent results on iOS WebKit). Honours the same
+// privacy rules as GET /tickets/:ticketId.
+router.get(
+  "/:ticketId/export-card.png",
+  asyncHandler(async (req, res) => {
+    const currentUserId = req.session?.userId;
+    const { ticketId } = req.params;
+    const lang = req.query["lang"] === "th" ? "th" : "en";
+
+    const [ticket] = await db
+      .select()
+      .from(ticketsTable)
+      .where(
+        and(eq(ticketsTable.id, ticketId), isNull(ticketsTable.deletedAt)),
+      )
+      .limit(1);
+    if (!ticket) throw new NotFoundError("Ticket");
+    if (ticket.isPrivate && ticket.userId !== currentUserId) {
+      throw new ForbiddenError();
+    }
+
+    const built = await buildTicket(ticket, currentUserId);
+
+    // Lazy-import the renderer so its (large) deps only load when actually used.
+    const { renderTicketCardPng } = await import("../services/card-render.js");
+    const png = await renderTicketCardPng(built, { lang });
+
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Content-Length", String(png.length));
+    res.setHeader("Cache-Control", "private, max-age=60");
+    res.end(png);
+  }),
+);
+
 // ── POST /tickets/:ticketId/refresh-rank ─────────────────────────────────────
 router.post(
   "/:ticketId/refresh-rank",
