@@ -296,17 +296,13 @@ router.get("/", async (req, res) => {
 
     if (poolChains.length > 0) {
       const poolIds = poolChains.map(c => c.id);
-      const [likeRows, commentRows, runRows, followRows] = await Promise.all([
+      const [likeRows, commentRows, runRows] = await Promise.all([
         db.select({ chainId: chainLikesTable.chainId, n: count(), lastAt: max(chainLikesTable.createdAt) })
           .from(chainLikesTable).where(inArray(chainLikesTable.chainId, poolIds)).groupBy(chainLikesTable.chainId),
         db.select({ chainId: chainCommentsTable.chainId, n: count(), lastAt: max(chainCommentsTable.createdAt) })
           .from(chainCommentsTable).where(inArray(chainCommentsTable.chainId, poolIds)).groupBy(chainCommentsTable.chainId),
         db.select({ chainId: chainRunsTable.chainId, n: count(), lastAt: max(chainRunsTable.startedAt) })
           .from(chainRunsTable).where(inArray(chainRunsTable.chainId, poolIds)).groupBy(chainRunsTable.chainId),
-        currentUserId
-          ? db.select({ followingId: followsTable.followingId })
-              .from(followsTable).where(eq(followsTable.followerId, currentUserId))
-          : Promise.resolve([] as { followingId: string }[]),
       ]);
       const likeMap    = new Map(likeRows.map(r => [r.chainId, Number(r.n)]));
       const commentMap = new Map(commentRows.map(r => [r.chainId, Number(r.n)]));
@@ -315,13 +311,10 @@ router.get("/", async (req, res) => {
       const cmtLastAt  = new Map(commentRows.map(r => [r.chainId, r.lastAt ? new Date(r.lastAt) : null]));
       const runLastAt  = new Map(runRows.map(r => [r.chainId, r.lastAt ? new Date(r.lastAt) : null]));
 
-      // Explore mode: own fresh posts get a temporary boost (15×→1× over 60 min).
-      // Followed users' posts are NOT boosted here — this is a discovery/explore
-      // context and merit-based ranking should be fair across all creators.
-      const followedSet = currentUserId
-        ? new Set<string>([...followRows.map(r => r.followingId), currentUserId])
-        : null;
-      const freshBoostFn = makeFreshBoost(followedSet, currentUserId);
+      // Discover/explore mode: only own fresh posts get a temporary boost (15×→1× over 60 min).
+      // Followed users' posts are NOT boosted — this matches /api/feed?mode=discover exactly,
+      // ensuring ranking order is consistent between the combined feed and the separate Chains tab.
+      const freshBoostFn = makeFreshBoost(null, currentUserId);
 
       const scored = poolChains.map(c => {
         const lastActivityAt = [c.createdAt, likeLastAt.get(c.id), cmtLastAt.get(c.id), runLastAt.get(c.id)]

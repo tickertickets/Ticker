@@ -86,8 +86,7 @@ export function ChainCommentSheet({ chainId, onClose, commentCount: initialComme
       refetch();
       onCommentAdded?.();
       // Invalidate feed caches so counts refresh when sheet is closed
-      qc.invalidateQueries({ queryKey: ["chains-recent"] });
-      qc.invalidateQueries({ queryKey: ["chains-hot"] });
+      qc.invalidateQueries({ queryKey: ["chains-feed"] });
       qc.invalidateQueries({ queryKey: ["mixed-feed"] });
       qc.invalidateQueries({ queryKey: ["profile-chains-created"] });
       qc.invalidateQueries({ queryKey: ["profile-chains-played"] });
@@ -158,8 +157,7 @@ export function ChainCommentSheet({ chainId, onClose, commentCount: initialComme
                             onCommentDeleted?.();
                             try {
                               await fetch(`/api/chains/${chainId}/comments/${c.id}`, { method: "DELETE", credentials: "include" });
-                              qc.invalidateQueries({ queryKey: ["chains-recent"] });
-                              qc.invalidateQueries({ queryKey: ["chains-hot"] });
+                              qc.invalidateQueries({ queryKey: ["chains-feed"] });
                               qc.invalidateQueries({ queryKey: ["mixed-feed"] });
                               qc.invalidateQueries({ queryKey: ["profile-chains-created"] });
                               qc.invalidateQueries({ queryKey: ["profile-chains-played"] });
@@ -809,8 +807,7 @@ export function ChainCard({ chain }: { chain: ChainItem }) {
         ),
       };
     };
-    qc.setQueryData(["chains-recent"], patchChainList);
-    qc.setQueryData(["chains-hot"], patchChainList);
+    qc.setQueryData(["chains-feed"], patchChainList);
     qc.setQueriesData({ queryKey: ["mixed-feed"] }, patchMixedFeed);
     qc.invalidateQueries({ queryKey: ["profile-chains-created"] });
     qc.invalidateQueries({ queryKey: ["profile-chains-played"] });
@@ -859,8 +856,7 @@ export function ChainCard({ chain }: { chain: ChainItem }) {
         ({ ...old, chains: (old?.chains ?? []).filter((c: ChainItem) => c.id !== chain.id) });
       qc.setQueryData(["chains-own-following", user?.id], removeChain);
       qc.setQueryData(["chains-hot-following"], removeChain);
-      qc.setQueryData(["chains-recent"], removeChain);
-      qc.setQueryData(["chains-hot"], removeChain);
+      qc.setQueryData(["chains-feed"], removeChain);
       qc.invalidateQueries({ queryKey: ["chains-own-following"] });
       qc.invalidateQueries({ queryKey: ["chains-hot-following"] });
       qc.invalidateQueries({ queryKey: ["mixed-feed"] });

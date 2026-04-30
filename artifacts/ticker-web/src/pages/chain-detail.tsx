@@ -209,8 +209,7 @@ export default function ChainDetail() {
     },
     onSuccess: (data) => {
       qc.setQueryData(["/api/chains", chainId], data);
-      qc.invalidateQueries({ queryKey: ["chains-recent"] });
-      qc.invalidateQueries({ queryKey: ["chains-hot"] });
+      qc.invalidateQueries({ queryKey: ["chains-feed"] });
       qc.invalidateQueries({ queryKey: ["mixed-feed"] });
     },
   });
@@ -241,8 +240,7 @@ export default function ChainDetail() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/chains", chainId] });
-      qc.invalidateQueries({ queryKey: ["chains-recent"] });
-      qc.invalidateQueries({ queryKey: ["chains-hot"] });
+      qc.invalidateQueries({ queryKey: ["chains-feed"] });
       qc.invalidateQueries({ queryKey: ["profile-chains-played"] });
     },
   });
@@ -257,8 +255,7 @@ export default function ChainDetail() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/chains", chainId] });
-      qc.invalidateQueries({ queryKey: ["chains-recent"] });
-      qc.invalidateQueries({ queryKey: ["chains-hot"] });
+      qc.invalidateQueries({ queryKey: ["chains-feed"] });
       qc.invalidateQueries({ queryKey: ["profile-chains-played"] });
     },
   });
@@ -273,8 +270,7 @@ export default function ChainDetail() {
     setWatchingItemId(itemId);
     setItemStartMs(Date.now());
     qc.invalidateQueries({ queryKey: ["/api/chains", chainId] });
-    qc.invalidateQueries({ queryKey: ["chains-recent"] });
-    qc.invalidateQueries({ queryKey: ["chains-hot"] });
+    qc.invalidateQueries({ queryKey: ["chains-feed"] });
   }, [chain, chainId, qc]);
 
   const finishItem = useCallback(async (itemId: string) => {
@@ -292,8 +288,7 @@ export default function ChainDetail() {
     setItemStartMs(null);
     setFinishing(null);
     qc.invalidateQueries({ queryKey: ["/api/chains", chainId] });
-    qc.invalidateQueries({ queryKey: ["chains-recent"] });
-    qc.invalidateQueries({ queryKey: ["chains-hot"] });
+    qc.invalidateQueries({ queryKey: ["chains-feed"] });
     qc.invalidateQueries({ queryKey: ["profile-chains-played"] });
     qc.invalidateQueries({ queryKey: ["mixed-feed"] });
   }, [chain, chainId, itemStartMs, qc]);

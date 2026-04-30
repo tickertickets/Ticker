@@ -313,7 +313,7 @@ router.get(
       // Used for dedicated type tabs (Tickets / Reels) and unauthenticated users.
       // Visibility: public accounts + non-private posts only.
 
-      const DISC_POOL = limit * 4;
+      const DISC_POOL = limit * 5;
 
       const publicUserRows = await db
         .select({ id: usersTable.id })

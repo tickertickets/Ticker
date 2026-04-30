@@ -488,8 +488,7 @@ export default function CreateChain() {
       // Erase draft on successful submit
       eraseChainDraft(chainDraftKey, activeDraftId, user?.id);
       qc.invalidateQueries({ queryKey: ["/api/chains"] });
-      qc.invalidateQueries({ queryKey: ["chains-recent"] });
-      qc.invalidateQueries({ queryKey: ["chains-hot"] });
+      qc.invalidateQueries({ queryKey: ["chains-feed"] });
       qc.invalidateQueries({ queryKey: ["chains-own-following"] });
       qc.invalidateQueries({ queryKey: ["profile-chains-created"] });
       if (user?.username) qc.invalidateQueries({ queryKey: [`/api/users/${user.username}`] });

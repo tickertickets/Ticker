@@ -314,8 +314,7 @@ export default function Home() {
     scrollStore.set("news", 0);
     scrollStore.set("search", 0);
     qc.invalidateQueries({ queryKey: ["feed"] });
-    qc.invalidateQueries({ queryKey: ["chains-recent"] });
-    qc.invalidateQueries({ queryKey: ["chains-hot"] });
+    qc.invalidateQueries({ queryKey: ["chains-feed"] });
   }, [user?.id, qc]);
 
   const triggerRefresh = () => {
@@ -325,8 +324,7 @@ export default function Home() {
     setIsRefreshing(true);
     Promise.all([
       qc.invalidateQueries({ queryKey: ["feed"] }),
-      qc.invalidateQueries({ queryKey: ["chains-recent"] }),
-      qc.invalidateQueries({ queryKey: ["chains-hot"] }),
+      qc.invalidateQueries({ queryKey: ["chains-feed"] }),
     ]).then(() => setTimeout(() => setIsRefreshing(false), 400));
   };
 

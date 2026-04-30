@@ -1090,8 +1090,7 @@ export default function Settings() {
     mutationFn: restoreChain,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["chain-trash"] });
-      queryClient.invalidateQueries({ queryKey: ["chains-recent"] });
-      queryClient.invalidateQueries({ queryKey: ["chains-hot"] });
+      queryClient.invalidateQueries({ queryKey: ["chains-feed"] });
       queryClient.invalidateQueries({ queryKey: ["mixed-feed"] });
     },
   });

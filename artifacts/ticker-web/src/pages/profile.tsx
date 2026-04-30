@@ -467,8 +467,7 @@ function ChainContextMenu({
       await fetch(`/api/chains/${chain.id}/privacy`, { method: "PATCH", credentials: "include" });
       qc.invalidateQueries({ queryKey: ["profile-chains-created", profileUserId] });
       qc.invalidateQueries({ queryKey: ["mixed-feed"] });
-      qc.invalidateQueries({ queryKey: ["chains-recent"] });
-      qc.invalidateQueries({ queryKey: ["chains-hot"] });
+      qc.invalidateQueries({ queryKey: ["chains-feed"] });
       qc.invalidateQueries({ queryKey: ["chains-own-following"] });
       qc.invalidateQueries({ queryKey: ["chains-hot-following"] });
     } catch {}
@@ -511,8 +510,7 @@ function ChainContextMenu({
       old?.items ? { ...old, items: old.items.filter((item: any) => !(item.type === "chain" && item.chain?.id === chain.id)) } : old;
     qc.setQueriesData({ queryKey: ["profile-chains-created"], exact: false }, removeChain);
     qc.setQueriesData({ queryKey: ["profile-chains-played"], exact: false }, removeFromRuns);
-    qc.setQueryData(["chains-recent"], removeChain);
-    qc.setQueryData(["chains-hot"], removeChain);
+    qc.setQueryData(["chains-feed"], removeChain);
     qc.setQueriesData({ queryKey: ["chains-own-following"] }, removeChain);
     qc.setQueriesData({ queryKey: ["mixed-feed"] }, removeFromMixed);
     handleClose();
@@ -521,14 +519,12 @@ function ChainContextMenu({
       // Confirm removal with server refetch
       qc.invalidateQueries({ queryKey: ["profile-chains-created", profileUserId] });
       qc.invalidateQueries({ queryKey: ["profile-chains-played", profileUserId] });
-      qc.invalidateQueries({ queryKey: ["chains-recent"] });
-      qc.invalidateQueries({ queryKey: ["chains-hot"] });
+      qc.invalidateQueries({ queryKey: ["chains-feed"] });
     } catch {
       // Revert on failure by invalidating (will refetch original data)
       qc.invalidateQueries({ queryKey: ["profile-chains-created"] });
       qc.invalidateQueries({ queryKey: ["profile-chains-played"] });
-      qc.invalidateQueries({ queryKey: ["chains-recent"] });
-      qc.invalidateQueries({ queryKey: ["chains-hot"] });
+      qc.invalidateQueries({ queryKey: ["chains-feed"] });
     }
     setDeleting(false);
   };
@@ -743,8 +739,7 @@ function ProfileChainCard({
         ),
       };
     };
-    qc.setQueryData(["chains-recent"], patchChainList);
-    qc.setQueryData(["chains-hot"], patchChainList);
+    qc.setQueryData(["chains-feed"], patchChainList);
     qc.setQueriesData({ queryKey: ["mixed-feed"] }, patchMixedFeed);
     qc.setQueriesData({ queryKey: ["profile-chains-created"], exact: false }, patchChainList);
     qc.setQueriesData({ queryKey: ["profile-chains-played"], exact: false }, patchRunsList);

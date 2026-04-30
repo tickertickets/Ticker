@@ -382,16 +382,14 @@ export default function EditChain() {
         };
       };
 
-      qc.setQueryData(["chains-recent"], patchList);
-      qc.setQueryData(["chains-hot"], patchList);
+      qc.setQueryData(["chains-feed"], patchList);
       qc.setQueriesData({ queryKey: ["chains-own-following"] }, patchList);
       qc.setQueryData(["chains-hot-following"], patchList);
       qc.setQueriesData({ queryKey: ["mixed-feed"] }, patchMixed);
       qc.setQueriesData({ queryKey: ["profile-chains-created"] }, patchList);
       qc.setQueryData(["/api/chains", chainId], (old: any) => old ? { ...old, ...updated } : updated);
 
-      qc.invalidateQueries({ queryKey: ["chains-recent"] });
-      qc.invalidateQueries({ queryKey: ["chains-hot"] });
+      qc.invalidateQueries({ queryKey: ["chains-feed"] });
       qc.invalidateQueries({ queryKey: ["chains-own-following"] });
       qc.invalidateQueries({ queryKey: ["mixed-feed"] });
       // NOT invalidating profile-chains-created — setQueriesData already patched it in-place
