@@ -601,6 +601,20 @@ router.get(
 
     // Non-curated moods (now_playing etc.) use standard pagination, no caching here.
     const result = await fetchMoodMovies(cfg, urlFn, page, 1, lang);
+
+    // For now_playing: guard against TMDB community data errors where old movies
+    // get tagged with incorrect recent Thai release dates. Any movie whose
+    // release_date is more than 5 years old almost certainly isn't actually in
+    // cinemas today — drop it so it doesn't confuse users.
+    if (moodId === "now_playing") {
+      const cutoff = new Date();
+      cutoff.setFullYear(cutoff.getFullYear() - 5);
+      const cutoffStr = cutoff.toISOString().slice(0, 10); // "YYYY-MM-DD"
+      result.movies = result.movies.filter(
+        (m) => !m.releaseDate || m.releaseDate >= cutoffStr,
+      );
+    }
+
     await ensureMovieCores(result.movies as Record<string, any>[]);
     res.json(result);
   }),
