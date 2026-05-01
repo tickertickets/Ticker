@@ -26,7 +26,7 @@ router.post(
     const currentUserId = req.session?.userId;
     if (!currentUserId) throw new UnauthorizedError();
 
-    const { username } = req.params;
+    const username = String(req.params["username"]);
     const { reason, details } = req.body;
 
     if (!reason) throw new ValidationError("reason is required");
@@ -63,8 +63,8 @@ router.post(
       .limit(1);
     if (already) throw new ConflictError("already_reported", "Already reported this user");
 
-    const validReasons = ["spam", "inappropriate", "harassment", "impersonation", "other"] as const;
-    const safeReason = (validReasons as readonly string[]).includes(reason)
+    const validReasons = ["spam", "inappropriate", "harassment", "other"] as const;
+    const safeReason: (typeof validReasons)[number] = (validReasons as readonly string[]).includes(reason)
       ? (reason as (typeof validReasons)[number])
       : "other";
 
@@ -96,7 +96,7 @@ router.post(
     const currentUserId = req.session?.userId;
     if (!currentUserId) throw new UnauthorizedError();
 
-    const { commentId } = req.params;
+    const commentId = String(req.params["commentId"]);
     const { reason, details } = req.body;
     if (!reason) throw new ValidationError("reason is required");
 
@@ -158,7 +158,7 @@ router.post(
     const currentUserId = req.session?.userId;
     if (!currentUserId) throw new UnauthorizedError();
 
-    const { chainId } = req.params;
+    const chainId = String(req.params["chainId"]);
     const { reason, details } = req.body;
     if (!reason) throw new ValidationError("reason is required");
 

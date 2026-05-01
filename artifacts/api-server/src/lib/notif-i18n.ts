@@ -120,7 +120,7 @@ export function timedRecPushFor(opts: {
     : { 0: "Can't sleep?", 12: "Lunch break — what to watch?" };
   const prefixes: Record<0 | 12, string> = {
     0:  "2 AM Deep Talk",
-    12: "Marvel & DC",
+    12: "Brain Rot",
   };
   const body = opts.featuredMovie
     ? (th ? `${prefixes[opts.hour]} — ลอง "${opts.featuredMovie}"` : `${prefixes[opts.hour]} — try "${opts.featuredMovie}"`)

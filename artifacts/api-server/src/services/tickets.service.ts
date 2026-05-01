@@ -5,13 +5,11 @@
  *  - calculateRankTier:   fetches TMDB data and returns a rank tier + score
  *  - buildTicket:         assembles the full ticket API response object
  *  - updatePartyColor:    updates special foil color for all party members
- *  - checkAndUpdatePartyColor: awards color when all invites are accepted
  *
  * Previously all of this lived inside routes/tickets.ts, making that file
  * 1 000+ lines long and untestable in isolation.
  */
 
-import { createNotification } from "./notify.service";
 import { db } from "@workspace/db";
 import {
   usersTable,
@@ -23,7 +21,6 @@ import {
   ticketTagRatingsTable,
   memoryAccessRequestsTable,
   notificationsTable,
-  partyInvitesTable,
   moviesTable,
   ticketReactionsTable,
 } from "@workspace/db/schema";
@@ -33,8 +30,6 @@ import { tmdbFetch } from "../lib/tmdb-client";
 import {
   weightedScore,
   computeRankTier,
-  getSpecialColorForSize,
-  COLOR_NAMES,
   type RankTier,
   type SpecialColor,
 } from "./rank.service";
@@ -741,7 +736,7 @@ export async function updatePartySpecialColor(
 ): Promise<void> {
   await db
     .update(ticketsTable)
-    .set({ specialColor: color ?? null, updatedAt: new Date() })
+    .set({ specialColor: (color ?? null) as "bronze" | "silver" | "gold" | "diamond" | null, updatedAt: new Date() })
     .where(
       and(
         eq(ticketsTable.partyGroupId, partyGroupId),
@@ -755,47 +750,5 @@ export async function checkAndUpdatePartyColor(
   _partySize: number,
   _fromUserId: string,
 ): Promise<void> {
-  // Party mode special colors have been disabled — this is now a no-op
-  return;
-  const invites = await db
-    .select()
-    .from(partyInvitesTable)
-    .where(eq(partyInvitesTable.partyGroupId, partyGroupId));
-
-  const accepted = invites.filter((i) => i.status === "accepted").length;
-  const totalInvited = invites.length;
-
-  // Everyone accepted when all invitees (partySize - 1) have accepted
-  const allAccepted =
-    accepted === totalInvited && totalInvited === partySize - 1;
-
-  if (!allAccepted) return;
-
-  const color = getSpecialColorForSize(partySize);
-  await updatePartySpecialColor(partyGroupId, color);
-
-  // Notify all party members about the color unlock
-  const partyTickets = await db
-    .select()
-    .from(ticketsTable)
-    .where(
-      and(
-        eq(ticketsTable.partyGroupId, partyGroupId),
-        isNull(ticketsTable.deletedAt),
-      ),
-    );
-
-  for (const t of partyTickets) {
-    if (t.userId === fromUserId) continue;
-    await createNotification({
-      id: nanoid(),
-      userId: t.userId,
-      fromUserId,
-      type: "party_color_unlock",
-      ticketId: t.id,
-      partyGroupId,
-      message: `ปลดล็อกสีพิเศษ ${color ? (COLOR_NAMES[color] ?? color) : ""}! ทุกคนในปาร์ตี้ยืนยันแล้ว 🎉`,
-      isRead: false,
-    });
-  }
+  // Party mode special colors are disabled — no-op
 }

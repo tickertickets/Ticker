@@ -563,7 +563,7 @@ router.get(
 router.get(
   "/mood/:moodId",
   asyncHandler(async (req, res) => {
-    const { moodId } = req.params;
+    const moodId = String(req.params["moodId"]);
     const page = Math.max(
       1,
       parseInt((req.query["page"] as string) || "1", 10),
@@ -788,7 +788,7 @@ router.get(
 router.get(
   "/:movieId/likes",
   asyncHandler(async (req, res) => {
-    const { movieId } = req.params;
+    const movieId = String(req.params["movieId"]);
     const currentUserId = req.session?.userId;
 
     const [likeCountResult] = await db
@@ -858,7 +858,7 @@ router.get(
 router.post(
   "/:movieId/like",
   asyncHandler(async (req, res) => {
-    const { movieId } = req.params;
+    const movieId = String(req.params["movieId"]);
     const currentUserId = req.session?.userId;
     if (!currentUserId) throw new UnauthorizedError();
 
@@ -896,7 +896,7 @@ router.post(
 router.get(
   "/:movieId/movie-comments",
   asyncHandler(async (req, res) => {
-    const { movieId } = req.params;
+    const movieId = String(req.params["movieId"]);
     const currentUserId = req.session?.userId;
     const limit = Math.min(Number(req.query["limit"]) || 30, 50);
 
@@ -948,7 +948,7 @@ router.get(
 router.post(
   "/:movieId/movie-comments",
   asyncHandler(async (req, res) => {
-    const { movieId } = req.params;
+    const movieId = String(req.params["movieId"]);
     const currentUserId = req.session?.userId;
     if (!currentUserId) throw new UnauthorizedError();
 
@@ -994,7 +994,7 @@ router.post(
 router.get(
   "/:movieId/social-status",
   asyncHandler(async (req, res) => {
-    const { movieId } = req.params;
+    const movieId = String(req.params["movieId"]);
     const currentUserId = req.session?.userId;
 
     const [likeResult] = await db
@@ -1048,7 +1048,7 @@ router.get(
 router.post(
   "/:movieId/bookmark",
   asyncHandler(async (req, res) => {
-    const { movieId } = req.params;
+    const movieId = String(req.params["movieId"]);
     const currentUserId = req.session?.userId;
     if (!currentUserId) throw new UnauthorizedError();
 
@@ -1086,7 +1086,7 @@ router.post(
 router.get(
   "/:movieId/ratings-summary",
   asyncHandler(async (req, res) => {
-    const { movieId } = req.params;
+    const movieId = String(req.params["movieId"]);
     const tickets = await db
       .select({ rating: ticketsTable.rating, ratingType: ticketsTable.ratingType })
       .from(ticketsTable)
@@ -1129,7 +1129,7 @@ router.get(
 router.get(
   "/:movieId/community",
   asyncHandler(async (req, res) => {
-    const { movieId } = req.params;
+    const movieId = String(req.params["movieId"]);
     const currentUserId = req.session?.userId;
     const limit = Math.min(Number(req.query["limit"]) || 20, 50);
     const POOL = limit * 4;
@@ -1149,7 +1149,8 @@ router.get(
       .limit(POOL);
 
     if (rawTickets.length === 0) {
-      return res.json({ tickets: [], total: 0 });
+      res.json({ tickets: [], total: 0 });
+      return;
     }
 
     const ticketIds = rawTickets.map((t) => t.id);
@@ -1238,7 +1239,7 @@ router.get(
 router.get(
   "/:movieId/backdrops",
   asyncHandler(async (req, res) => {
-    const { movieId } = req.params;
+    const movieId = String(req.params["movieId"]);
 
     let tmdbId: number;
     let isTv = false;
@@ -1285,7 +1286,7 @@ router.get(
 router.get(
   "/:movieId/videos",
   asyncHandler(async (req, res) => {
-    const { movieId } = req.params;
+    const movieId = String(req.params["movieId"]);
 
     let tmdbId: number;
     let isTv = false;
@@ -1344,7 +1345,7 @@ router.get(
 router.get(
   "/:movieId/seasons",
   asyncHandler(async (req, res) => {
-    const { movieId } = req.params;
+    const movieId = String(req.params["movieId"]);
 
     let tmdbId: number;
     if (movieId.startsWith("tmdb_tv:")) {
@@ -1872,7 +1873,7 @@ router.get(
 router.get(
   "/:movieId",
   asyncHandler(async (req, res) => {
-    const { movieId } = req.params;
+    const movieId = String(req.params["movieId"]);
     const uiLang = getUILang(req);
 
     // If the caller came from a search result, they pass ?srclang= with the

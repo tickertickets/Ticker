@@ -152,8 +152,8 @@ function getTimedMiddleOrder(): string[] {
   if (h < 6)  return ["2am_deep_talk", "heartbreak", "midnight_horror", "anime", "k_wave", "chaos_red_flags", "brain_rot", "main_character", "disney_dreamworks", "marvel_dc", "tokusatsu"];
   // เช้า 6–11: เบาสบาย ครอบครัว
   if (h < 12) return ["disney_dreamworks", "marvel_dc", "anime", "main_character", "brain_rot", "k_wave", "tokusatsu", "heartbreak", "chaos_red_flags", "2am_deep_talk", "midnight_horror"];
-  // บ่าย 12–17: สนุกสนาน ไม่ต้องคิดมาก
-  if (h < 18) return ["marvel_dc", "brain_rot", "anime", "disney_dreamworks", "k_wave", "main_character", "tokusatsu", "heartbreak", "chaos_red_flags", "2am_deep_talk", "midnight_horror"];
+  // บ่าย 12–17: brain rot + สนุกสนาน ไม่ต้องคิดมาก
+  if (h < 18) return ["brain_rot", "anime", "disney_dreamworks", "k_wave", "main_character", "tokusatsu", "marvel_dc", "heartbreak", "chaos_red_flags", "2am_deep_talk", "midnight_horror"];
   // เย็น / กลางคืน 18–23: dark & moody + heartbreak เริ่มผงาด
   return ["chaos_red_flags", "heartbreak", "main_character", "marvel_dc", "k_wave", "anime", "brain_rot", "disney_dreamworks", "2am_deep_talk", "midnight_horror", "tokusatsu"];
 }

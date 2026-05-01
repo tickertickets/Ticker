@@ -55,7 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { data: serverUser, isLoading, error } = useGetMe({
     query: {
       enabled: !loggingOut,
-      retry: (failureCount, err: unknown) => {
+      retry: (failureCount: number, err: unknown) => {
         const status = (err as { response?: { status?: number } })?.response?.status;
         // Genuinely not logged in → stop immediately
         if (status === 401 || status === 403) return false;

@@ -104,7 +104,7 @@ router.get(
 router.get(
   "/user/:userId",
   asyncHandler(async (req, res) => {
-    const { userId } = req.params;
+    const userId = String(req.params["userId"]);
     const badge = await getBadgeStatus(userId);
 
     if (!badge || (badge.level === 0 && !badge.isPageVerified)) {

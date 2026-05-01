@@ -12,7 +12,7 @@ type Slot = { hour: 0 | 12; categoryId: string };
 
 const SLOTS: Slot[] = [
   { hour: 0,  categoryId: "2am_deep_talk" },
-  { hour: 12, categoryId: "marvel_dc" },
+  { hour: 12, categoryId: "brain_rot" },
 ];
 
 const DEFAULT_TZ = "Asia/Bangkok";

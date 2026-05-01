@@ -443,7 +443,8 @@ router.get("/runs", async (req, res) => {
   ]);
 
   // Build lookup maps
-  const moviesByChain = new Map<string, typeof allMovies>();
+  type ChainMovie = (typeof allMovies)[number];
+  const moviesByChain = new Map<string, ChainMovie[]>();
   for (const m of allMovies) {
     if (!moviesByChain.has(m.chainId)) moviesByChain.set(m.chainId, []);
     moviesByChain.get(m.chainId)!.push(m);
@@ -470,7 +471,7 @@ router.get("/runs", async (req, res) => {
     if (!chain) return null;
     if (blockedOwnerIds.has(chain.userId)) return null;
     const movies = (moviesByChain.get(chain.id) ?? []).slice(0, 4);
-    const movieCount = movieCountMap.get(chain.id) ?? chain.movieCount ?? 0;
+    const movieCount = movieCountMap.get(chain.id) ?? 0;
     const chainCount = runCountMap.get(chain.id) ?? 0;
     return {
       runId: run.id,

@@ -55,7 +55,7 @@ async function buildMessage(msg: typeof chatMessagesTable.$inferSelect, sender: 
         id: c.id,
         title: c.title,
         description: c.description,
-        movieCount: c.movieCount,
+        movieCount: c.minMovieCount,
         chainCount: c.chainCount,
         posterUrl: firstMovie?.posterUrl ?? null,
       };

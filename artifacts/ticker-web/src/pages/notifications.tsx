@@ -171,7 +171,7 @@ function PartyAcceptModal({
                   partySeatNumber: null,
                   partySize: info.movie.partySize ?? null,
                 } as unknown as Ticket;
-                const rStyle = getRatingCardStyle(null, syntheticTicket.ratingType ?? "star");
+                const rStyle = getRatingCardStyle(null, (syntheticTicket as any).ratingType ?? "star");
                 return (
                   <div
                     style={{
@@ -197,7 +197,7 @@ function PartyAcceptModal({
                       {isPoster ? (
                         <PosterCardFront
                           ticket={syntheticTicket}
-                          imageSrc={syntheticTicket.cardBackdropUrl as string | null}
+                          imageSrc={(syntheticTicket as any).cardBackdropUrl as string | null}
                           borderColorHex={rStyle.borderColorHex}
                         />
                       ) : (
@@ -453,7 +453,7 @@ export default function Notifications() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeInviteId, setActiveInviteId] = useState<string | null>(null);
 
-  const { data, isLoading } = useGetNotifications(undefined, { query: { refetchInterval: 60_000, staleTime: 30_000 } });
+  const { data, isLoading } = useGetNotifications(undefined, { query: { refetchInterval: 60_000, staleTime: 30_000 } as any });
 
   const markOneRead = async (id: string) => {
     const notifs = (queryClient.getQueryData<any>(["/api/notifications"])?.notifications ?? []) as any[];
@@ -549,10 +549,10 @@ export default function Notifications() {
         <div>
           {notifications.map(notif => {
             const notifRec = (notif as unknown) as Record<string, unknown>;
-            const isPartyInvite = notif.type === "party_invite" && notifRec["partyInviteId"];
+            const isPartyInvite = (notif.type as string) === "party_invite" && notifRec["partyInviteId"];
             const partyInviteId = notifRec["partyInviteId"] as string | null;
             const partyInviteStatus = notifRec["partyInviteStatus"] as string | null;
-            const isColorNotif = notif.type === "party_color_unlock";
+            const isColorNotif = (notif.type as string) === "party_color_unlock";
 
             return (
               <div
@@ -608,7 +608,7 @@ export default function Notifications() {
                     </div>
                   )}
 
-                  {(notif.type as string) === "follow_request" && notifRec["followRequestId"] && (
+                  {(notif.type as string) === "follow_request" && !!notifRec["followRequestId"] && (
                     <FollowRequestActions
                       fromUsername={notif.fromUser.username}
                       requestId={notifRec["followRequestId"] as string}
@@ -639,7 +639,7 @@ export default function Notifications() {
                       </div>
                     </Link>
                   )}
-                  {notifRec["chainId"] && (notif.type === "chain_continued" || notif.type === "chain_run_started") && (
+                  {!!notifRec["chainId"] && ((notif.type as string) === "chain_continued" || (notif.type as string) === "chain_run_started") && (
                     <Link href={`/chain/${notifRec["chainId"]}`} onClick={e => e.stopPropagation()}>
                       <div className="w-11 h-11 rounded-xl overflow-hidden border border-border flex items-center justify-center bg-secondary">
                         <Link2 className="w-4 h-4 text-muted-foreground" />

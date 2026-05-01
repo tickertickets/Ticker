@@ -150,7 +150,7 @@ function buildScoreInput(
 function getTicketEffects(ticket: Ticket): EffectTag[] {
   const t = (ticket as unknown) as Record<string, unknown>;
   // LEGENDARY / CULT CLASSIC ไม่มี effect tags เลย — เช็ค DB tier ก่อน
-  const dbTierRaw = (t["currentRankTier"] ?? ticket.rankTier) as string | undefined;
+  const dbTierRaw = (t["currentRankTier"] ?? t["rankTier"]) as string | undefined;
   if (dbTierRaw === "holographic" || dbTierRaw === "cult_classic") return [];
 
   const live = (t["movieLiveSnapshot"] as MovieLiveSnapshot | null | undefined) ?? null;
@@ -189,7 +189,7 @@ function getTicketVisual(ticket: Ticket) {
 
   // DB tier สำหรับ special tiers (holographic=LEGENDARY, cult_classic=CULT CLASSIC)
   // ต้องเชื่อ DB เสมอ เพราะ snapshot อาจไม่มี year → real-time compute จะ downgrade ผิด
-  const dbTierRaw = (t["currentRankTier"] ?? ticket.rankTier) as string | undefined;
+  const dbTierRaw = (t["currentRankTier"] ?? t["rankTier"]) as string | undefined;
   if (dbTierRaw === "holographic" || dbTierRaw === "cult_classic") {
     return getCardVisual(dbTierRaw, effectiveRating);
   }

@@ -23,7 +23,7 @@ const followRateLimit = rateLimit({
 router.post("/:username/follow", followRateLimit, async (req, res) => {
   const currentUserId = req.session?.userId;
   if (!currentUserId) { res.status(401).json({ error: "unauthorized" }); return; }
-  const { username } = req.params;
+  const username = String(req.params["username"]);
   const [target] = await db.select().from(usersTable).where(eq(usersTable.username, username)).limit(1);
   if (!target) { res.status(404).json({ error: "not_found" }); return; }
   if (target.id === currentUserId) { res.status(400).json({ error: "bad_request", message: "Cannot follow yourself" }); return; }
@@ -74,7 +74,7 @@ router.post("/:username/follow", followRateLimit, async (req, res) => {
 router.delete("/:username/follow", followRateLimit, async (req, res) => {
   const currentUserId = req.session?.userId;
   if (!currentUserId) { res.status(401).json({ error: "unauthorized" }); return; }
-  const { username } = req.params;
+  const username = String(req.params["username"]);
   const [target] = await db.select().from(usersTable).where(eq(usersTable.username, username)).limit(1);
   if (!target) { res.status(404).json({ error: "not_found" }); return; }
   await db.delete(followsTable).where(and(eq(followsTable.followerId, currentUserId), eq(followsTable.followingId, target.id)));

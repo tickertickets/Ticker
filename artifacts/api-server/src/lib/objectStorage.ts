@@ -21,10 +21,11 @@ export class ObjectNotFoundError extends Error {
 }
 
 let bucketEnsured = false;
-async function ensureBucket(supabase: ReturnType<typeof createClient>) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function ensureBucket(supabase: any) {
   if (bucketEnsured) return;
   const { data: buckets } = await supabase.storage.listBuckets();
-  const exists = buckets?.some((b) => b.name === BUCKET_NAME);
+  const exists = buckets?.some((b: { name: string }) => b.name === BUCKET_NAME);
   if (!exists) {
     await supabase.storage.createBucket(BUCKET_NAME, { public: true });
   }

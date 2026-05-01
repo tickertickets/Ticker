@@ -99,21 +99,14 @@ router.post("/supabase/login", authLimiter, async (req: Request, res: Response) 
   const { email, password } = parsed.data;
 
   try {
-    const { data: authData, error: authError } = await supabase.auth.admin.getUserByEmail(email);
+    const { data: sessionData, error: sessionError } = await supabase.auth.signInWithPassword({ email, password });
 
-    if (authError || !authData.user) {
+    if (sessionError || !sessionData.user || !sessionData.session) {
       res.status(401).json({ error: "invalid_credentials", message: "Email or password is incorrect" });
       return;
     }
 
-    const { data: sessionData, error: sessionError } = await supabase.auth.admin.createSession(authData.user.id);
-
-    if (sessionError || !sessionData.session) {
-      res.status(500).json({ error: "internal_error", message: "Failed to create session" });
-      return;
-    }
-
-    const userId = `sup_${authData.user.id}`;
+    const userId = `sup_${sessionData.user.id}`;
     req.session.userId = userId;
     res.json({
       success: true,

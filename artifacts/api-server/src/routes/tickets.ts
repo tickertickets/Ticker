@@ -710,7 +710,7 @@ router.post(
     const currentUserId = req.session?.userId;
     if (!currentUserId) throw new UnauthorizedError();
 
-    const { ticketId } = req.params;
+    const ticketId = String(req.params["ticketId"]);
     const [ticket] = await db
       .select()
       .from(ticketsTable)
@@ -770,7 +770,7 @@ router.delete(
     const currentUserId = req.session?.userId;
     if (!currentUserId) throw new UnauthorizedError();
 
-    const { ticketId } = req.params;
+    const ticketId = String(req.params["ticketId"]);
     const [ticket] = await db
       .select()
       .from(ticketsTable)
@@ -821,7 +821,7 @@ router.get(
   "/user/:username",
   asyncHandler(async (req, res) => {
     const currentUserId = req.session?.userId;
-    const { username } = req.params;
+    const username = String(req.params["username"]);
     const limit = Math.min(Number(req.query["limit"]) || 50, 100);
 
     const [user] = await db
@@ -861,7 +861,7 @@ router.get(
   "/:ticketId",
   asyncHandler(async (req, res) => {
     const currentUserId = req.session?.userId;
-    const { ticketId } = req.params;
+    const ticketId = String(req.params["ticketId"]);
 
     const [ticket] = await db
       .select()
@@ -889,7 +889,7 @@ router.get(
   "/:ticketId/export-card.png",
   asyncHandler(async (req, res) => {
     const currentUserId = req.session?.userId;
-    const { ticketId } = req.params;
+    const ticketId = String(req.params["ticketId"]);
     const lang = req.query["lang"] === "th" ? "th" : "en";
 
     const [ticket] = await db
@@ -924,7 +924,7 @@ router.post(
     const currentUserId = req.session?.userId;
     if (!currentUserId) throw new UnauthorizedError();
 
-    const { ticketId } = req.params;
+    const ticketId = String(req.params["ticketId"]);
     const [ticket] = await db
       .select()
       .from(ticketsTable)
@@ -968,7 +968,7 @@ router.patch(
   asyncHandler(async (req, res) => {
     const currentUserId = req.session?.userId;
     if (!currentUserId) throw new UnauthorizedError();
-    const { ticketId } = req.params;
+    const ticketId = String(req.params["ticketId"]);
     const [ticket] = await db
       .select()
       .from(ticketsTable)
@@ -999,7 +999,7 @@ router.patch(
   asyncHandler(async (req, res) => {
     const currentUserId = req.session?.userId;
     if (!currentUserId) throw new UnauthorizedError();
-    const { ticketId } = req.params;
+    const ticketId = String(req.params["ticketId"]);
     const { rating } = req.body;
 
     if (typeof rating !== "number" || rating < 1 || rating > 5) {
@@ -1040,7 +1040,7 @@ router.patch(
     const currentUserId = req.session?.userId;
     if (!currentUserId) throw new UnauthorizedError();
 
-    const { ticketId } = req.params;
+    const ticketId = String(req.params["ticketId"]);
     const [ticket] = await db
       .select()
       .from(ticketsTable)
@@ -1067,7 +1067,7 @@ router.patch(
     const currentUserId = req.session?.userId;
     if (!currentUserId) throw new UnauthorizedError();
 
-    const { ticketId } = req.params;
+    const ticketId = String(req.params["ticketId"]);
     const [ticket] = await db
       .select()
       .from(ticketsTable)
@@ -1094,7 +1094,7 @@ router.patch(
     const currentUserId = req.session?.userId;
     if (!currentUserId) throw new UnauthorizedError();
 
-    const { ticketId } = req.params;
+    const ticketId = String(req.params["ticketId"]);
     const [ticket] = await db
       .select()
       .from(ticketsTable)
@@ -1121,7 +1121,7 @@ router.delete(
     const currentUserId = req.session?.userId;
     if (!currentUserId) throw new UnauthorizedError();
 
-    const { ticketId } = req.params;
+    const ticketId = String(req.params["ticketId"]);
     const [ticket] = await db
       .select()
       .from(ticketsTable)
@@ -1197,7 +1197,7 @@ router.post(
     const currentUserId = req.session?.userId;
     if (!currentUserId) throw new UnauthorizedError();
 
-    const { ticketId } = req.params;
+    const ticketId = String(req.params["ticketId"]);
     const [ticket] = await db
       .select()
       .from(ticketsTable)
@@ -1256,7 +1256,7 @@ router.get(
     const currentUserId = req.session?.userId;
     if (!currentUserId) throw new UnauthorizedError();
 
-    const { ticketId } = req.params;
+    const ticketId = String(req.params["ticketId"]);
     const [ticket] = await db
       .select()
       .from(ticketsTable)
@@ -1299,7 +1299,7 @@ router.post(
     const currentUserId = req.session?.userId;
     if (!currentUserId) throw new UnauthorizedError();
 
-    const { ticketId, requestId } = req.params;
+    const ticketId = String(req.params["ticketId"]); const requestId = String(req.params["requestId"]);
     const [ticket] = await db
       .select()
       .from(ticketsTable)
@@ -1349,7 +1349,7 @@ router.post(
     const currentUserId = req.session?.userId;
     if (!currentUserId) throw new UnauthorizedError();
 
-    const { ticketId, requestId } = req.params;
+    const ticketId = String(req.params["ticketId"]); const requestId = String(req.params["requestId"]);
     const [ticket] = await db
       .select()
       .from(ticketsTable)
@@ -1381,7 +1381,7 @@ router.post(
     const currentUserId = req.session?.userId;
     if (!currentUserId) throw new UnauthorizedError();
 
-    const { ticketId } = req.params;
+    const ticketId = String(req.params["ticketId"]);
     const { reason, details } = req.body;
 
     const [ticket] = await db

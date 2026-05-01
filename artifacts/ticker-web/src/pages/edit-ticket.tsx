@@ -28,7 +28,7 @@ export default function EditTicket() {
   const cached = queryClient.getQueryData<any>([`/api/tickets/${ticketId}`]);
 
   const { data: ticket, isLoading } = useGetTicket(ticketId, {
-    query: { enabled: !!ticketId && !cached },
+    query: { enabled: !!ticketId && !cached } as any,
   });
 
   const src = cached ?? (ticket as unknown as Record<string, unknown>);

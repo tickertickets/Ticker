@@ -55,7 +55,7 @@ if (typeof window !== "undefined") {
   });
 
   persistQueryClient({
-    queryClient,
+    queryClient: queryClient as unknown as Parameters<typeof persistQueryClient>[0]["queryClient"],
     persister,
     maxAge: 1000 * 60 * 60 * 24,
   });
