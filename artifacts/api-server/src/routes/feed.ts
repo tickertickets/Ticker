@@ -7,12 +7,14 @@ import {
   chainRunsTable,
   chainLikesTable,
   chainCommentsTable,
+  chainBookmarksTable,
   followsTable,
   likesTable,
   commentsTable,
+  bookmarksTable,
 } from "@workspace/db/schema";
 import { eq, and, desc, isNull, count, max, inArray, ne, or, sql } from "drizzle-orm";
-import { hotScore, makeFreshBoost } from "../lib/hot-score";
+import { hotScore, makeFreshBoost, applyDiversityCap, DIVERSITY_CAP } from "../lib/hot-score";
 import { buildChain } from "./chains";
 import { buildTicketBatch } from "../services/tickets.service";
 
@@ -28,6 +30,13 @@ const router: IRouter = Router();
  *                + public discovery (Tier B) — Instagram-style
  * mode=following Only posts from followed users + own posts, hotScore ranked
  *
+ * Ranking formula (industry-standard):
+ *   engagement = log(1+likes)×1 + log(1+saves)×1.5 + log(1+comments)×2 + log(1+runs)×3
+ *   score      = (engagement + 1) / (hours_since_last_activity + 2) ^ 1.8
+ *
+ * Diversity cap: max DIVERSITY_CAP posts per user per page — prevents any
+ * single viral user from monopolising the feed (Twitter/Instagram standard).
+ *
  * Returns: { items: FeedItem[], hasMore: boolean }
  * FeedItem = { type: "ticket", ticket: ... } | { type: "chain", chain: ... }
  */
@@ -35,7 +44,8 @@ router.get("/", async (req, res) => {
   const currentUserId = req.session?.userId;
   const limit = Math.min(Number(req.query["limit"]) || 20, 50);
   const mode = (req.query["mode"] as string) || "discover";
-  const POOL = limit * 5;
+  // Larger pool ensures diversity cap has enough candidates to fill the page
+  const POOL = limit * 6;
 
   // ── Get followed user IDs ────────────────────────────────────────────────────
   let followedIds: string[] = [];
@@ -64,7 +74,6 @@ router.get("/", async (req, res) => {
   // freshBoost:
   //   • discover mode → only own posts get the fresh window boost (fair ranking)
   //   • home / following mode → followed users also get a boost (personal feed)
-  // Posts < 60 min old: 15× at creation, linearly decaying to 1× at 60 min.
   const freshBoostFollowedSet = (mode === "home" || mode === "following") ? followedSet : null;
   const freshBoost = makeFreshBoost(freshBoostFollowedSet, currentUserId);
 
@@ -90,7 +99,6 @@ router.get("/", async (req, res) => {
           COALESCE((SELECT MAX(created_at) FROM comments WHERE ticket_id = ${ticketsTable.id}), ${ticketsTable.createdAt})
         )`))
         .limit(POOL);
-      // Keep own posts; exclude private posts and posts from private accounts
       ticketPool = raw.filter(
         (t) => t.userId === currentUserId || (!t.isPrivate && !privateUserIds.has(t.userId)),
       );
@@ -183,7 +191,7 @@ router.get("/", async (req, res) => {
 
   if (ticketPool.length > 0) {
     const ids = ticketPool.map((t) => t.id);
-    const [likeRows, commentRows] = await Promise.all([
+    const [likeRows, commentRows, saveRows] = await Promise.all([
       db
         .select({
           ticketId: likesTable.ticketId,
@@ -202,23 +210,20 @@ router.get("/", async (req, res) => {
         .from(commentsTable)
         .where(inArray(commentsTable.ticketId, ids))
         .groupBy(commentsTable.ticketId),
+      db
+        .select({
+          ticketId: bookmarksTable.ticketId,
+          n: count(),
+        })
+        .from(bookmarksTable)
+        .where(inArray(bookmarksTable.ticketId, ids))
+        .groupBy(bookmarksTable.ticketId),
     ]);
-    const likeMap = new Map(likeRows.map((r) => [r.ticketId, Number(r.n)]));
-    const commentMap = new Map(
-      commentRows.map((r) => [r.ticketId, Number(r.n)]),
-    );
-    const likeLastAt = new Map(
-      likeRows.map((r) => [
-        r.ticketId,
-        r.lastAt ? new Date(r.lastAt) : null,
-      ]),
-    );
-    const cmtLastAt = new Map(
-      commentRows.map((r) => [
-        r.ticketId,
-        r.lastAt ? new Date(r.lastAt) : null,
-      ]),
-    );
+    const likeMap    = new Map(likeRows.map((r) => [r.ticketId, Number(r.n)]));
+    const commentMap = new Map(commentRows.map((r) => [r.ticketId, Number(r.n)]));
+    const saveMap    = new Map(saveRows.map((r) => [r.ticketId, Number(r.n)]));
+    const likeLastAt = new Map(likeRows.map((r) => [r.ticketId, r.lastAt ? new Date(r.lastAt) : null]));
+    const cmtLastAt  = new Map(commentRows.map((r) => [r.ticketId, r.lastAt ? new Date(r.lastAt) : null]));
     for (const t of ticketPool) {
       const la = likeLastAt.get(t.id);
       const ca = cmtLastAt.get(t.id);
@@ -226,8 +231,9 @@ router.get("/", async (req, res) => {
         .filter((d): d is Date => d instanceof Date)
         .reduce((a, b) => (a > b ? a : b), t.createdAt);
       const base = hotScore({
-        likes: likeMap.get(t.id) ?? 0,
+        likes:    likeMap.get(t.id) ?? 0,
         comments: commentMap.get(t.id) ?? 0,
+        saves:    saveMap.get(t.id) ?? 0,
         lastActivityAt,
       });
       scoredItems.push({ type: "ticket", data: t, score: base * freshBoost(t.userId, t.createdAt) });
@@ -237,7 +243,7 @@ router.get("/", async (req, res) => {
   // ── Bulk score chains ────────────────────────────────────────────────────────
   if (chainPool.length > 0) {
     const ids = chainPool.map((c) => c.id);
-    const [likeRows, commentRows, runRows] = await Promise.all([
+    const [likeRows, commentRows, runRows, saveRows] = await Promise.all([
       db
         .select({
           chainId: chainLikesTable.chainId,
@@ -265,24 +271,22 @@ router.get("/", async (req, res) => {
         .from(chainRunsTable)
         .where(inArray(chainRunsTable.chainId, ids))
         .groupBy(chainRunsTable.chainId),
+      db
+        .select({
+          chainId: chainBookmarksTable.chainId,
+          n: count(),
+        })
+        .from(chainBookmarksTable)
+        .where(inArray(chainBookmarksTable.chainId, ids))
+        .groupBy(chainBookmarksTable.chainId),
     ]);
-    const likeMap = new Map(likeRows.map((r) => [r.chainId, Number(r.n)]));
-    const commentMap = new Map(
-      commentRows.map((r) => [r.chainId, Number(r.n)]),
-    );
-    const runMap = new Map(runRows.map((r) => [r.chainId, Number(r.n)]));
-    const likeLastAt = new Map(
-      likeRows.map((r) => [r.chainId, r.lastAt ? new Date(r.lastAt) : null]),
-    );
-    const cmtLastAt = new Map(
-      commentRows.map((r) => [
-        r.chainId,
-        r.lastAt ? new Date(r.lastAt) : null,
-      ]),
-    );
-    const runLastAt = new Map(
-      runRows.map((r) => [r.chainId, r.lastAt ? new Date(r.lastAt) : null]),
-    );
+    const likeMap    = new Map(likeRows.map((r) => [r.chainId, Number(r.n)]));
+    const commentMap = new Map(commentRows.map((r) => [r.chainId, Number(r.n)]));
+    const runMap     = new Map(runRows.map((r) => [r.chainId, Number(r.n)]));
+    const saveMap    = new Map(saveRows.map((r) => [r.chainId, Number(r.n)]));
+    const likeLastAt = new Map(likeRows.map((r) => [r.chainId, r.lastAt ? new Date(r.lastAt) : null]));
+    const cmtLastAt  = new Map(commentRows.map((r) => [r.chainId, r.lastAt ? new Date(r.lastAt) : null]));
+    const runLastAt  = new Map(runRows.map((r) => [r.chainId, r.lastAt ? new Date(r.lastAt) : null]));
     for (const c of chainPool) {
       const lastActivityAt = [
         c.createdAt,
@@ -295,22 +299,33 @@ router.get("/", async (req, res) => {
       const base = hotScore({
         likes:    likeMap.get(c.id) ?? 0,
         comments: commentMap.get(c.id) ?? 0,
-        bonus:    runMap.get(c.id) ?? 0,   // actual run count; 0 if no runs yet
+        bonus:    runMap.get(c.id) ?? 0,
+        saves:    saveMap.get(c.id) ?? 0,
         lastActivityAt,
       });
       scoredItems.push({ type: "chain", data: c, score: base * freshBoost(c.userId, c.createdAt) });
     }
   }
 
-  // ── Merge and sort ───────────────────────────────────────────────────────────
-  // Primary: hotScore descending. Tiebreaker: newer content first (createdAt DESC).
+  // ── Merge, sort, apply diversity cap ─────────────────────────────────────────
+  // 1. Sort by hotScore descending; tiebreak by newest content first.
   scoredItems.sort((a, b) => {
     const diff = b.score - a.score;
     if (Math.abs(diff) > 1e-10) return diff;
     return b.data.createdAt.getTime() - a.data.createdAt.getTime();
   });
-  const hasMore = scoredItems.length > limit;
-  const page = scoredItems.slice(0, limit);
+
+  // 2. Diversity cap: walk sorted list, allow max DIVERSITY_CAP posts per user.
+  //    Request limit+1 slots so we can detect hasMore after capping.
+  const diversified = applyDiversityCap(
+    scoredItems,
+    (item) => item.data.userId,
+    DIVERSITY_CAP,
+    limit + 1,
+  );
+
+  const hasMore = diversified.length > limit;
+  const page = diversified.slice(0, limit);
 
   // ── Build full objects ───────────────────────────────────────────────────────
   const rawTickets = page
@@ -326,7 +341,7 @@ router.get("/", async (req, res) => {
   ]);
 
   const ticketMap = new Map(builtTickets.map((t) => [t.id, t]));
-  const chainMap = new Map(builtChains.map((c) => [c.id, c]));
+  const chainMap  = new Map(builtChains.map((c) => [c.id, c]));
 
   const items = page
     .map((scored) => {

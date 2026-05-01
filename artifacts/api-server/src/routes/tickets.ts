@@ -27,6 +27,7 @@ import {
   followsTable,
   likesTable,
   commentsTable,
+  bookmarksTable,
 } from "@workspace/db/schema";
 import {
   eq,
@@ -44,7 +45,7 @@ import {
 } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { sanitize } from "../lib/sanitize";
-import { hotScore } from "../lib/hot-score";
+import { hotScore, applyDiversityCap, DIVERSITY_CAP } from "../lib/hot-score";
 import { asyncHandler } from "../middlewares/error-handler";
 import {
   UnauthorizedError,
@@ -138,7 +139,7 @@ router.get(
     ): Promise<Array<{ t: RawTicket; score: number }>> => {
       if (rows.length === 0) return [];
       const ids = rows.map((t) => t.id);
-      const [likeRows, commentRows] = await Promise.all([
+      const [likeRows, commentRows, saveRows] = await Promise.all([
         db
           .select({ ticketId: likesTable.ticketId, n: count(), lastAt: max(likesTable.createdAt) })
           .from(likesTable)
@@ -149,11 +150,17 @@ router.get(
           .from(commentsTable)
           .where(inArray(commentsTable.ticketId, ids))
           .groupBy(commentsTable.ticketId),
+        db
+          .select({ ticketId: bookmarksTable.ticketId, n: count() })
+          .from(bookmarksTable)
+          .where(inArray(bookmarksTable.ticketId, ids))
+          .groupBy(bookmarksTable.ticketId),
       ]);
       const likeMap    = new Map(likeRows.map((r) => [r.ticketId, Number(r.n)]));
       const likeLastAt = new Map(likeRows.map((r) => [r.ticketId, r.lastAt ? new Date(r.lastAt) : null]));
       const commentMap = new Map(commentRows.map((r) => [r.ticketId, Number(r.n)]));
       const cmtLastAt  = new Map(commentRows.map((r) => [r.ticketId, r.lastAt ? new Date(r.lastAt) : null]));
+      const saveMap    = new Map(saveRows.map((r) => [r.ticketId, Number(r.n)]));
 
       return rows.map((t) => {
         const la = likeLastAt.get(t.id) ?? null;
@@ -162,8 +169,9 @@ router.get(
           .filter((d): d is Date => d instanceof Date)
           .reduce((a, b) => (a > b ? a : b), t.createdAt);
         const base = hotScore({
-          likes: likeMap.get(t.id) ?? 0,
+          likes:    likeMap.get(t.id) ?? 0,
           comments: commentMap.get(t.id) ?? 0,
+          saves:    saveMap.get(t.id) ?? 0,
           lastActivityAt,
         });
         const affinity = affinityFn ? affinityFn(t.userId) : 1.0;
@@ -261,7 +269,8 @@ router.get(
 
       const merged = [...scoredA, ...scoredB];
       merged.sort((a, b) => b.score - a.score);
-      tickets = merged.slice(0, limit + 1).map((s) => s.t);
+      const capped = applyDiversityCap(merged, (s) => s.t.userId, DIVERSITY_CAP, limit + 1);
+      tickets = capped.map((s) => s.t);
 
     } else if (feed === "following" && currentUserId) {
       // ── Following Feed — Only posts from followed users + own posts ─────────
@@ -303,7 +312,8 @@ router.get(
         const freshBoostFn = makeFreshBoost(followedSet);
         const scored = await bulkScore(filtered, undefined, freshBoostFn);
         scored.sort((a, b) => b.score - a.score);
-        tickets = scored.slice(0, limit + 1).map((s) => s.t);
+        const capped = applyDiversityCap(scored, (s) => s.t.userId, DIVERSITY_CAP, limit + 1);
+        tickets = capped.map((s) => s.t);
       }
 
     } else {
@@ -343,7 +353,8 @@ router.get(
       const freshBoostFn = makeFreshBoost();
       const scored = await bulkScore(discRaw, undefined, freshBoostFn);
       scored.sort((a, b) => b.score - a.score);
-      tickets = scored.slice(0, limit + 1).map((s) => s.t);
+      const capped = applyDiversityCap(scored, (s) => s.t.userId, DIVERSITY_CAP, limit + 1);
+      tickets = capped.map((s) => s.t);
     }
 
     const hasMore = tickets.length > limit;

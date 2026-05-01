@@ -17,7 +17,7 @@ import {
 import { eq, and, desc, isNull, isNotNull, count, max, asc, sql, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { sanitize } from "../lib/sanitize";
-import { hotScore, makeFreshBoost } from "../lib/hot-score";
+import { hotScore, makeFreshBoost, applyDiversityCap, DIVERSITY_CAP } from "../lib/hot-score";
 import { tmdbFetch } from "../lib/tmdb-client";
 import { awardXp } from "../services/badge.service";
 import { notifyFollowersNewPost, createNotification } from "../services/notify.service";
@@ -280,8 +280,9 @@ router.get("/", async (req, res) => {
       .limit(limit + 1);
   } else {
     // Explore: filter both chain-level privacy AND owner account privacy,
-    // then rank with hotScore so popular chains surface above stale ones.
-    const POOL = limit * 4;
+    // then rank with hotScore (log-scaled, gravity=1.8, bookmark signal, diversity cap)
+    // matching /api/feed?mode=discover exactly for consistent cross-feed ordering.
+    const POOL = limit * 6;
     const rawRows = await db.select({ chain: chainsTable }).from(chainsTable)
       .innerJoin(usersTable, and(eq(chainsTable.userId, usersTable.id), eq(usersTable.isPrivate, false)))
       .where(and(isNull(chainsTable.deletedAt), eq(chainsTable.isPrivate, false)))
@@ -296,44 +297,50 @@ router.get("/", async (req, res) => {
 
     if (poolChains.length > 0) {
       const poolIds = poolChains.map(c => c.id);
-      const [likeRows, commentRows, runRows] = await Promise.all([
+      const [likeRows, commentRows, runRows, saveRows] = await Promise.all([
         db.select({ chainId: chainLikesTable.chainId, n: count(), lastAt: max(chainLikesTable.createdAt) })
           .from(chainLikesTable).where(inArray(chainLikesTable.chainId, poolIds)).groupBy(chainLikesTable.chainId),
         db.select({ chainId: chainCommentsTable.chainId, n: count(), lastAt: max(chainCommentsTable.createdAt) })
           .from(chainCommentsTable).where(inArray(chainCommentsTable.chainId, poolIds)).groupBy(chainCommentsTable.chainId),
         db.select({ chainId: chainRunsTable.chainId, n: count(), lastAt: max(chainRunsTable.startedAt) })
           .from(chainRunsTable).where(inArray(chainRunsTable.chainId, poolIds)).groupBy(chainRunsTable.chainId),
+        db.select({ chainId: chainBookmarksTable.chainId, n: count() })
+          .from(chainBookmarksTable).where(inArray(chainBookmarksTable.chainId, poolIds)).groupBy(chainBookmarksTable.chainId),
       ]);
       const likeMap    = new Map(likeRows.map(r => [r.chainId, Number(r.n)]));
       const commentMap = new Map(commentRows.map(r => [r.chainId, Number(r.n)]));
       const runMap     = new Map(runRows.map(r => [r.chainId, Number(r.n)]));
+      const saveMap    = new Map(saveRows.map(r => [r.chainId, Number(r.n)]));
       const likeLastAt = new Map(likeRows.map(r => [r.chainId, r.lastAt ? new Date(r.lastAt) : null]));
       const cmtLastAt  = new Map(commentRows.map(r => [r.chainId, r.lastAt ? new Date(r.lastAt) : null]));
       const runLastAt  = new Map(runRows.map(r => [r.chainId, r.lastAt ? new Date(r.lastAt) : null]));
 
       // Discover/explore mode: only own fresh posts get a temporary boost (15×→1× over 60 min).
-      // Followed users' posts are NOT boosted — this matches /api/feed?mode=discover exactly,
-      // ensuring ranking order is consistent between the combined feed and the separate Chains tab.
+      // Followed users' posts are NOT boosted — matches /api/feed?mode=discover exactly.
       const freshBoostFn = makeFreshBoost(null, currentUserId);
 
       const scored = poolChains.map(c => {
         const lastActivityAt = [c.createdAt, likeLastAt.get(c.id), cmtLastAt.get(c.id), runLastAt.get(c.id)]
           .filter((d): d is Date => d instanceof Date)
           .reduce((a, b) => (a > b ? a : b), c.createdAt);
-        // bonus = actual chain_runs count (0 if none). Never fall back to the
-        // denormalized chainCount column — it may be stale.
-        const base = hotScore({ likes: likeMap.get(c.id) ?? 0, comments: commentMap.get(c.id) ?? 0, bonus: runMap.get(c.id) ?? 0, lastActivityAt });
-        return {
-          chain: c,
-          score: base * freshBoostFn(c.userId, c.createdAt),
-        };
+        const base = hotScore({
+          likes:    likeMap.get(c.id) ?? 0,
+          comments: commentMap.get(c.id) ?? 0,
+          bonus:    runMap.get(c.id) ?? 0,   // chain_runs — participatory signal
+          saves:    saveMap.get(c.id) ?? 0,  // bookmarks  — quality/intent signal
+          lastActivityAt,
+        });
+        return { chain: c, score: base * freshBoostFn(c.userId, c.createdAt) };
       });
       scored.sort((a, b) => {
         const diff = b.score - a.score;
         if (Math.abs(diff) > 1e-10) return diff;
         return b.chain.createdAt.getTime() - a.chain.createdAt.getTime();
       });
-      chains = scored.slice(0, limit + 1).map(s => s.chain);
+
+      // Diversity cap: max DIVERSITY_CAP chains per user per page
+      const capped = applyDiversityCap(scored, (s) => s.chain.userId, DIVERSITY_CAP, limit + 1);
+      chains = capped.map(s => s.chain);
     } else {
       chains = [];
     }
