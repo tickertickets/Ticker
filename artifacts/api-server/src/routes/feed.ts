@@ -13,7 +13,7 @@ import {
   commentsTable,
   bookmarksTable,
 } from "@workspace/db/schema";
-import { eq, and, desc, isNull, count, max, inArray, ne, or, sql, lt } from "drizzle-orm";
+import { eq, and, desc, isNull, count, countDistinct, max, inArray, ne, or, sql, lt } from "drizzle-orm";
 import { hotScore, makeFreshBoost, applyDiversityCap, DIVERSITY_CAP, AFFINITY_FOLLOWED } from "../lib/hot-score";
 import { buildChain } from "./chains";
 import { buildTicketBatch } from "../services/tickets.service";
@@ -280,7 +280,7 @@ router.get("/", async (req, res) => {
       db
         .select({
           chainId: chainRunsTable.chainId,
-          n: count(),
+          n: countDistinct(chainRunsTable.userId), // unique participants, not total runs
           lastAt: max(chainRunsTable.startedAt),
         })
         .from(chainRunsTable)

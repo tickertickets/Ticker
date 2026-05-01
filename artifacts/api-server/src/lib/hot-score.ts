@@ -31,7 +31,8 @@
  *      saves×1.5   — intent to revisit (Instagram/Pinterest proven: saves
  *                    indicate quality content worth keeping)
  *      comments×2  — active engagement, starts conversation
- *      bonus×3     — chain participants (strong community/participatory signal)
+ *      bonus×3     — unique chain participants (distinct users who joined the chain)
+ *                    strongest community signal: real people committing to watch together
  *      (Same weight philosophy as Letterboxd "activity score" convention.)
  *
  * Score examples (gravity=1.8):

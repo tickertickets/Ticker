@@ -48,6 +48,14 @@ export default function Feed() {
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
 
+  const { user } = useAuth();
+  useSocketFeedUpdates();
+  const unreadCount = useNotificationCount();
+
+  // Logged-in users get mode=home so followed-user affinity (2×) applies.
+  // Guests get mode=discover (public hotScore ranking, no personalisation).
+  const feedMode = user ? "home" : "discover";
+
   const doRefresh = () => {
     const el = scrollRef.current;
     if (el) el.scrollTo({ top: 0, behavior: "smooth" });
@@ -56,20 +64,15 @@ export default function Feed() {
     setExtraItems([]);
     setNextCursor(null);
     setHasMore(false);
-    qc.invalidateQueries({ queryKey: ["mixed-feed"] }).then(() => {
+    qc.invalidateQueries({ queryKey: ["mixed-feed", feedMode] }).then(() => {
       setTimeout(() => setIsRefreshing(false), 400);
     });
   };
-
-  const { user } = useAuth();
-  useSocketFeedUpdates();
-  const unreadCount = useNotificationCount();
-
-  // ── Unified mixed feed — discover mode (all public users, hotScore ranked) ──
+  // ── Unified mixed feed (personalised or discover depending on auth) ──────────
   const { data: feedData, isLoading } = useQuery<{ items: FeedItem[]; hasMore: boolean; nextCursor: string | null }>({
-    queryKey: ["mixed-feed"],
+    queryKey: ["mixed-feed", feedMode],
     queryFn: async () => {
-      const res = await fetch(`/api/feed?mode=discover&limit=20`, { credentials: "include" });
+      const res = await fetch(`/api/feed?mode=${feedMode}&limit=20`, { credentials: "include" });
       if (!res.ok) throw new Error("failed");
       return res.json();
     },
@@ -88,13 +91,13 @@ export default function Feed() {
     }
   }, [feedData]);
 
-  // Fetch next page
+  // Fetch next page (same mode as first page)
   const fetchMore = useCallback(async () => {
     if (loadingMore || !hasMore || !nextCursor) return;
     setLoadingMore(true);
     try {
       const res = await fetch(
-        `/api/feed?mode=discover&limit=20&before=${encodeURIComponent(nextCursor)}`,
+        `/api/feed?mode=${feedMode}&limit=20&before=${encodeURIComponent(nextCursor)}`,
         { credentials: "include" },
       );
       if (!res.ok) return;
@@ -105,7 +108,7 @@ export default function Feed() {
     } finally {
       setLoadingMore(false);
     }
-  }, [loadingMore, hasMore, nextCursor]);
+  }, [loadingMore, hasMore, nextCursor, feedMode]);
 
   // Intersection observer — trigger fetchMore when sentinel enters viewport
   useEffect(() => {
