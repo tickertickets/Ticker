@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect, useLayoutEffect } from "react";
-import { useLang, displayYear } from "@/lib/i18n";
+import { useLang, displayYear, displayDate } from "@/lib/i18n";
 import { ExpandableText } from "./ExpandableText";
 import { createPortal } from "react-dom";
 import { useKeyboardHeight } from "@/hooks/use-keyboard-height";
@@ -681,7 +681,7 @@ function CompactCard({ ticket, onLongPress, viewHref }: { ticket: Ticket; onLong
                   <div className="flex items-center gap-1">
                     <CalendarDays className="w-3 h-3 shrink-0" style={{ color: isCompactPoster ? "rgba(28,28,28,0.35)" : "var(--card-back-text-faint)" }} />
                     <span className="text-[10px]" style={{ color: isCompactPoster ? "rgba(28,28,28,0.55)" : "var(--card-back-text-muted)" }}>
-                      {new Date(ticket.watchedAt).toLocaleDateString("th", { month: "short", year: "numeric" })}
+                      {displayDate(ticket.watchedAt, lang, { month: "short", year: "numeric" })}
                     </span>
                   </div>
                 )}
@@ -1321,7 +1321,7 @@ function FeedCard({ ticket, onLongPress }: { ticket: Ticket; onLongPress?: (t: T
                         <div className="flex items-center gap-1">
                           <CalendarDays className="w-3 h-3 shrink-0" style={{ color: isPoster ? "rgba(28,28,28,0.35)" : "var(--card-back-text-faint)" }} />
                           <span className="text-[10px]" style={{ color: isPoster ? "rgba(28,28,28,0.55)" : "var(--card-back-text-muted)" }}>
-                            {new Date(ticket.watchedAt).toLocaleDateString("th", { month: "short", year: "numeric" })}
+                            {displayDate(ticket.watchedAt, lang, { month: "short", year: "numeric" })}
                           </span>
                         </div>
                       )}

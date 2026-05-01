@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { TicketCard } from "@/components/TicketCard";
 import { Loader2, MessageCircle, Bell } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
@@ -35,17 +35,27 @@ export default function Feed() {
   const { t } = useLang();
   const scrollRef   = useRef<HTMLDivElement>(null);
   const headerRef   = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
   const firstLoadDone = useRef(false);
   const [headerH, setHeaderH]           = useState(64);
   const [headerHidden, setHeaderHidden] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const qc = useQueryClient();
 
+  // Pagination state for "load more"
+  const [extraItems, setExtraItems] = useState<FeedItem[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+
   const doRefresh = () => {
     const el = scrollRef.current;
     if (el) el.scrollTo({ top: 0, behavior: "smooth" });
     setHeaderHidden(false);
     setIsRefreshing(true);
+    setExtraItems([]);
+    setNextCursor(null);
+    setHasMore(false);
     qc.invalidateQueries({ queryKey: ["mixed-feed"] }).then(() => {
       setTimeout(() => setIsRefreshing(false), 400);
     });
@@ -56,7 +66,7 @@ export default function Feed() {
   const unreadCount = useNotificationCount();
 
   // ── Unified mixed feed — discover mode (all public users, hotScore ranked) ──
-  const { data: feedData, isLoading } = useQuery<{ items: FeedItem[]; hasMore: boolean }>({
+  const { data: feedData, isLoading } = useQuery<{ items: FeedItem[]; hasMore: boolean; nextCursor: string | null }>({
     queryKey: ["mixed-feed"],
     queryFn: async () => {
       const res = await fetch(`/api/feed?mode=discover&limit=20`, { credentials: "include" });
@@ -67,6 +77,47 @@ export default function Feed() {
     refetchInterval: 120_000,
     refetchOnWindowFocus: true,
   });
+
+  // Sync pagination state from first-page feed data
+  useEffect(() => {
+    if (feedData) {
+      setNextCursor(feedData.nextCursor ?? null);
+      setHasMore(feedData.hasMore);
+      // Reset extra items whenever the base feed refreshes
+      setExtraItems([]);
+    }
+  }, [feedData]);
+
+  // Fetch next page
+  const fetchMore = useCallback(async () => {
+    if (loadingMore || !hasMore || !nextCursor) return;
+    setLoadingMore(true);
+    try {
+      const res = await fetch(
+        `/api/feed?mode=discover&limit=20&before=${encodeURIComponent(nextCursor)}`,
+        { credentials: "include" },
+      );
+      if (!res.ok) return;
+      const data: { items: FeedItem[]; hasMore: boolean; nextCursor: string | null } = await res.json();
+      setExtraItems((prev) => [...prev, ...data.items]);
+      setNextCursor(data.nextCursor ?? null);
+      setHasMore(data.hasMore);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loadingMore, hasMore, nextCursor]);
+
+  // Intersection observer — trigger fetchMore when sentinel enters viewport
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+    const obs = new IntersectionObserver(
+      (entries) => { if (entries[0]?.isIntersecting) fetchMore(); },
+      { threshold: 0.1 },
+    );
+    obs.observe(sentinel);
+    return () => obs.disconnect();
+  }, [fetchMore]);
 
   // ── Upcoming movies (injected every 6 posts) ─────────────────────────────────
   const { data: upcomingMovies } = useUpcomingMovies();
@@ -149,7 +200,7 @@ export default function Feed() {
   }, []);
 
   // Build display list: inject UpcomingCard every 6 items
-  const items = feedData?.items ?? [];
+  const items = [...(feedData?.items ?? []), ...extraItems];
   type Injected =
     | { kind: "ticket"; ticket: any; key: string }
     | { kind: "chain"; chain: ChainItem; key: string }
@@ -242,6 +293,10 @@ export default function Feed() {
               if (item.kind === "chain") return <ChainCard key={item.key} chain={item.chain} />;
               return <UpcomingCard key={item.key} movie={item.movie} />;
             })}
+            {/* Infinite scroll sentinel */}
+            <div ref={sentinelRef} className="h-12 flex items-center justify-center">
+              {loadingMore && <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />}
+            </div>
           </div>
         )}
       </div>

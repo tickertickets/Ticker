@@ -10,7 +10,9 @@ import { useGetTicket, useGetTicketComments, useCreateComment, useDeleteTicket }
 import { TicketCard } from "@/components/TicketCard";
 import { VerifiedBadge, isVerified } from "@/components/VerifiedBadge";
 import { BadgeIcon } from "@/components/BadgeIcon";
-import { Loader2, ChevronLeft, Send, MapPin, CalendarDays, Trash2, MessageCircle, Flag } from "lucide-react";
+import { Loader2, ChevronLeft, Send, MapPin, CalendarDays, Trash2, MessageCircle, Flag, Share2 } from "lucide-react";
+import { ShareStoryModal } from "@/components/ShareStoryModal";
+import { useToast } from "@/hooks/use-toast";
 import { ReactionButton } from "@/components/ReactionButton";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
@@ -46,6 +48,8 @@ export default function TicketDetail() {
   const [reactionBreakdown, setReactionBreakdown] = useState<Record<string, number> | null>(null);
   const [reportTicketOpen, setReportTicketOpen] = useState(false);
   const [reportCommentId, setReportCommentId] = useState<string | null>(null);
+  const [storyShareOpen, setStoryShareOpen] = useState(false);
+  const { toast } = useToast();
   const [deleteSheetOpen, setDeleteSheetOpen] = useState(false);
   const [deleteSheetVisible, setDeleteSheetVisible] = useState(false);
   const deleteSheetCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -337,24 +341,35 @@ export default function TicketDetail() {
         <div className="flex-1 flex justify-center">
           <h1 className="font-display font-bold text-xl tracking-tight text-foreground">Ticker</h1>
         </div>
-        {isOwner ? (
+        <div className="flex items-center gap-1">
           <button
-            onClick={handleDeleteTicket}
-            disabled={deleteTicket.isPending}
+            onClick={() => {
+              if (!user) { toast({ title: t.signInToLike, duration: 1500 }); return; }
+              setStoryShareOpen(true);
+            }}
             className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
           >
-            {deleteTicket.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+            <Share2 className="w-4 h-4" />
           </button>
-        ) : user && !isVerified(ticket.user?.username) ? (
-          <button
-            onClick={() => setReportTicketOpen(true)}
-            className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <Flag className="w-4 h-4" />
-          </button>
-        ) : (
-          <div className="w-9" />
-        )}
+          {isOwner ? (
+            <button
+              onClick={handleDeleteTicket}
+              disabled={deleteTicket.isPending}
+              className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {deleteTicket.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+            </button>
+          ) : user && !isVerified(ticket.user?.username) ? (
+            <button
+              onClick={() => setReportTicketOpen(true)}
+              className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Flag className="w-4 h-4" />
+            </button>
+          ) : (
+            <div className="w-9" />
+          )}
+        </div>
       </div>
 
       {/* Scrollable content */}
@@ -664,6 +679,15 @@ export default function TicketDetail() {
             )}
           </button>
         </form>
+      )}
+
+      {/* Share story modal — same system as feed */}
+      {storyShareOpen && ticket && (
+        <ShareStoryModal
+          ticket={ticket}
+          onClose={() => setStoryShareOpen(false)}
+          onOpenChat={() => setStoryShareOpen(false)}
+        />
       )}
 
       {/* Report ticket sheet */}

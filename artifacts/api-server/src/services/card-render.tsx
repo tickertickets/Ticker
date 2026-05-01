@@ -891,21 +891,26 @@ function CardBack({
             </div>
           </>
         ) : hasMemory ? (
-          <div
-            style={{
-              fontSize: 11 * SCALE,
-              fontWeight: 400,
-              lineHeight: 1.625,
-              fontStyle: "italic",
-              color: memoryColor,
-              width: innerW,
-              fontFamily: "DM Sans, Noto Sans Thai",
-              overflow: "hidden",
-              display: "block",
-              lineClamp: 6,
-            }}
-          >
-            {`"${ticket.memoryNote}"`}
+          <div style={{ width: innerW, overflow: "hidden" }}>
+            <div
+              style={{
+                fontSize: 11 * SCALE,
+                fontWeight: 400,
+                lineHeight: 1.625,
+                fontStyle: "italic",
+                color: memoryColor,
+                fontFamily: "DM Sans, Noto Sans Thai",
+                display: "block",
+                lineClamp: 6,
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+                overflowWrap: "break-word",
+                transform: "skewX(-8deg)",
+                transformOrigin: "center center",
+              }}
+            >
+              {`"${ticket.memoryNote}"`}
+            </div>
           </div>
         ) : (
           <div

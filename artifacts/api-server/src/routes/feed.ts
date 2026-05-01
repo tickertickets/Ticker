@@ -13,7 +13,7 @@ import {
   commentsTable,
   bookmarksTable,
 } from "@workspace/db/schema";
-import { eq, and, desc, isNull, count, max, inArray, ne, or, sql } from "drizzle-orm";
+import { eq, and, desc, isNull, count, max, inArray, ne, or, sql, lt } from "drizzle-orm";
 import { hotScore, makeFreshBoost, applyDiversityCap, DIVERSITY_CAP } from "../lib/hot-score";
 import { buildChain } from "./chains";
 import { buildTicketBatch } from "../services/tickets.service";
@@ -46,6 +46,9 @@ router.get("/", async (req, res) => {
   const mode = (req.query["mode"] as string) || "discover";
   // Larger pool ensures diversity cap has enough candidates to fill the page
   const POOL = limit * 6;
+  // Cursor for pagination: ISO timestamp of the oldest createdAt from the previous page
+  const beforeParam = req.query["before"] as string | undefined;
+  const beforeDate = beforeParam ? new Date(beforeParam) : null;
 
   // ── Get followed user IDs ────────────────────────────────────────────────────
   let followedIds: string[] = [];
@@ -91,6 +94,7 @@ router.get("/", async (req, res) => {
             isNull(ticketsTable.deletedAt),
             or(isNull(ticketsTable.cardTheme), ne(ticketsTable.cardTheme, "reel")),
             inArray(ticketsTable.userId, feedUserIds),
+            beforeDate ? lt(ticketsTable.createdAt, beforeDate) : undefined,
           ),
         )
         .orderBy(desc(sql`GREATEST(
@@ -120,6 +124,7 @@ router.get("/", async (req, res) => {
             or(isNull(ticketsTable.cardTheme), ne(ticketsTable.cardTheme, "reel")),
             eq(ticketsTable.isPrivate, false),
             inArray(ticketsTable.userId, publicUserIds),
+            beforeDate ? lt(ticketsTable.createdAt, beforeDate) : undefined,
           ),
         )
         .orderBy(desc(sql`GREATEST(
@@ -144,6 +149,7 @@ router.get("/", async (req, res) => {
           and(
             isNull(chainsTable.deletedAt),
             inArray(chainsTable.userId, feedUserIds),
+            beforeDate ? lt(chainsTable.createdAt, beforeDate) : undefined,
           ),
         )
         .orderBy(desc(sql`GREATEST(
@@ -163,7 +169,11 @@ router.get("/", async (req, res) => {
       .select({ chain: chainsTable })
       .from(chainsTable)
       .innerJoin(usersTable, and(eq(usersTable.id, chainsTable.userId), eq(usersTable.isPrivate, false)))
-      .where(and(isNull(chainsTable.deletedAt), eq(chainsTable.isPrivate, false)))
+      .where(and(
+        isNull(chainsTable.deletedAt),
+        eq(chainsTable.isPrivate, false),
+        beforeDate ? lt(chainsTable.createdAt, beforeDate) : undefined,
+      ))
       .orderBy(desc(sql`GREATEST(
         ${chainsTable.createdAt},
         COALESCE((SELECT MAX(created_at) FROM chain_likes WHERE chain_id = ${chainsTable.id}), ${chainsTable.createdAt}),
@@ -355,7 +365,14 @@ router.get("/", async (req, res) => {
     })
     .filter(Boolean);
 
-  res.json({ items, hasMore });
+  // nextCursor = ISO timestamp of the oldest createdAt on this page (used as `before` param for next page)
+  const nextCursor = page.length > 0
+    ? page.reduce((oldest, item) =>
+        item.data.createdAt < oldest.data.createdAt ? item : oldest
+      ).data.createdAt.toISOString()
+    : null;
+
+  res.json({ items, hasMore, nextCursor });
 });
 
 export default router;
