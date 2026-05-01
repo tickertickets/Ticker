@@ -14,7 +14,7 @@ import {
   bookmarksTable,
 } from "@workspace/db/schema";
 import { eq, and, desc, isNull, count, max, inArray, ne, or, sql, lt } from "drizzle-orm";
-import { hotScore, makeFreshBoost, applyDiversityCap, DIVERSITY_CAP } from "../lib/hot-score";
+import { hotScore, makeFreshBoost, applyDiversityCap, DIVERSITY_CAP, AFFINITY_FOLLOWED } from "../lib/hot-score";
 import { buildChain } from "./chains";
 import { buildTicketBatch } from "../services/tickets.service";
 
@@ -26,8 +26,9 @@ const router: IRouter = Router();
  * Unified ranked feed mixing Tickets and Chains via a shared hotScore.
  *
  * mode=discover  All public content, scored by hotScore (default)
- * mode=home      Two-tier: followed users get 2× affinity boost (Tier A)
- *                + public discovery (Tier B) — Instagram-style
+ * mode=home      Followed users get AFFINITY_FOLLOWED (2×) permanent score boost
+ *                on top of freshBoost — ensures their content surfaces even after
+ *                the 60-min fresh window (Instagram-style persistent affinity)
  * mode=following Only posts from followed users + own posts, hotScore ranked
  *
  * Ranking formula (industry-standard):
@@ -246,7 +247,11 @@ router.get("/", async (req, res) => {
         saves:    saveMap.get(t.id) ?? 0,
         lastActivityAt,
       });
-      scoredItems.push({ type: "ticket", data: t, score: base * freshBoost(t.userId, t.createdAt) });
+      // home mode: permanently boost followed users' content so it surfaces beyond the 60-min fresh window
+      const affinity = (mode === "home" && followedIds.length > 0 && followedSet.has(t.userId) && t.userId !== currentUserId)
+        ? AFFINITY_FOLLOWED
+        : 1.0;
+      scoredItems.push({ type: "ticket", data: t, score: base * affinity * freshBoost(t.userId, t.createdAt) });
     }
   }
 
@@ -313,7 +318,10 @@ router.get("/", async (req, res) => {
         saves:    saveMap.get(c.id) ?? 0,
         lastActivityAt,
       });
-      scoredItems.push({ type: "chain", data: c, score: base * freshBoost(c.userId, c.createdAt) });
+      const chainAffinity = (mode === "home" && followedIds.length > 0 && followedSet.has(c.userId) && c.userId !== currentUserId)
+        ? AFFINITY_FOLLOWED
+        : 1.0;
+      scoredItems.push({ type: "chain", data: c, score: base * chainAffinity * freshBoost(c.userId, c.createdAt) });
     }
   }
 

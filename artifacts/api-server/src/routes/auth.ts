@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { rateLimit } from "express-rate-limit";
+import { rateLimit, ipKeyGenerator } from "express-rate-limit";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { db, pool } from "@workspace/db";
@@ -52,7 +52,7 @@ const signupDeviceLimiter = rateLimit({
     if (typeof deviceId === "string" && deviceId.length > 0 && deviceId.length <= 64) {
       return `device:signup:${deviceId}`;
     }
-    return `device:signup:ip:${req.ip ?? req.socket?.remoteAddress ?? "unknown"}`;
+    return `device:signup:ip:${ipKeyGenerator(req)}`;
   },
   standardHeaders: true,
   legacyHeaders: false,

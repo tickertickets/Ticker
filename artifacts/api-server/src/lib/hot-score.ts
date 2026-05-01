@@ -46,7 +46,8 @@
 const log1p = (n: number) => Math.log(1 + Math.max(0, n));
 
 export const HOT_GRAVITY = 1.8;
-export const DIVERSITY_CAP = 3; // max posts per user per page (feed diversity)
+export const DIVERSITY_CAP = 3;       // max posts per user per page (feed diversity)
+export const AFFINITY_FOLLOWED = 2.0; // permanent score multiplier for followed users in home feed
 
 export interface HotScoreParams {
   likes:        number;

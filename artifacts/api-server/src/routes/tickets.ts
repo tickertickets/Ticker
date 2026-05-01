@@ -42,10 +42,11 @@ import {
   ne,
   or,
   sql,
+  lt,
 } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { sanitize } from "../lib/sanitize";
-import { hotScore, applyDiversityCap, DIVERSITY_CAP } from "../lib/hot-score";
+import { hotScore, makeFreshBoost, applyDiversityCap, DIVERSITY_CAP, AFFINITY_FOLLOWED } from "../lib/hot-score";
 import { asyncHandler } from "../middlewares/error-handler";
 import {
   UnauthorizedError,
@@ -97,6 +98,9 @@ router.get(
     const feed = (req.query["feed"] as string) || "discovery";
     const typeParam = (req.query["type"] as string) || "all";
     const notDeleted = isNull(ticketsTable.deletedAt);
+    // Cursor-based pagination: ISO timestamp of oldest item from previous page
+    const beforeParam = req.query["before"] as string | undefined;
+    const beforeDate = beforeParam ? new Date(beforeParam) : null;
 
     // ── Content-type filter ────────────────────────────────────────────────────
     // type=ticket → regular tickets only (cardTheme ≠ reel)
@@ -111,23 +115,7 @@ router.get(
 
     type RawTicket = typeof ticketsTable.$inferSelect;
 
-    // ── Fresh-post boost (industry-standard "velocity" signal) ────────────────
-    // Posts < 60 min old from the current user (all modes) or from followed
-    // users (home/following mode) receive a decaying multiplier: 15× at t=0,
-    // dropping linearly to 1× at t=1 (60 min). After expiry they compete
-    // purely on hotScore — no permanent affinity multiplier.
-    // Matches Instagram/Reddit behaviour.
-    const FRESH_WINDOW_MS = 60 * 60 * 1000;
-    const makeFreshBoost = (followedSet?: Set<string>) =>
-      (userId: string, createdAt: Date): number => {
-        const isOwnPost = currentUserId && userId === currentUserId;
-        const isFollowedPost = followedSet ? followedSet.has(userId) : false;
-        if (!isOwnPost && !isFollowedPost) return 1.0;
-        const ageMs = Date.now() - createdAt.getTime();
-        if (ageMs >= FRESH_WINDOW_MS) return 1.0;
-        const t = ageMs / FRESH_WINDOW_MS;
-        return 1.0 + 14.0 * (1 - t); // 15× at t=0, 1× at t=1
-      };
+    // freshBoost and affinity are imported from hot-score.ts
 
     // ── Shared helper: bulk-score a list of tickets ────────────────────────────
     // Uses likesTable (heart likes) — the single engagement currency.
@@ -189,14 +177,12 @@ router.get(
       //   Tier A: Own posts (all visibility) + followed users' public posts
       //   Tier B: Discovery pool from public accounts
       //
-      // Final ranking: hotScore × freshBoost, merged and sorted.
-      // No permanent affinity multiplier — followed users only get the
-      // 60-minute fresh boost (and own/followed posts get pulled into Tier A).
-      // After the fresh window, every post competes equally.
+      // Final ranking: hotScore × AFFINITY_FOLLOWED(2×) × freshBoost, merged and sorted.
+      // Followed users receive a permanent 2× affinity boost so their content stays
+      // prominent even after the 60-min fresh window expires.
 
-      const POOL = limit * 4;
-      const AFFINITY_FOLLOWED = 1.0;
-      const AFFINITY_DISCOVERY = 1.0;
+      const POOL = limit * 6;
+      const AFFINITY_DISCOVERY = 1.0; // AFFINITY_FOLLOWED (2×) is imported from hot-score
 
       // 1. Get followed user IDs
       const followRows = await db
@@ -213,8 +199,7 @@ router.get(
         followedIds.length > 0
           ? inArray(ticketsTable.userId, [...followedIds, currentUserId])
           : eq(ticketsTable.userId, currentUserId),
-        // own posts: show all; followed users: only non-private tickets
-        // We fetch all then filter: private tickets from others are excluded below
+        beforeDate ? lt(ticketsTable.createdAt, beforeDate) : undefined,
       );
       const tierARaw = await db
         .select()
@@ -246,10 +231,8 @@ router.get(
               notDeleted,
               typeFilter,
               inArray(ticketsTable.userId, publicUserIds),
-              // exclude posts already in tier A to avoid duplicates
-              tierA.length > 0
-                ? notInArray(ticketsTable.id, tierA.map((t) => t.id))
-                : undefined,
+              tierA.length > 0 ? notInArray(ticketsTable.id, tierA.map((t) => t.id)) : undefined,
+              beforeDate ? lt(ticketsTable.createdAt, beforeDate) : undefined,
             ))
             .orderBy(desc(sql`GREATEST(
               ${ticketsTable.createdAt},
@@ -260,8 +243,8 @@ router.get(
         : [];
 
       // 3. Score both tiers and merge
-      const affinityFn = (uid: string) => followedSet.has(uid) ? AFFINITY_FOLLOWED : AFFINITY_DISCOVERY;
-      const freshBoostFn = makeFreshBoost(followedSet);
+      const affinityFn = (uid: string) => (followedSet.has(uid) && uid !== currentUserId) ? AFFINITY_FOLLOWED : AFFINITY_DISCOVERY;
+      const freshBoostFn = makeFreshBoost(followedSet, currentUserId);
       const [scoredA, scoredB] = await Promise.all([
         bulkScore(tierA, affinityFn, freshBoostFn),
         bulkScore(tierBRaw, affinityFn, freshBoostFn),
@@ -289,7 +272,7 @@ router.get(
       if (feedUserIds.length === 0) {
         tickets = [];
       } else {
-        const POOL = limit * 4;
+        const POOL = limit * 6;
         const raw = await db
           .select()
           .from(ticketsTable)
@@ -297,7 +280,7 @@ router.get(
             inArray(ticketsTable.userId, feedUserIds),
             notDeleted,
             typeFilter,
-            // own posts shown regardless of privacy; others' only if non-private
+            beforeDate ? lt(ticketsTable.createdAt, beforeDate) : undefined,
           ))
           .orderBy(desc(sql`GREATEST(
             ${ticketsTable.createdAt},
@@ -309,7 +292,7 @@ router.get(
         // filter: keep own private posts, exclude others' private tickets
         const filtered = raw.filter((t) => t.userId === currentUserId || !t.isPrivate);
         const followedSet = new Set(feedUserIds);
-        const freshBoostFn = makeFreshBoost(followedSet);
+        const freshBoostFn = makeFreshBoost(followedSet, currentUserId);
         const scored = await bulkScore(filtered, undefined, freshBoostFn);
         scored.sort((a, b) => b.score - a.score);
         const capped = applyDiversityCap(scored, (s) => s.t.userId, DIVERSITY_CAP, limit + 1);
@@ -323,7 +306,7 @@ router.get(
       // Used for dedicated type tabs (Tickets / Reels) and unauthenticated users.
       // Visibility: public accounts + non-private posts only.
 
-      const DISC_POOL = limit * 5;
+      const DISC_POOL = limit * 6;
 
       const publicUserRows = await db
         .select({ id: usersTable.id })
@@ -340,6 +323,7 @@ router.get(
               notDeleted,
               typeFilter,
               inArray(ticketsTable.userId, publicUserIds),
+              beforeDate ? lt(ticketsTable.createdAt, beforeDate) : undefined,
             ))
             .orderBy(desc(sql`GREATEST(
               ${ticketsTable.createdAt},
@@ -350,7 +334,7 @@ router.get(
         : [];
 
       // In discovery mode only own posts get freshBoost (no social graph context)
-      const freshBoostFn = makeFreshBoost();
+      const freshBoostFn = makeFreshBoost(null, currentUserId);
       const scored = await bulkScore(discRaw, undefined, freshBoostFn);
       scored.sort((a, b) => b.score - a.score);
       const capped = applyDiversityCap(scored, (s) => s.t.userId, DIVERSITY_CAP, limit + 1);
@@ -360,10 +344,11 @@ router.get(
     const hasMore = tickets.length > limit;
     const items = tickets.slice(0, limit);
     const result = await buildTicketBatch(items, currentUserId);
+    const oldestItem = items.length > 0 ? items.reduce((a, b) => (a.createdAt < b.createdAt ? a : b)) : null;
     res.json({
       tickets: result,
       hasMore,
-      nextCursor: hasMore ? items[items.length - 1]?.id : null,
+      nextCursor: hasMore && oldestItem ? oldestItem.createdAt.toISOString() : null,
     });
   }),
 );
