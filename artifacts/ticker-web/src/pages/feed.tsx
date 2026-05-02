@@ -57,6 +57,8 @@ export default function Feed() {
   const feedMode = user ? "home" : "discover";
 
   const doRefresh = () => {
+    // Allow the scroll-tracking reset (below) to fire again after this refresh.
+    firstLoadDone.current = false;
     const el = scrollRef.current;
     if (el) el.scrollTo({ top: 0, behavior: "smooth" });
     setHeaderHidden(false);
@@ -149,10 +151,17 @@ export default function Feed() {
     return () => { obs.disconnect(); clearTimeout(t); };
   }, []);
 
+  // Reset scroll-tracking flag whenever the feed mode switches (login/logout),
+  // so the Android Chrome PWA touch-scroll re-init fires for the new feed.
+  useEffect(() => {
+    firstLoadDone.current = false;
+  }, [feedMode]);
+
   // After the feed data first appears (isLoading → false), force a no-op
   // scrollTop assignment so Android Chrome PWA re-initialises touch-scroll
   // tracking for this container. Without this the container appears frozen
-  // right after the initial loading spinner disappears.
+  // right after the initial loading spinner disappears.  Also fires after
+  // doRefresh() or a feedMode change because firstLoadDone is reset above.
   useEffect(() => {
     if (!isLoading && feedData && !firstLoadDone.current) {
       firstLoadDone.current = true;
@@ -190,6 +199,21 @@ export default function Feed() {
       scrollStore.set("feed", el.scrollTop);
     };
   }, [headerH]);
+
+  // PWA scroll-lock fix: clamp scrollTop when content height shrinks so
+  // Android Chrome doesn't get stuck past the new maximum scroll position.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      if (el.clientHeight === 0 || el.scrollHeight === 0) return;
+      const maxScroll = el.scrollHeight - el.clientHeight;
+      if (maxScroll > 0 && el.scrollTop > maxScroll) el.scrollTop = maxScroll;
+    });
+    if (el.firstElementChild) ro.observe(el.firstElementChild);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     const handler = (e: Event) => {

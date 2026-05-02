@@ -533,6 +533,7 @@ function ClassicFront({
           return (
             <div
               style={{
+                display: "flex",
                 fontSize: 7 * SCALE,
                 fontWeight: 600,
                 textTransform: "uppercase",
@@ -554,6 +555,7 @@ function ClassicFront({
 
         <div
           style={{
+            display: "flex",
             fontSize: 13 * SCALE,
             fontWeight: 700,
             color: titleColor,
@@ -561,8 +563,6 @@ function ClassicFront({
             marginTop: 1 * SCALE,
             fontFamily: "Space Grotesk, DM Sans, Noto Sans Thai",
             overflow: "hidden",
-            display: "block",
-            // Single-line truncation: Satori supports lineClamp.
             lineClamp: 1,
           }}
         >
@@ -572,6 +572,7 @@ function ClassicFront({
         {ticket.movieYear ? (
           <div
             style={{
+              display: "flex",
               fontSize: 10 * SCALE,
               color: "rgba(255,255,255,0.55)",
               marginTop: 2 * SCALE,
@@ -587,6 +588,7 @@ function ClassicFront({
       {username ? (
         <div
           style={{
+            display: "flex",
             position: "absolute",
             bottom: 12 * SCALE,
             left: 8 * SCALE,
@@ -724,6 +726,7 @@ function PosterFront({
       >
         <div
           style={{
+            display: "flex",
             fontSize: 11.5 * SCALE,
             fontWeight: 900,
             textTransform: "uppercase",
@@ -732,7 +735,6 @@ function PosterFront({
             letterSpacing: -0.115 * SCALE,
             lineHeight: 1.45,
             color: POSTER_DARK,
-            display: "block",
             overflow: "hidden",
             fontFamily: "DM Sans, Noto Sans Thai",
             lineClamp: 2,
@@ -743,6 +745,7 @@ function PosterFront({
         {ticket.movieYear ? (
           <div
             style={{
+              display: "flex",
               fontSize: 8 * SCALE,
               fontWeight: 700,
               color: POSTER_DARK,
@@ -760,6 +763,7 @@ function PosterFront({
       {username ? (
         <div
           style={{
+            display: "flex",
             position: "absolute",
             bottom: 12 * SCALE,
             left: 8 * SCALE,
@@ -874,6 +878,7 @@ function CardBack({
             <LockIcon size={20 * SCALE} color={lockColor} />
             <div
               style={{
+                display: "flex",
                 fontSize: 10 * SCALE,
                 fontStyle: "italic",
                 color: metaTextColor,
@@ -886,21 +891,20 @@ function CardBack({
             </div>
           </>
         ) : hasMemory ? (
-          <div style={{ width: innerW, overflow: "hidden" }}>
+          <div style={{ display: "flex", flexDirection: "column", width: innerW, overflow: "hidden" }}>
             <div
               style={{
+                display: "flex",
+                flexDirection: "column",
                 fontSize: 11 * SCALE,
                 fontWeight: 400,
                 lineHeight: 1.625,
                 fontStyle: "italic",
                 color: memoryColor,
                 fontFamily: "DM Sans, Noto Sans Thai",
-                display: "block",
                 lineClamp: 6,
                 whiteSpace: "pre-wrap",
                 wordBreak: "break-word",
-                overflowWrap: "break-word",
-
               }}
             >
               {`"${ticket.memoryNote}"`}
@@ -909,6 +913,7 @@ function CardBack({
         ) : (
           <div
             style={{
+              display: "flex",
               fontSize: 10 * SCALE,
               fontStyle: "italic",
               color: emptyColor,
@@ -943,6 +948,7 @@ function CardBack({
             <CalendarIcon size={12 * SCALE} color={metaIconColor} />
             <div
               style={{
+                display: "flex",
                 fontSize: 10 * SCALE,
                 color: metaTextColor,
                 fontFamily: "DM Sans, Noto Sans Thai",
@@ -963,6 +969,7 @@ function CardBack({
             <MapPinIcon size={12 * SCALE} color={metaIconColor} />
             <div
               style={{
+                display: "flex",
                 fontSize: 10 * SCALE,
                 color: metaTextColor,
                 fontFamily: "DM Sans, Noto Sans Thai",
