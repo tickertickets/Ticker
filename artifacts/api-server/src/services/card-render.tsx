@@ -994,7 +994,9 @@ function CardBack({
           fontSize: 11 * SCALE,
           fontWeight: 700,
           color: viewColor,
-          borderTop: `1px solid ${viewBorder}`,
+          borderTopWidth: 1,
+          borderTopStyle: "solid",
+          borderTopColor: viewBorder,
           fontFamily: "Space Grotesk, DM Sans",
           flexShrink: 0,
         }}

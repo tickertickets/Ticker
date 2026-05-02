@@ -335,13 +335,22 @@ router.get("/", async (req, res) => {
 
   // 2. Diversity cap applied SEPARATELY per content type so that a user's
   //    chains cannot crowd out their own tickets (and vice-versa).
-  //    Each type gets up to DIVERSITY_CAP posts per user, then both lists are
+  //    Each type gets up to effectiveCap posts per user, then both lists are
   //    merged and re-sorted by hotScore before the final page slice.
+  //
+  //    Small-pool relaxation: when the pool is smaller than one full page
+  //    (i.e. total content < limit), all posts fit on a single page anyway,
+  //    so the diversity cap would only hide content — defeat its purpose.
+  //    In that case, lift the cap to show everything. The hard cap only
+  //    kicks in for large feeds where a single viral user could monopolise.
   const ticketItems = scoredItems.filter((i): i is ScoredTicket => i.type === "ticket");
   const chainItems  = scoredItems.filter((i): i is ScoredChain  => i.type === "chain");
 
-  const cappedTickets = applyDiversityCap(ticketItems, (i) => i.data.userId, DIVERSITY_CAP, ticketItems.length);
-  const cappedChains  = applyDiversityCap(chainItems,  (i) => i.data.userId, DIVERSITY_CAP, chainItems.length);
+  const effectiveTicketCap = ticketItems.length <= limit ? ticketItems.length : DIVERSITY_CAP;
+  const effectiveChainCap  = chainItems.length  <= limit ? chainItems.length  : DIVERSITY_CAP;
+
+  const cappedTickets = applyDiversityCap(ticketItems, (i) => i.data.userId, effectiveTicketCap, ticketItems.length);
+  const cappedChains  = applyDiversityCap(chainItems,  (i) => i.data.userId, effectiveChainCap,  chainItems.length);
 
   // Re-merge and sort by hotScore descending; request limit+1 to detect hasMore
   const merged = [...cappedTickets, ...cappedChains].sort((a, b) => b.score - a.score);
