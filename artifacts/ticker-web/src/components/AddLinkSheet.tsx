@@ -149,7 +149,7 @@ export function AddLinkSheet({ open, onClose, links: initialLinks, entityType, e
                 value={urlInput}
                 onChange={e => setUrlInput(e.target.value)}
                 placeholder={t.addLinkPlaceholder}
-                className="flex-1 h-9 text-sm bg-background border-border"
+                className="flex-1 h-9 text-sm bg-background border-border text-foreground"
                 onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); handleAdd(); } }}
                 autoCapitalize="none"
                 autoCorrect="off"

@@ -24,7 +24,7 @@ import type { ChainItem } from "@/components/ChainsSection";
 import {
   Loader2, Settings, Link2, Users, X, User as UserIcon,
   Camera, MessageCircle, Lock, Unlock, Flag, MoreHorizontal, ChevronLeft, Bookmark,
-  Heart, Send, Pencil, Trash2, Ticket as TicketIcon, AtSign, Check, Search, EyeOff, Eye, Plus,
+  Heart, Send, Pencil, Trash2, Ticket as TicketIcon, AtSign, Check, Search, EyeOff, Eye, Plus, Globe,
 } from "lucide-react";
 import { cn, fmtCount } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
@@ -416,9 +416,10 @@ function EditProfileSheet({
               })}
               {bioLinksState.length < MAX_LINKS && (
                 <div className="flex gap-2 items-center">
-                  {linkDetected && (
-                    <SocialLinkPlatformIcon platform={linkDetected.platform} size={18} className="text-foreground shrink-0" />
-                  )}
+                  {linkDetected
+                    ? <SocialLinkPlatformIcon platform={linkDetected.platform} size={18} className="text-foreground shrink-0" />
+                    : <Globe className="w-[18px] h-[18px] shrink-0 text-muted-foreground" />
+                  }
                   <input
                     value={linkUrlInput}
                     onChange={e => setLinkUrlInput(e.target.value)}
