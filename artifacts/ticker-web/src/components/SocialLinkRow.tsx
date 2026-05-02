@@ -45,7 +45,7 @@ export function SocialLinkRow({ links, isOwner, showHidden, onManage, className,
               className="text-foreground flex-shrink-0"
             />
             {link.label && (
-              <span className={cn("font-semibold leading-none text-foreground max-w-[90px] truncate", labelCls)}>
+              <span className={cn("font-semibold leading-none text-foreground whitespace-nowrap", labelCls)}>
                 {link.label}
               </span>
             )}

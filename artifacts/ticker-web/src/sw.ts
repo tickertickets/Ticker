@@ -146,7 +146,7 @@ self.addEventListener("push", (event: PushEvent) => {
     self.registration.showNotification(title, {
       body,
       icon,
-      badge: "/icon-192.png",
+      badge: "/notification-badge.svg",
       tag,
       data: { url },
       requireInteraction: true,

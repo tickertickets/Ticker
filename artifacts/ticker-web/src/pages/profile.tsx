@@ -1264,7 +1264,7 @@ export default function Profile() {
           </div>
           <div className="flex-1 min-w-0 flex flex-col justify-center" style={{ minHeight: 32, marginTop: "-10px" }}>
             <div className="flex items-center gap-1">
-              <h2 className="font-display font-bold text-lg text-foreground leading-tight truncate">{profile.displayName}</h2>
+              <h2 className="font-display font-bold text-lg text-foreground leading-tight break-all">{profile.displayName}</h2>
               {isVerified(profile.username) && <VerifiedBadge className="w-[18px] h-[18px]" />}
               {profile.id && <BadgeIcon userId={profile.id} size={18} nudge={1.2} />}
             </div>
@@ -1281,7 +1281,7 @@ export default function Profile() {
           />
         )}
 
-        <div className="grid grid-cols-4 divide-x divide-border py-3 border-t border-border">
+        <div className="grid grid-cols-4 divide-x divide-border py-3 mt-3 border-t border-border">
           <div className="flex flex-col items-center gap-0.5">
             <span className="font-display font-bold text-base text-foreground">{fmtCount(tickets.length)}</span>
             <span className="text-[11px] text-muted-foreground">Tickets</span>

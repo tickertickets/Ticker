@@ -116,7 +116,29 @@ export function normalizeUrl(url: string): string {
 
 export function isValidUrl(url: string): boolean {
   try {
-    new URL(normalizeUrl(url));
+    const normalized = normalizeUrl(url);
+    const parsed = new URL(normalized);
+
+    // Only allow http / https
+    if (!["http:", "https:"].includes(parsed.protocol)) return false;
+
+    const h = parsed.hostname.toLowerCase();
+
+    // Must have a dot — bare hostnames ("localhost", "intranet") are invalid
+    if (!h.includes(".")) return false;
+
+    // Block loopback / localhost
+    if (["localhost", "127.0.0.1", "0.0.0.0", "::1"].includes(h)) return false;
+
+    // Block private IPv4 ranges: 10.x, 172.16–31.x, 192.168.x
+    if (/^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)/.test(h)) return false;
+
+    // Block reserved / internal TLDs
+    if (/\.(local|internal|test|example|invalid|localhost|corp|home|lan)$/.test(h)) return false;
+
+    // Hostname must look like a real domain (alphanumeric + hyphens/dots)
+    if (!/^[a-z0-9][a-z0-9\-.]*\.[a-z]{2,}$/.test(h)) return false;
+
     return url.trim().length > 0;
   } catch {
     return false;
