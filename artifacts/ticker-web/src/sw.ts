@@ -135,7 +135,9 @@ self.addEventListener("push", (event: PushEvent) => {
   const body  = data.body  || "";
   const url   = data.url   || "/";
   const tag   = data.tag   || "ticker";
-  const icon  = data.icon  || "/icon.svg";
+  // Android OS (when Chrome is closed) cannot render SVG notification icons —
+  // always use PNG so the system notification appears even in the background.
+  const icon  = data.icon  || "/icon-192.png";
 
   // Visible diagnostic in DevTools → Application → Service Workers → console
   console.log("[sw push]", { title, body, tag, url, icon, raw });
@@ -144,7 +146,7 @@ self.addEventListener("push", (event: PushEvent) => {
     self.registration.showNotification(title, {
       body,
       icon,
-      badge: "/notification-badge.svg",
+      badge: "/icon-192.png",
       tag,
       data: { url },
       requireInteraction: true,
