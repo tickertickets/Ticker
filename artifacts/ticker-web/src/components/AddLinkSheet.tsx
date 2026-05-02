@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLang } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
-import { type SocialLink, type Platform, detectPlatform, normalizeUrl, isValidUrl, PLATFORM_META, MAX_LINKS } from "@/lib/socialLinks";
+import { type SocialLink, detectPlatform, normalizeUrl, isValidUrl, getPlatformName, MAX_LINKS } from "@/lib/socialLinks";
 import { SocialLinkPlatformIcon } from "./SocialLinkPlatformIcon";
 import { Trash2, EyeOff, Eye, Plus, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -99,7 +99,6 @@ export function AddLinkSheet({ open, onClose, links: initialLinks, entityType, e
             <p className="text-sm text-muted-foreground text-center py-4">{t.noLinksYet}</p>
           )}
           {links.map(link => {
-            const meta = PLATFORM_META[link.platform as Platform] ?? PLATFORM_META.generic;
             return (
               <div
                 key={link.id}
@@ -108,10 +107,10 @@ export function AddLinkSheet({ open, onClose, links: initialLinks, entityType, e
                   link.hidden && "opacity-60",
                 )}
               >
-                <SocialLinkPlatformIcon platform={link.platform as Platform} size={18} className="text-foreground shrink-0" />
+                <SocialLinkPlatformIcon platform={link.platform} size={18} className="text-foreground shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-semibold text-foreground truncate">
-                    {link.label ?? meta.name}
+                    {link.label ?? getPlatformName(link.platform)}
                   </p>
                   <p className="text-[10px] text-muted-foreground truncate">{link.url}</p>
                 </div>
@@ -143,7 +142,7 @@ export function AddLinkSheet({ open, onClose, links: initialLinks, entityType, e
           <div className="shrink-0 pt-2 border-t border-border">
             <div className="flex gap-2 items-center">
               {detectedPlatform && (
-                <SocialLinkPlatformIcon platform={detectedPlatform.platform as Platform} size={18} className="text-foreground shrink-0" />
+                <SocialLinkPlatformIcon platform={detectedPlatform.platform} size={18} className="text-foreground shrink-0" />
               )}
               <Input
                 value={urlInput}

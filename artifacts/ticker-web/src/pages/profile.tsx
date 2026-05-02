@@ -34,7 +34,7 @@ import { ReportSheet } from "@/components/ReportSheet";
 import { SocialLinkRow } from "@/components/SocialLinkRow";
 import { SocialLinkPlatformIcon } from "@/components/SocialLinkPlatformIcon";
 import { AddLinkSheet } from "@/components/AddLinkSheet";
-import { type SocialLink, type Platform, detectPlatform, normalizeUrl, isValidUrl, PLATFORM_META, MAX_LINKS } from "@/lib/socialLinks";
+import { type SocialLink, detectPlatform, normalizeUrl, isValidUrl, getPlatformName, MAX_LINKS } from "@/lib/socialLinks";
 import { VerifiedBadge, isVerified } from "@/components/VerifiedBadge";
 import { BadgeIcon } from "@/components/BadgeIcon";
 import { useToast } from "@/hooks/use-toast";
@@ -394,12 +394,11 @@ function EditProfileSheet({
             <label className="text-[11px] font-semibold text-muted-foreground tracking-widest">{t.manageLinks}</label>
             <div className="space-y-2">
               {bioLinksState.map(link => {
-                const meta = PLATFORM_META[link.platform as Platform] ?? PLATFORM_META.generic;
                 return (
                   <div key={link.id} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-2xl bg-secondary/60", link.hidden && "opacity-60")}>
-                    <SocialLinkPlatformIcon platform={link.platform as Platform} size={18} className="text-foreground shrink-0" />
+                    <SocialLinkPlatformIcon platform={link.platform} size={18} className="text-foreground shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-foreground truncate">{link.label ?? meta.name}</p>
+                      <p className="text-xs font-semibold text-foreground truncate">{link.label ?? getPlatformName(link.platform)}</p>
                       <p className="text-[10px] text-muted-foreground truncate">{link.url}</p>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
@@ -418,7 +417,7 @@ function EditProfileSheet({
               {bioLinksState.length < MAX_LINKS && (
                 <div className="flex gap-2 items-center">
                   {linkDetected && (
-                    <SocialLinkPlatformIcon platform={linkDetected.platform as Platform} size={18} className="text-foreground shrink-0" />
+                    <SocialLinkPlatformIcon platform={linkDetected.platform} size={18} className="text-foreground shrink-0" />
                   )}
                   <input
                     value={linkUrlInput}

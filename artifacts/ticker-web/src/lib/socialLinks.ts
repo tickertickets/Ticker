@@ -1,12 +1,6 @@
-export type Platform =
-  | "instagram"
-  | "youtube"
-  | "tiktok"
-  | "x"
-  | "facebook"
-  | "threads"
-  | "discord"
-  | "generic";
+// platform is now a free-form Simple Icons slug (e.g. "instagram", "github", "spotify")
+// No hardcoded list — any URL is supported via domain detection.
+export type Platform = string;
 
 export interface SocialLink {
   id: string;
@@ -16,62 +10,102 @@ export interface SocialLink {
   hidden?: boolean;
 }
 
-export const PLATFORM_META: Record<
-  Platform,
-  { name: string; bg: string; fg: string }
-> = {
-  instagram: { name: "Instagram", bg: "#E1306C", fg: "#fff" },
-  youtube:   { name: "YouTube",   bg: "#FF0000", fg: "#fff" },
-  tiktok:    { name: "TikTok",    bg: "#010101", fg: "#fff" },
-  x:         { name: "X",         bg: "#000000", fg: "#fff" },
-  facebook:  { name: "Facebook",  bg: "#1877F2", fg: "#fff" },
-  threads:   { name: "Threads",   bg: "#000000", fg: "#fff" },
-  discord:   { name: "Discord",   bg: "#5865F2", fg: "#fff" },
-  generic:   { name: "Link",      bg: "#6B7280", fg: "#fff" },
+// Human-readable names for well-known slugs (fallback: capitalize the slug)
+const KNOWN_NAMES: Record<string, string> = {
+  instagram: "Instagram",
+  youtube: "YouTube",
+  tiktok: "TikTok",
+  x: "X",
+  facebook: "Facebook",
+  threads: "Threads",
+  discord: "Discord",
+  github: "GitHub",
+  linkedin: "LinkedIn",
+  twitch: "Twitch",
+  spotify: "Spotify",
+  behance: "Behance",
+  dribbble: "Dribbble",
+  patreon: "Patreon",
+  substack: "Substack",
+  medium: "Medium",
+  reddit: "Reddit",
+  pinterest: "Pinterest",
+  snapchat: "Snapchat",
+  line: "LINE",
+  telegram: "Telegram",
+  whatsapp: "WhatsApp",
+  vimeo: "Vimeo",
+  soundcloud: "SoundCloud",
 };
+
+export function getPlatformName(slug: string): string {
+  return KNOWN_NAMES[slug] ?? (slug.charAt(0).toUpperCase() + slug.slice(1));
+}
+
+// Legacy export kept for any existing imports
+export const PLATFORM_META: Record<string, { name: string; bg: string; fg: string }> = {};
 
 export const MAX_LINKS = 5;
 
+// Domain → Simple Icons slug overrides (where domain part ≠ slug)
+const DOMAIN_SLUG: Record<string, string> = {
+  "twitter.com": "x",
+  "t.co": "x",
+  "youtu.be": "youtube",
+  "fb.com": "facebook",
+  "fb.me": "facebook",
+  "discordapp.com": "discord",
+  "discord.gg": "discord",
+  "vm.tiktok.com": "tiktok",
+  "open.spotify.com": "spotify",
+  "music.apple.com": "applemusic",
+  "lin.ee": "line",
+  "line.me": "line",
+  "t.me": "telegram",
+  "wa.me": "whatsapp",
+};
+
+// Domains where we can extract a @username label
+const USERNAME_PATTERNS: { pattern: RegExp; slug: string; skip?: string[] }[] = [
+  { pattern: /instagram\.com\/([^/?#\s]+)/, slug: "instagram", skip: ["p", "reel", "stories", "explore", "tv"] },
+  { pattern: /youtube\.com\/@?(?:c\/|user\/|channel\/)?([^/?#\s]+)/, slug: "youtube", skip: ["watch", "playlist", "shorts", "results", "feed"] },
+  { pattern: /tiktok\.com\/@?([^/?#\s]+)/, slug: "tiktok" },
+  { pattern: /(?:twitter|x)\.com\/([^/?#\s]+)/, slug: "x", skip: ["home", "explore", "notifications", "messages", "search", "i", "settings"] },
+  { pattern: /threads\.net\/@?([^/?#\s]+)/, slug: "threads" },
+  { pattern: /facebook\.com\/([^/?#\s]+)/, slug: "facebook", skip: ["pages", "groups", "events", "watch", "gaming", "marketplace", "profile.php"] },
+  { pattern: /discord\.(?:gg|com\/invite|com\/channels)\/([^/?#\s]+)/, slug: "discord" },
+  { pattern: /github\.com\/([^/?#\s]+)/, slug: "github", skip: ["orgs", "topics", "trending", "explore"] },
+  { pattern: /linkedin\.com\/in\/([^/?#\s]+)/, slug: "linkedin" },
+  { pattern: /twitch\.tv\/([^/?#\s]+)/, slug: "twitch", skip: ["directory", "subscriptions", "videos"] },
+];
+
 export function detectPlatform(rawUrl: string): { platform: Platform; label?: string } {
   const url = rawUrl.trim().toLowerCase().replace(/\/+$/, "");
-  let m: RegExpMatchArray | null;
 
-  if ((m = url.match(/instagram\.com\/([^/?#\s]+)/))) {
-    const u = m[1]!;
-    if (!["p", "reel", "stories", "explore", "tv"].includes(u))
-      return { platform: "instagram", label: "@" + u };
-    return { platform: "instagram" };
+  // Try username extraction for known patterns first
+  for (const { pattern, slug, skip } of USERNAME_PATTERNS) {
+    const m = url.match(pattern);
+    if (m) {
+      const u = m[1]!.replace(/^@/, "");
+      const label = skip && skip.includes(u) ? undefined : "@" + u;
+      return { platform: slug, label };
+    }
   }
-  if ((m = url.match(/youtube\.com\/@?(?:c\/|user\/|channel\/)?([^/?#\s]+)/))) {
-    const u = m[1]!;
-    if (!["watch", "playlist", "shorts", "results", "feed"].includes(u))
-      return { platform: "youtube", label: "@" + u.replace(/^@/, "") };
-    return { platform: "youtube" };
+
+  // Extract slug from domain
+  try {
+    const { hostname } = new URL(normalizeUrl(rawUrl));
+    const domain = hostname.replace(/^www\./, "");
+
+    // Check override map first
+    if (DOMAIN_SLUG[domain]) return { platform: DOMAIN_SLUG[domain] };
+
+    // Derive slug from first part of domain (e.g. "spotify" from "spotify.com")
+    const slug = domain.split(".")[0]!;
+    return { platform: slug };
+  } catch {
+    return { platform: "generic" };
   }
-  if (/youtu\.be/.test(url)) return { platform: "youtube" };
-  if ((m = url.match(/tiktok\.com\/@?([^/?#\s]+)/))) {
-    return { platform: "tiktok", label: "@" + m[1]!.replace(/^@/, "") };
-  }
-  if ((m = url.match(/(?:twitter|x)\.com\/([^/?#\s]+)/))) {
-    const u = m[1]!;
-    if (!["home", "explore", "notifications", "messages", "search", "i", "settings"].includes(u))
-      return { platform: "x", label: "@" + u };
-    return { platform: "x" };
-  }
-  if ((m = url.match(/facebook\.com\/([^/?#\s]+)/))) {
-    const u = m[1]!;
-    if (!["pages", "groups", "events", "watch", "gaming", "marketplace", "profile.php"].includes(u))
-      return { platform: "facebook", label: u };
-    return { platform: "facebook" };
-  }
-  if ((m = url.match(/threads\.net\/@?([^/?#\s]+)/))) {
-    return { platform: "threads", label: "@" + m[1]!.replace(/^@/, "") };
-  }
-  if ((m = url.match(/discord\.(?:gg|com\/invite|com\/channels)\/([^/?#\s]+)/))) {
-    return { platform: "discord", label: m[1] };
-  }
-  if (/discord\.gg|discord\.com/.test(url)) return { platform: "discord" };
-  return { platform: "generic" };
 }
 
 export function normalizeUrl(url: string): string {
