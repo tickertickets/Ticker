@@ -468,7 +468,7 @@ function ReportButton({ ticketId, className }: { ticketId: string; className?: s
         className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
         title={t.report}
       >
-        {done ? <Flag className="w-3.5 h-3.5 fill-red-400 text-red-400" /> : <Flag className="w-3.5 h-3.5" />}
+        {done ? <Flag className="w-3.5 h-3.5 fill-foreground text-foreground" /> : <Flag className="w-3.5 h-3.5" />}
       </button>
       {open && !done && (
         <>

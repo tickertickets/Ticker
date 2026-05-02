@@ -53,9 +53,9 @@ export function ReportSheet({ type, targetId, onClose }: ReportSheetProps) {
   };
 
   const TYPE_CONFIG: Record<ReportType, { title: string; subtitle: string; apiPath: (id: string) => string; color: string }> = {
-    ticket:  { title: t.reportTicketTitle,   subtitle: t.reportSelectReason, apiPath: (id) => `/api/tickets/${id}/report`,    color: "text-red-500" },
-    user:    { title: t.reportUserTitle,      subtitle: t.reportSelectReason, apiPath: (id) => `/api/reports/user/${id}`,       color: "text-orange-500" },
-    comment: { title: t.reportCommentTitle,   subtitle: t.reportSelectReason, apiPath: (id) => `/api/reports/comment/${id}`,    color: "text-yellow-600" },
+    ticket:  { title: t.reportTicketTitle,   subtitle: t.reportSelectReason, apiPath: (id) => `/api/tickets/${id}/report`,    color: "text-muted-foreground" },
+    user:    { title: t.reportUserTitle,      subtitle: t.reportSelectReason, apiPath: (id) => `/api/reports/user/${id}`,       color: "text-muted-foreground" },
+    comment: { title: t.reportCommentTitle,   subtitle: t.reportSelectReason, apiPath: (id) => `/api/reports/comment/${id}`,    color: "text-muted-foreground" },
     contact: { title: t.contactTicker,        subtitle: t.contactReplyPromise, apiPath: () => `/api/reports/contact`,            color: "text-foreground" },
   };
 
@@ -98,7 +98,11 @@ export function ReportSheet({ type, targetId, onClose }: ReportSheetProps) {
 
   return createPortal(
     <>
-      <div className="fixed inset-0 z-[90] bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div
+        className="fixed inset-0 z-[90] bg-black/50 backdrop-blur-sm cursor-pointer"
+        onClick={onClose}
+        onTouchEnd={(e) => { e.preventDefault(); onClose(); }}
+      />
       <div
         className="fixed bottom-0 z-[100] bg-background rounded-t-3xl"
         style={{
@@ -116,7 +120,7 @@ export function ReportSheet({ type, targetId, onClose }: ReportSheetProps) {
 
         {/* Header */}
         <div className="flex items-center px-5 pb-4 pt-2 gap-3">
-          <div className={cn("w-8 h-8 rounded-xl flex items-center justify-center", isContact ? "bg-secondary" : "bg-red-50")}>
+          <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-secondary">
             <Flag className={cn("w-4 h-4", config.color)} />
           </div>
           <div className="flex-1">
@@ -131,8 +135,8 @@ export function ReportSheet({ type, targetId, onClose }: ReportSheetProps) {
         {/* Content */}
         {step === "done" ? (
           <div className="flex flex-col items-center gap-3 px-6 pt-4 pb-8">
-            <div className="w-16 h-16 rounded-full bg-green-50 flex items-center justify-center">
-              <CheckCircle2 className="w-8 h-8 text-green-500" />
+            <div className="w-16 h-16 rounded-full bg-secondary flex items-center justify-center">
+              <CheckCircle2 className="w-8 h-8 text-foreground" />
             </div>
             <p className="font-display font-bold text-base text-foreground text-center">
               {isContact ? t.contactSentTitle : t.reportedTitle}
@@ -203,7 +207,7 @@ export function ReportSheet({ type, targetId, onClose }: ReportSheetProps) {
                 className="w-full bg-secondary rounded-2xl px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground outline-none border border-transparent focus:border-border resize-none"
               />
             </div>
-            {error && <p className="text-xs text-red-500 font-medium">{error}</p>}
+            {error && <p className="text-xs text-destructive font-medium">{error}</p>}
             <div className="flex gap-2">
               <button
                 onClick={() => setStep("reason")}

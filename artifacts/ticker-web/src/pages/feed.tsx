@@ -209,6 +209,9 @@ export default function Feed() {
       if (el.clientHeight === 0 || el.scrollHeight === 0) return;
       const maxScroll = el.scrollHeight - el.clientHeight;
       if (maxScroll > 0 && el.scrollTop > maxScroll) el.scrollTop = maxScroll;
+      // Re-initialise Android Chrome touch tracking after layout change
+      // (no-op read+write that forces the browser to commit the scroll position)
+      void el.scrollTop;
     });
     if (el.firstElementChild) ro.observe(el.firstElementChild);
     ro.observe(el);

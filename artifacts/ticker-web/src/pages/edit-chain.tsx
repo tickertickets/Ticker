@@ -412,7 +412,7 @@ export default function EditChain() {
 
       {/* ── Header — fixed outside scroll so content below is always scrollable ── */}
       <div className="shrink-0 bg-background border-b border-border">
-        <div className="flex items-center gap-3 px-4 h-14">
+        <div className="flex items-center gap-3 px-4 pt-4 pb-3">
           <button
             onClick={goBack}
             className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center shrink-0"

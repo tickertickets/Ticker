@@ -70,36 +70,28 @@ export async function enablePushNotifications(): Promise<{ ok: boolean; reason?:
     return { ok: false, reason: "no_vapid" };
   }
 
-  // If an existing subscription was made with a *different* VAPID key
-  // (e.g. dev vs prod), re-subscribing with a new key throws
-  // InvalidStateError and the call can hang in some browsers. Force a
-  // clean re-subscribe so prod always works after a key change.
-  let sub = await reg.pushManager.getSubscription();
-  if (sub) {
-    const existingKey = sub.options?.applicationServerKey;
-    const targetBytes = urlBase64ToUint8Array(publicKey);
-    const sameKey =
-      existingKey instanceof ArrayBuffer &&
-      new Uint8Array(existingKey).length === targetBytes.length &&
-      new Uint8Array(existingKey).every((b, i) => b === targetBytes[i]);
-    if (!sameKey) {
-      try { await sub.unsubscribe(); } catch { /* ignore */ }
-      sub = null;
-    }
+  // Always force-unsubscribe and get a fresh PushSubscription so that
+  // Chrome's silent FCM token rotation (which invalidates the old endpoint
+  // on the server with a 410 Gone without ever firing pushsubscriptionchange)
+  // is healed every time the user explicitly enables push notifications.
+  // Immediately re-subscribing gives us a brand-new, valid FCM endpoint.
+  const existingSub = await reg.pushManager.getSubscription();
+  if (existingSub) {
+    try { await existingSub.unsubscribe(); } catch { /* ignore — best-effort */ }
   }
-  if (!sub) {
-    try {
-      sub = await withTimeout(
-        reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(publicKey),
-        }),
-        15000,
-        "subscribe",
-      );
-    } catch {
-      return { ok: false, reason: "subscribe_failed" };
-    }
+
+  let sub: PushSubscription;
+  try {
+    sub = await withTimeout(
+      reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey),
+      }),
+      15000,
+      "subscribe",
+    );
+  } catch {
+    return { ok: false, reason: "subscribe_failed" };
   }
 
   const json = sub.toJSON();
