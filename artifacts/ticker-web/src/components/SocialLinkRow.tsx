@@ -19,8 +19,8 @@ export function SocialLinkRow({ links, isOwner, showHidden, onManage, className,
 
   if (visible.length === 0 && !isOwner) return null;
 
-  const iconBox = size === "md" ? "w-8 h-8 rounded-xl" : "w-7 h-7 rounded-xl";
-  const iconSize = size === "md" ? 17 : 15;
+  const iconBox = size === "md" ? "w-7 h-7 rounded-md" : "w-6 h-6 rounded-md";
+  const iconSize = size === "md" ? 15 : 13;
   const labelCls = size === "md" ? "text-xs" : "text-[11px]";
 
   return (
@@ -61,8 +61,8 @@ export function SocialLinkRow({ links, isOwner, showHidden, onManage, className,
           onClick={e => { e.stopPropagation(); onManage?.(); }}
           className={cn(
             "inline-flex items-center justify-center gap-1 bg-secondary text-muted-foreground",
-            "hover:text-foreground hover:bg-secondary/80 transition-colors rounded-xl",
-            links.length === 0 ? "px-3 h-7 gap-1.5" : iconBox,
+            "hover:text-foreground hover:bg-secondary/80 transition-colors rounded-md",
+            links.length === 0 ? "px-3 h-6 gap-1.5" : iconBox,
           )}
           title={links.length < MAX_LINKS ? t.addLink : t.manageLinks}
         >

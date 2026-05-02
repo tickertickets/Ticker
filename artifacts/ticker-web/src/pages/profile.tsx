@@ -349,10 +349,10 @@ function EditProfileSheet({
     <>
       <div className="fixed inset-0 z-[200] bg-black/40 backdrop-blur-sm" onClick={onClose} />
       <div
-        className="fixed bottom-0 z-[201] bg-background rounded-t-3xl overflow-hidden"
-        style={{ left: "50%", transform: "translateX(-50%)", width: "min(100%, 430px)" }}
+        className="fixed bottom-0 z-[201] bg-background rounded-t-3xl overflow-hidden flex flex-col"
+        style={{ left: "50%", transform: "translateX(-50%)", width: "min(100%, 430px)", maxHeight: "90dvh" }}
       >
-        <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-border">
+        <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-border shrink-0">
           <button onClick={onClose} className="text-sm text-muted-foreground font-medium">{t.cancelBtn}</button>
           <h2 className="font-display font-bold text-base text-foreground">{t.editProfile}</h2>
           <button onClick={handleSave} disabled={saving || uploadingAvatar} className="text-sm font-bold text-foreground disabled:opacity-50">
@@ -360,8 +360,8 @@ function EditProfileSheet({
           </button>
         </div>
         <div
-          className="px-6 pt-6 space-y-6 overflow-y-auto"
-          style={{ maxHeight: "92vh", paddingBottom: "calc(max(env(safe-area-inset-bottom, 0px), 16px) + 24px)" }}
+          className="px-6 pt-6 space-y-6 overflow-y-auto flex-1 min-h-0"
+          style={{ paddingBottom: "calc(max(env(safe-area-inset-bottom, 0px), 16px) + 24px)" }}
         >
           {error && <p className="text-xs text-red-500 font-medium">{error}</p>}
           <div className="flex flex-col items-center gap-2">
@@ -396,15 +396,12 @@ function EditProfileSheet({
           <div className="space-y-2">
             <label className="text-[11px] font-semibold text-muted-foreground tracking-widest">{t.manageLinks}</label>
             <div className="space-y-2">
-              {bioLinksState.length === 0 && (
-                <p className="text-xs text-muted-foreground px-1">{t.noLinksYet}</p>
-              )}
               {bioLinksState.map(link => {
                 const meta = PLATFORM_META[link.platform as Platform] ?? PLATFORM_META.generic;
                 return (
                   <div key={link.id} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-2xl bg-secondary/60", link.hidden && "opacity-60")}>
-                    <span className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 bg-foreground text-background">
-                      <SocialLinkPlatformIcon platform={link.platform as Platform} size={16} />
+                    <span className="w-7 h-7 rounded-md flex items-center justify-center shrink-0 bg-foreground text-background">
+                      <SocialLinkPlatformIcon platform={link.platform as Platform} size={14} />
                     </span>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-semibold text-foreground truncate">{link.label ?? meta.name}</p>
@@ -426,8 +423,8 @@ function EditProfileSheet({
               {bioLinksState.length < MAX_LINKS && (
                 <div className="flex gap-2 items-center">
                   {linkDetected && (
-                    <span className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-foreground text-background">
-                      <SocialLinkPlatformIcon platform={linkDetected.platform as Platform} size={16} />
+                    <span className="w-8 h-8 rounded-md flex items-center justify-center shrink-0 bg-foreground text-background">
+                      <SocialLinkPlatformIcon platform={linkDetected.platform as Platform} size={14} />
                     </span>
                   )}
                   <input
@@ -1288,7 +1285,7 @@ export default function Profile() {
           <SocialLinkRow
             links={bioLinks}
             showHidden={isMyProfile}
-            className="mt-2"
+            className="mt-2 !justify-start"
           />
         )}
 
