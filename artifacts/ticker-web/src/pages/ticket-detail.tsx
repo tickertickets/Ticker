@@ -130,12 +130,13 @@ export default function TicketDetail() {
     setTagRating(null);
   }, [ticketId]);
 
-  // Sync caption links from loaded ticket
+  // Sync caption links whenever ticket data changes (including after feed-side saves)
   useEffect(() => {
     if (!ticket) return;
     const td = ticket as unknown as Record<string, unknown>;
     setCaptionLinks((td["captionLinks"] as SocialLink[] | undefined) ?? []);
-  }, [(ticket as any)?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [(ticket as any)?.id, JSON.stringify((ticket as any)?.captionLinks ?? null)]);
 
   const tx = ticket as unknown as Record<string, unknown>;
   const effectiveHasReacted   = hasReacted       !== null ? hasReacted       : (tx?.["hasReacted"]       as boolean               ?? ticket?.isLiked   ?? false);
@@ -305,7 +306,11 @@ export default function TicketDetail() {
   if (ticketId === "new") return null;
 
   if (!ticket) {
-    if (ticketLoading) return null;
+    if (ticketLoading) return (
+      <div className="h-full flex items-center justify-center bg-background">
+        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+      </div>
+    );
     return (
       <div className="flex flex-col items-center justify-center py-32 gap-3 px-6 text-center">
         <p className="font-display font-bold text-foreground">{t.cardNotFound}</p>
@@ -488,7 +493,12 @@ export default function TicketDetail() {
             links={captionLinks}
             entityType="caption"
             entityId={ticketId}
-            onSaved={setCaptionLinks}
+            onSaved={(newLinks) => {
+              setCaptionLinks(newLinks);
+              queryClient.setQueryData([`/api/tickets/${ticketId}`], (old: any) =>
+                old ? { ...old, captionLinks: newLinks } : old
+              );
+            }}
           />
         )}
 

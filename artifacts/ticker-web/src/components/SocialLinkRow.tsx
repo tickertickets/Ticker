@@ -34,7 +34,7 @@ export function SocialLinkRow({ links, isOwner, showHidden, onManage, className,
             rel="noopener noreferrer"
             onClick={e => e.stopPropagation()}
             className={cn(
-              "inline-flex items-center gap-1.5 transition-opacity active:scale-95 select-none",
+              "inline-flex items-center gap-1.5 transition-opacity active:scale-95 select-none text-foreground",
               isHidden && "opacity-40",
             )}
             title={link.label ? `${link.label}` : link.platform}

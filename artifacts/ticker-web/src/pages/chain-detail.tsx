@@ -142,11 +142,12 @@ export default function ChainDetail() {
   const addSearchResults = ((addSearchData?.movies ?? []) as Array<{ imdbId: string; title: string; year: string | null; posterUrl: string | null }>);
   const trendingSuggestions = ((trendingData?.movies ?? []) as Array<{ imdbId: string; title: string; year: string | null; posterUrl: string | null }>).slice(0, 12);
 
-  // Sync description links from chain
+  // Sync description links whenever chain data changes (including after feed-side saves)
   useEffect(() => {
     if (!chain) return;
     setDescLinks(((chain as any).descriptionLinks as SocialLink[] | undefined) ?? []);
-  }, [chain?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chain?.id, JSON.stringify((chain as any)?.descriptionLinks ?? null)]);
 
   const addMovieMutation = useMutation({
     mutationFn: async ({ movie, note }: { movie: { imdbId: string; title: string; year: string | null; posterUrl: string | null }; note: string }) => {
@@ -330,7 +331,11 @@ export default function ChainDetail() {
   const foundMovies = (chain?.movies ?? []).filter(m => foundSet.has(m.id));
 
   if (!chain) {
-    if (isLoading) return null;
+    if (isLoading) return (
+      <div className="h-full flex items-center justify-center bg-background">
+        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+      </div>
+    );
     return (
       <div className="bg-background flex flex-col items-center justify-center py-32 gap-3">
         <p className="text-muted-foreground">ไม่พบ Chain นี้</p>
@@ -406,7 +411,12 @@ export default function ChainDetail() {
             links={descLinks}
             entityType="chain"
             entityId={chainId}
-            onSaved={setDescLinks}
+            onSaved={(newLinks) => {
+              setDescLinks(newLinks);
+              qc.setQueryData(["/api/chains", chainId], (old: any) =>
+                old ? { ...old, descriptionLinks: newLinks } : old
+              );
+            }}
           />
         )}
 

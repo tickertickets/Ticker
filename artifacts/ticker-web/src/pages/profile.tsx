@@ -1202,7 +1202,11 @@ export default function Profile() {
   };
 
   if (!profile) {
-    if (profileLoading) return null;
+    if (profileLoading) return (
+      <div className="h-full flex items-center justify-center bg-background">
+        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+      </div>
+    );
     return (
       <div className="h-full flex flex-col items-center justify-center py-32 gap-3 px-6 text-center">
         <p className="font-display font-bold text-lg text-foreground">User not found</p>
@@ -1277,7 +1281,7 @@ export default function Profile() {
           <SocialLinkRow
             links={bioLinks}
             showHidden={isMyProfile}
-            className="mt-2 !justify-start"
+            className="mt-2 justify-start"
           />
         )}
 

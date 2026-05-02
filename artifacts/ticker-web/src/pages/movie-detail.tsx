@@ -5,7 +5,7 @@ import { BadgeIcon } from "@/components/BadgeIcon";
 import { MovieBadges, BADGE_DESC_TH, BADGE_DESC_EN } from "@/components/MovieBadges";
 import { computeCardTier, computeEffectTags, TIER_VISUAL } from "@/lib/ranks";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { ChevronLeft, Film, Star, Users, Bookmark, ChevronDown, ChevronUp, Tv, Flag } from "lucide-react";
+import { ChevronLeft, Film, Star, Users, Bookmark, ChevronDown, ChevronUp, Tv, Flag, Loader2 } from "lucide-react";
 import { useState, useRef, useEffect, useMemo } from "react";
 import { cn, fmtCount } from "@/lib/utils";
 import { scrollStore } from "@/lib/scroll-store";
@@ -435,7 +435,11 @@ export default function MovieDetail() {
   }
 
   if (!movie) {
-    if (movieLoading) return null;
+    if (movieLoading) return (
+      <div className="h-full flex items-center justify-center bg-background">
+        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+      </div>
+    );
     return (
       <div className="bg-background flex flex-col items-center justify-center py-32 gap-4 px-6 text-center">
         <Film className="w-10 h-10 text-muted-foreground" />

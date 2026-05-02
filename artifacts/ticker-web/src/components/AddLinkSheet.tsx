@@ -6,7 +6,7 @@ import { useLang } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { type SocialLink, detectPlatform, normalizeUrl, isValidUrl, getPlatformName, MAX_LINKS } from "@/lib/socialLinks";
 import { SocialLinkPlatformIcon } from "./SocialLinkPlatformIcon";
-import { Trash2, EyeOff, Eye, Plus, Loader2 } from "lucide-react";
+import { Trash2, EyeOff, Eye, Plus, Loader2, Globe } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type EntityType = "caption" | "chain" | "bio";
@@ -139,11 +139,12 @@ export function AddLinkSheet({ open, onClose, links: initialLinks, entityType, e
         </div>
 
         {links.length < MAX_LINKS && (
-          <div className="shrink-0 pt-2 border-t border-border">
+          <div className="shrink-0 pt-2">
             <div className="flex gap-2 items-center">
-              {detectedPlatform && (
-                <SocialLinkPlatformIcon platform={detectedPlatform.platform} size={18} className="text-foreground shrink-0" />
-              )}
+              {detectedPlatform
+                ? <SocialLinkPlatformIcon platform={detectedPlatform.platform} size={18} className="text-foreground shrink-0" />
+                : <Globe className="w-[18px] h-[18px] shrink-0 text-muted-foreground" />
+              }
               <Input
                 value={urlInput}
                 onChange={e => setUrlInput(e.target.value)}
