@@ -202,7 +202,22 @@ async function ensureSupporterRequestsTable(): Promise<void> {
   }
 }
 
-export { ensureSessionTable, ensureTicketTagRatingsTable, ensureBadgeXpLogTable, ensureChainMoviesColumns, ensureUserBadgeTable, ensureSupporterRequestsTable, ensureSupporterApprovedColumn };
+async function ensureSocialLinksColumns(): Promise<void> {
+  try {
+    await pool.query(`
+      ALTER TABLE "tickets"
+        ADD COLUMN IF NOT EXISTS "caption_links" jsonb NOT NULL DEFAULT '[]'::jsonb;
+      ALTER TABLE "chains"
+        ADD COLUMN IF NOT EXISTS "description_links" jsonb NOT NULL DEFAULT '[]'::jsonb;
+      ALTER TABLE "users"
+        ADD COLUMN IF NOT EXISTS "bio_links" jsonb NOT NULL DEFAULT '[]'::jsonb;
+    `);
+  } catch (err) {
+    logger.warn({ err }, "social links columns migration warning (non-fatal)");
+  }
+}
+
+export { ensureSessionTable, ensureTicketTagRatingsTable, ensureBadgeXpLogTable, ensureChainMoviesColumns, ensureUserBadgeTable, ensureSupporterRequestsTable, ensureSupporterApprovedColumn, ensureSocialLinksColumns };
 
 const app: Express = express();
 

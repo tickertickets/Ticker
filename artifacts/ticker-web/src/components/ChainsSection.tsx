@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { SocialLinkRow } from "./SocialLinkRow";
+import { AddLinkSheet } from "./AddLinkSheet";
+import type { SocialLink } from "@/lib/socialLinks";
 import { createPortal } from "react-dom";
 import { useKeyboardHeight } from "@/hooks/use-keyboard-height";
 import { useQuery } from "@tanstack/react-query";
@@ -6,7 +9,7 @@ import { useLang } from "@/lib/i18n";
 import { Link, useLocation } from "wouter";
 import { Loader2, Link2, Heart, MessagesSquare, Share2, X, Trash2, Users, Search, Bookmark, Flag, Send, MessageCircle, Check } from "lucide-react";
 import { useModalBackButton } from "@/hooks/use-modal-back-button";
-import { cn, fmtCount, renderWithLinks } from "@/lib/utils";
+import { cn, fmtCount } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -679,7 +682,7 @@ function ChainDescBlock({ text, chainId, align }: { text: string; chainId: strin
         )}
         style={{ overflowWrap: "break-word", wordBreak: "break-word" }}
       >
-        {renderWithLinks(text, true)}
+        {text}
       </p>
       {isLong && (
         <button
@@ -770,12 +773,15 @@ export function ChainCard({ chain }: { chain: ChainItem }) {
   const [shareOpen, setShareOpen] = useState(false);
   const [commentCount, setCommentCount] = useState(chain.commentCount ?? 0);
   const [deleting, setDeleting] = useState(false);
+  const [descLinks, setDescLinks] = useState<SocialLink[]>(() => ((chain as any).descriptionLinks ?? []) as SocialLink[]);
+  const [linkSheetOpen, setLinkSheetOpen] = useState(false);
 
   // Sync local state when cache updates from another tab/component
   useEffect(() => { setLiked(chain.isLiked ?? false); }, [chain.isLiked]);
   useEffect(() => { setLikeCount(chain.likeCount ?? 0); }, [chain.likeCount]);
   useEffect(() => { setBookmarked(chain.isBookmarked ?? false); }, [chain.isBookmarked]);
   useEffect(() => { setCommentCount(chain.commentCount ?? 0); }, [chain.commentCount]);
+  useEffect(() => { setDescLinks(((chain as any).descriptionLinks ?? []) as SocialLink[]); }, [(chain as any).descriptionLinks]);
 
   const isOwner = user?.id === chain.user?.id;
 
@@ -964,6 +970,24 @@ export function ChainCard({ chain }: { chain: ChainItem }) {
             <div className="w-full mt-1">
               <ChainDescBlock text={chain.description} chainId={chain.id} align={chain.descriptionAlign} />
             </div>
+          )}
+          {(descLinks.length > 0 || isOwner) && (
+            <SocialLinkRow
+              links={descLinks}
+              isOwner={isOwner}
+              onManage={() => setLinkSheetOpen(true)}
+              className="mt-2 justify-center"
+            />
+          )}
+          {isOwner && linkSheetOpen && (
+            <AddLinkSheet
+              open={linkSheetOpen}
+              onClose={() => setLinkSheetOpen(false)}
+              links={descLinks}
+              entityType="chain"
+              entityId={chain.id}
+              onSaved={setDescLinks}
+            />
           )}
           {tags.length > 0 && (
             <div className="flex flex-wrap justify-center gap-1.5 mt-2">

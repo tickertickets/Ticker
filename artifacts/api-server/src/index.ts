@@ -1,5 +1,5 @@
 import { createServer } from "http";
-import app, { ensureSessionTable, ensureTicketTagRatingsTable, ensureBadgeXpLogTable, ensureChainMoviesColumns, ensureUserBadgeTable, ensureSupporterRequestsTable, ensureSupporterApprovedColumn } from "./app";
+import app, { ensureSessionTable, ensureTicketTagRatingsTable, ensureBadgeXpLogTable, ensureChainMoviesColumns, ensureUserBadgeTable, ensureSupporterRequestsTable, ensureSupporterApprovedColumn, ensureSocialLinksColumns } from "./app";
 import { initSocket } from "./lib/socket";
 import { logger } from "./lib/logger";
 import { scheduleCleanup } from "./jobs/cleanChatImages";
@@ -36,6 +36,7 @@ await ensureChainMoviesColumns();
 await ensureUserBadgeTable();
 await ensureSupporterRequestsTable();
 await ensureSupporterApprovedColumn();
+await ensureSocialLinksColumns();
 
 scheduleCleanup();
 scheduleWarmMovieCache();

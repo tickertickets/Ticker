@@ -1,4 +1,7 @@
 import { useState, useRef, useCallback, useEffect, useLayoutEffect } from "react";
+import { SocialLinkRow } from "./SocialLinkRow";
+import { AddLinkSheet } from "./AddLinkSheet";
+import type { SocialLink } from "@/lib/socialLinks";
 import { useLang, displayYear, displayDate } from "@/lib/i18n";
 import { ExpandableText } from "./ExpandableText";
 import { createPortal } from "react-dom";
@@ -1040,6 +1043,12 @@ function FeedCard({ ticket, onLongPress }: { ticket: Ticket; onLongPress?: (t: T
   };
 
   const isOwner   = user?.id === ticket.userId;
+  const [captionLinks, setCaptionLinks] = useState<SocialLink[]>(() => (((ticket as unknown) as Record<string, unknown>)["captionLinks"] as SocialLink[] | undefined) ?? []);
+  const [linkSheetOpen, setLinkSheetOpen] = useState(false);
+  useEffect(() => {
+    setCaptionLinks((((ticket as unknown) as Record<string, unknown>)["captionLinks"] as SocialLink[] | undefined) ?? []);
+  }, [(ticket as any).captionLinks]);
+
   const avatarUrl  = ticket.user?.avatarUrl;
   const specialColorCfg = getSpecialColorCfg(((ticket as unknown) as Record<string, unknown>)["specialColor"] as string | null);
   const partySeat = ((ticket as unknown) as Record<string, unknown>)["partySeatNumber"] as number | null | undefined;
@@ -1425,6 +1434,24 @@ function FeedCard({ ticket, onLongPress }: { ticket: Ticket; onLongPress?: (t: T
                   className="text-sm text-foreground/80 leading-relaxed"
                 />
               </div>
+            )}
+            {(captionLinks.length > 0 || isOwner) && (
+              <SocialLinkRow
+                links={captionLinks}
+                isOwner={isOwner}
+                onManage={() => setLinkSheetOpen(true)}
+                className="px-4 mt-2"
+              />
+            )}
+            {isOwner && linkSheetOpen && (
+              <AddLinkSheet
+                open={linkSheetOpen}
+                onClose={() => setLinkSheetOpen(false)}
+                links={captionLinks}
+                entityType="caption"
+                entityId={ticket.id}
+                onSaved={setCaptionLinks}
+              />
             )}
           </>
         );

@@ -26,11 +26,14 @@ import {
   Camera, MessageCircle, Lock, Unlock, Flag, MoreHorizontal, ChevronLeft, Bookmark,
   Heart, Send, Pencil, Trash2, Ticket as TicketIcon, AtSign, Check, Search,
 } from "lucide-react";
-import { cn, fmtCount, renderWithLinks } from "@/lib/utils";
+import { cn, fmtCount } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { useLang } from "@/lib/i18n";
 import type { Ticket } from "@workspace/api-client-react";
 import { ReportSheet } from "@/components/ReportSheet";
+import { SocialLinkRow } from "@/components/SocialLinkRow";
+import { AddLinkSheet } from "@/components/AddLinkSheet";
+import type { SocialLink } from "@/lib/socialLinks";
 import { VerifiedBadge, isVerified } from "@/components/VerifiedBadge";
 import { BadgeIcon } from "@/components/BadgeIcon";
 import { useToast } from "@/hooks/use-toast";
@@ -1063,6 +1066,14 @@ export default function Profile() {
 
   const { toast } = useToast();
 
+  const isMyProfile = !!me && me.id === profileUserId;
+  const [bioLinks, setBioLinks] = useState<SocialLink[]>(() => ((profile as any).bioLinks ?? []) as SocialLink[]);
+  const [bioLinkSheetOpen, setBioLinkSheetOpen] = useState(false);
+
+  useEffect(() => {
+    setBioLinks(((profile as any).bioLinks ?? []) as SocialLink[]);
+  }, [(profile as any).bioLinks]);
+
   const handleFollow = async () => {
     if (!profile) return;
     if (!me) { toast({ title: t.signInToLike, duration: 1500 }); return; }
@@ -1186,7 +1197,28 @@ export default function Profile() {
           </div>
         </div>
 
-        {profile.bio && <p className="text-sm text-muted-foreground mb-3 leading-relaxed whitespace-pre-wrap break-words">{renderWithLinks(profile.bio)}</p>}
+        {profile.bio && <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap break-words">{profile.bio}</p>}
+        {(bioLinks.length > 0 || isMyProfile) && (
+          <SocialLinkRow
+            links={bioLinks}
+            isOwner={isMyProfile}
+            onManage={() => setBioLinkSheetOpen(true)}
+            className="mt-2"
+          />
+        )}
+        {isMyProfile && bioLinkSheetOpen && profileUserId && (
+          <AddLinkSheet
+            open={bioLinkSheetOpen}
+            onClose={() => setBioLinkSheetOpen(false)}
+            links={bioLinks}
+            entityType="bio"
+            entityId={profileUserId}
+            onSaved={saved => {
+              setBioLinks(saved);
+              queryClient.setQueryData([`/api/users/${username}`], (old: any) => old ? { ...old, bioLinks: saved } : old);
+            }}
+          />
+        )}
 
         <div className="grid grid-cols-4 divide-x divide-border py-3 border-t border-border">
           <div className="flex flex-col items-center gap-0.5">

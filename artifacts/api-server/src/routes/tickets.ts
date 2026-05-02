@@ -981,6 +981,34 @@ router.patch(
   }),
 );
 
+// ── PATCH /tickets/:ticketId/caption-links — manage social link icons on caption ─
+router.patch(
+  "/:ticketId/caption-links",
+  asyncHandler(async (req, res) => {
+    const currentUserId = req.session?.userId;
+    if (!currentUserId) throw new UnauthorizedError();
+    const ticketId = String(req.params["ticketId"]);
+    const [ticket] = await db
+      .select({ id: ticketsTable.id, userId: ticketsTable.userId })
+      .from(ticketsTable)
+      .where(and(eq(ticketsTable.id, ticketId), isNull(ticketsTable.deletedAt)))
+      .limit(1);
+    if (!ticket) throw new NotFoundError("Ticket");
+    if (ticket.userId !== currentUserId) throw new ForbiddenError();
+    const { links } = req.body;
+    if (!Array.isArray(links) || links.length > 5)
+      throw new ValidationError("links must be an array of max 5 items");
+    const sanitized = (links as Record<string, unknown>[]).map(l => ({
+      id: String(l["id"] ?? "").slice(0, 50),
+      url: String(l["url"] ?? "").slice(0, 2000),
+      platform: String(l["platform"] ?? "generic").slice(0, 20),
+      label: l["label"] ? String(l["label"]).slice(0, 100) : undefined,
+    }));
+    await db.update(ticketsTable).set({ captionLinks: sanitized }).where(eq(ticketsTable.id, ticketId));
+    res.json({ success: true, links: sanitized });
+  }),
+);
+
 // ── PATCH /tickets/:ticketId/tag-rating — tagged co-watcher submits their rating ─
 router.patch(
   "/:ticketId/tag-rating",

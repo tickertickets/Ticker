@@ -22,6 +22,7 @@ export const usersTable = pgTable("users", {
   // tiles. Soft-deleted tickets are kept in this list as placeholders so a
   // restored post returns to its slot.
   pinnedTicketIds: jsonb("pinned_ticket_ids").$type<string[]>().default([]),
+  bioLinks: jsonb("bio_links").$type<Array<{ id: string; url: string; platform: string; label?: string; hidden?: boolean }>>().default([]),
   preferredLang: text("preferred_lang").notNull().default("en"),
   timezone: text("timezone"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

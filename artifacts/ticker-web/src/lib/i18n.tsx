@@ -471,6 +471,16 @@ export interface Strings {
   errSaveFailed: string;
   errUploadAvatar: string;
   errGenericRetry: string;
+  // ── Social links ──────────────────────────────────────────────────
+  manageLinks: string;
+  addLink: string;
+  addLinkPlaceholder: string;
+  linkRemoved: string;
+  showLink: string;
+  hideLink: string;
+  maxLinksReached: string;
+  invalidUrl: string;
+  noLinksYet: string;
   // ── Profile — chain subtabs ──────────────────────────────────────
   chainSubTabPlayed: string;
   chainSubTabCreated: string;
@@ -1013,6 +1023,15 @@ const TH: Strings = {
   errSaveFailed: "บันทึกไม่สำเร็จ กรุณาลองใหม่",
   errUploadAvatar: "อัปโหลดรูปไม่สำเร็จ กรุณาลองใหม่",
   errGenericRetry: "เกิดข้อผิดพลาด กรุณาลองใหม่",
+  manageLinks: "จัดการลิงก์",
+  addLink: "เพิ่มลิงก์",
+  addLinkPlaceholder: "วาง URL ที่นี่...",
+  linkRemoved: "ลบลิงก์แล้ว",
+  showLink: "แสดง",
+  hideLink: "ซ่อน",
+  maxLinksReached: "เพิ่มได้สูงสุด 5 ลิงก์",
+  invalidUrl: "URL ไม่ถูกต้อง",
+  noLinksYet: "ยังไม่มีลิงก์",
   // Profile — chain subtabs
   chainSubTabPlayed: "เล่นแล้ว",
   chainSubTabCreated: "สร้างไว้",
@@ -1555,6 +1574,15 @@ const EN: Strings = {
   errSaveFailed: "Failed to save, please try again",
   errUploadAvatar: "Failed to upload image, please try again",
   errGenericRetry: "Something went wrong, please try again",
+  manageLinks: "Manage Links",
+  addLink: "Add Link",
+  addLinkPlaceholder: "Paste URL here...",
+  linkRemoved: "Link removed",
+  showLink: "Show",
+  hideLink: "Hide",
+  maxLinksReached: "Maximum 5 links",
+  invalidUrl: "Invalid URL",
+  noLinksYet: "No links yet",
   // Profile — chain subtabs
   chainSubTabPlayed: "Played",
   chainSubTabCreated: "Created",

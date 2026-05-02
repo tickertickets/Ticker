@@ -246,6 +246,24 @@ router.put("/me/profile", async (req, res) => {
   res.json(profile);
 });
 
+router.patch("/me/bio-links", async (req, res) => {
+  const userId = req.session?.userId;
+  if (!userId) { res.status(401).json({ error: "unauthorized" }); return; }
+  const { links } = req.body;
+  if (!Array.isArray(links) || links.length > 5) {
+    res.status(400).json({ error: "bad_request", message: "links must be array max 5" }); return;
+  }
+  const sanitized = (links as Record<string, unknown>[]).map(l => ({
+    id: String(l["id"] ?? "").slice(0, 50),
+    url: String(l["url"] ?? "").slice(0, 2000),
+    platform: String(l["platform"] ?? "generic").slice(0, 20),
+    label: l["label"] ? String(l["label"]).slice(0, 100) : undefined,
+    hidden: !!l["hidden"],
+  }));
+  await db.update(usersTable).set({ bioLinks: sanitized, updatedAt: new Date() }).where(eq(usersTable.id, userId));
+  res.json({ success: true, links: sanitized });
+});
+
 router.patch("/me/username", async (req, res) => {
   const userId = req.session?.userId;
   if (!userId) {
@@ -520,6 +538,7 @@ async function buildUserProfile(user: typeof usersTable.$inferSelect, currentUse
     username: user.username!,
     displayName: user.displayName,
     bio: user.bio,
+    bioLinks: (user.bioLinks ?? []).filter((l: { hidden?: boolean }) => currentUserId === user.id || !l.hidden),
     avatarUrl: user.avatarUrl,
     isPrivate: user.isPrivate,
     ticketCount: Number(ticketCountResult?.count ?? 0),

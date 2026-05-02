@@ -1,4 +1,4 @@
-import { pgTable, text, boolean, timestamp, integer, primaryKey } from "drizzle-orm/pg-core";
+import { pgTable, text, boolean, timestamp, integer, primaryKey, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -17,6 +17,7 @@ export const chainsTable = pgTable("chains", {
   hideLikes: boolean("hide_likes").notNull().default(false),
   hideChainCount: boolean("hide_chain_count").notNull().default(false),
   chainCount: integer("chain_count").notNull().default(0),
+  descriptionLinks: jsonb("description_links").$type<Array<{ id: string; url: string; platform: string; label?: string }>>().default([]),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),

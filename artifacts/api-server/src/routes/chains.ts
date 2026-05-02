@@ -735,6 +735,29 @@ router.patch("/:chainId", async (req, res) => {
   res.json(result);
 });
 
+// ── PATCH /chains/:chainId/description-links — manage social link icons ─────────
+router.patch("/:chainId/description-links", async (req, res) => {
+  const currentUserId = req.session?.userId;
+  if (!currentUserId) { res.status(401).json({ error: "unauthorized" }); return; }
+  const { chainId } = req.params;
+  const [chain] = await db.select({ id: chainsTable.id, userId: chainsTable.userId })
+    .from(chainsTable).where(and(eq(chainsTable.id, chainId), isNull(chainsTable.deletedAt))).limit(1);
+  if (!chain) { res.status(404).json({ error: "not_found" }); return; }
+  if (chain.userId !== currentUserId) { res.status(403).json({ error: "forbidden" }); return; }
+  const { links } = req.body;
+  if (!Array.isArray(links) || links.length > 5) {
+    res.status(400).json({ error: "bad_request", message: "links must be array max 5" }); return;
+  }
+  const sanitized = (links as Record<string, unknown>[]).map(l => ({
+    id: String(l["id"] ?? "").slice(0, 50),
+    url: String(l["url"] ?? "").slice(0, 2000),
+    platform: String(l["platform"] ?? "generic").slice(0, 20),
+    label: l["label"] ? String(l["label"]).slice(0, 100) : undefined,
+  }));
+  await db.update(chainsTable).set({ descriptionLinks: sanitized }).where(eq(chainsTable.id, chainId));
+  res.json({ success: true, links: sanitized });
+});
+
 // ── PATCH /chains/:chainId/privacy — toggle isPrivate ─────────────────────────
 router.patch("/:chainId/privacy", async (req, res) => {
   const currentUserId = req.session?.userId;

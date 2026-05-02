@@ -68,6 +68,7 @@ export const ticketsTable = pgTable("tickets", {
   episodeLabel: text("episode_label"),
   displayOrder: integer("display_order"),
   cardData: jsonb("card_data").$type<Record<string, unknown>>(),
+  captionLinks: jsonb("caption_links").$type<Array<{ id: string; url: string; platform: string; label?: string }>>().default([]),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
