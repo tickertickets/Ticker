@@ -6,7 +6,7 @@ import { useLang } from "@/lib/i18n";
 import { Link, useLocation } from "wouter";
 import { Loader2, Link2, Heart, MessagesSquare, Share2, X, Trash2, Users, Search, Bookmark, Flag, Send, MessageCircle, Check } from "lucide-react";
 import { useModalBackButton } from "@/hooks/use-modal-back-button";
-import { cn, fmtCount } from "@/lib/utils";
+import { cn, fmtCount, renderWithLinks } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -679,7 +679,7 @@ function ChainDescBlock({ text, chainId, align }: { text: string; chainId: strin
         )}
         style={{ overflowWrap: "break-word", wordBreak: "break-word" }}
       >
-        {text}
+        {renderWithLinks(text, true)}
       </p>
       {isLong && (
         <button

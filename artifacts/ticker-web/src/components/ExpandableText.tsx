@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { cn } from "@/lib/utils";
+import { cn, renderWithLinks } from "@/lib/utils";
 import { useLang } from "@/lib/i18n";
 
 type Props = {
@@ -63,7 +63,7 @@ export function ExpandableText({
         className={cn("whitespace-pre-wrap break-words", className)}
         style={{ overflowWrap: "break-word", wordBreak: "break-word", ...clampStyle }}
       >
-        {text}
+        {renderWithLinks(text, true)}
       </p>
       {overflows && (
         <button

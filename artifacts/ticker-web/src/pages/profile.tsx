@@ -26,7 +26,7 @@ import {
   Camera, MessageCircle, Lock, Unlock, Flag, MoreHorizontal, ChevronLeft, Bookmark,
   Heart, Send, Pencil, Trash2, Ticket as TicketIcon, AtSign, Check, Search,
 } from "lucide-react";
-import { cn, fmtCount } from "@/lib/utils";
+import { cn, fmtCount, renderWithLinks } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { useLang } from "@/lib/i18n";
 import type { Ticket } from "@workspace/api-client-react";
@@ -1186,7 +1186,7 @@ export default function Profile() {
           </div>
         </div>
 
-        {profile.bio && <p className="text-sm text-muted-foreground mb-3 leading-relaxed whitespace-pre-wrap">{profile.bio}</p>}
+        {profile.bio && <p className="text-sm text-muted-foreground mb-3 leading-relaxed whitespace-pre-wrap break-words">{renderWithLinks(profile.bio)}</p>}
 
         <div className="grid grid-cols-4 divide-x divide-border py-3 border-t border-border">
           <div className="flex flex-col items-center gap-0.5">
