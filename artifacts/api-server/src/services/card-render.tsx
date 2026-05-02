@@ -94,8 +94,8 @@ export async function loadCardFonts(): Promise<SatoriFont[]> {
   // We register the same data ALSO under style: "italic" so Satori has a
   // glyph source when fontStyle: "italic" is requested on Thai text — without
   // this, italic Thai falls through to DM Sans (which has no Thai glyphs)
-  // and the characters render as tofu / get dropped. Synthetic slanting is
-  // applied at the call-site via `transform: skewX(...)` on the wrapper.
+  // and the characters render as tofu / get dropped. Satori does not support
+  // CSS transform so visual slanting is achieved through fontStyle only.
   cachedFonts = [
     { name: "DM Sans", data: dmSans400, weight: 400, style: "normal" },
     { name: "DM Sans", data: dmSans400Italic, weight: 400, style: "italic" },
@@ -905,8 +905,7 @@ function CardBack({
                 whiteSpace: "pre-wrap",
                 wordBreak: "break-word",
                 overflowWrap: "break-word",
-                transform: "skewX(-8deg)",
-                transformOrigin: "center center",
+
               }}
             >
               {`"${ticket.memoryNote}"`}
