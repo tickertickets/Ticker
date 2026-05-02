@@ -338,8 +338,10 @@ router.get("/", async (req, res) => {
         return b.chain.createdAt.getTime() - a.chain.createdAt.getTime();
       });
 
-      // Diversity cap: max DIVERSITY_CAP chains per user per page
-      const capped = applyDiversityCap(scored, (s) => s.chain.userId, DIVERSITY_CAP, limit + 1);
+      // Diversity cap: max DIVERSITY_CAP chains per user per page.
+      // Relaxed for small pools (< 1 full page) so all content is visible.
+      const effectiveChainCap = scored.length <= limit ? scored.length : DIVERSITY_CAP;
+      const capped = applyDiversityCap(scored, (s) => s.chain.userId, effectiveChainCap, limit + 1);
       chains = capped.map(s => s.chain);
     } else {
       chains = [];

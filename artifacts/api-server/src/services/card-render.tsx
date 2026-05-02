@@ -655,8 +655,6 @@ function PosterFront({
             height: imgSize,
             overflow: "hidden",
             display: "flex",
-            // ~0.5px outline approximation via background border
-            boxShadow: "inset 0 0 0 1.5px rgba(0,0,0,0.2)",
           }}
         >
           {imageDataUrl ? (
@@ -823,16 +821,13 @@ function CardBack({
         flexDirection: "column",
         background: isPoster ? POSTER_BG : "#ffffff",
         overflow: "hidden",
-        // Match the outer cardWrap radius so the inset boxShadow border line
-        // follows the rounded corners. Without this, the inset shadow draws
-        // a sharp rectangular border that the outer rounded clip slices off
-        // at the corners — producing the "ขอบที่ตัดไม่หมด" / faded-edge effect
-        // visible in saved PNGs. Poster theme is square (radius 0) so its
-        // 1.5px inset border already aligns naturally.
+        // Border follows the card's rounded corners (borderRadius clips it cleanly).
+        // Using real border properties instead of inset box-shadow because Satori
+        // does not support inset shadows — it would throw a 500 error.
         borderRadius: isPoster ? 0 : 12 * SCALE,
-        ...(isPoster
-          ? { boxShadow: "inset 0 0 0 1.5px rgba(0,0,0,0.18)" }
-          : { boxShadow: "inset 0 0 0 3px #e4e4e7" }),
+        borderWidth: isPoster ? 2 : 3,
+        borderStyle: "solid",
+        borderColor: isPoster ? "rgba(0,0,0,0.18)" : "#e4e4e7",
       }}
     >
       {/* party seat badge */}

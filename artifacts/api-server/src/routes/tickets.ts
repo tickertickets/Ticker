@@ -252,7 +252,8 @@ router.get(
 
       const merged = [...scoredA, ...scoredB];
       merged.sort((a, b) => b.score - a.score);
-      const capped = applyDiversityCap(merged, (s) => s.t.userId, DIVERSITY_CAP, limit + 1);
+      const effectiveCapHome = merged.length <= limit ? merged.length : DIVERSITY_CAP;
+      const capped = applyDiversityCap(merged, (s) => s.t.userId, effectiveCapHome, limit + 1);
       tickets = capped.map((s) => s.t);
 
     } else if (feed === "following" && currentUserId) {
@@ -295,7 +296,8 @@ router.get(
         const freshBoostFn = makeFreshBoost(followedSet, currentUserId);
         const scored = await bulkScore(filtered, undefined, freshBoostFn);
         scored.sort((a, b) => b.score - a.score);
-        const capped = applyDiversityCap(scored, (s) => s.t.userId, DIVERSITY_CAP, limit + 1);
+        const effectiveCapFollowing = scored.length <= limit ? scored.length : DIVERSITY_CAP;
+        const capped = applyDiversityCap(scored, (s) => s.t.userId, effectiveCapFollowing, limit + 1);
         tickets = capped.map((s) => s.t);
       }
 
@@ -337,7 +339,8 @@ router.get(
       const freshBoostFn = makeFreshBoost(null, currentUserId);
       const scored = await bulkScore(discRaw, undefined, freshBoostFn);
       scored.sort((a, b) => b.score - a.score);
-      const capped = applyDiversityCap(scored, (s) => s.t.userId, DIVERSITY_CAP, limit + 1);
+      const effectiveCapDisc = scored.length <= limit ? scored.length : DIVERSITY_CAP;
+      const capped = applyDiversityCap(scored, (s) => s.t.userId, effectiveCapDisc, limit + 1);
       tickets = capped.map((s) => s.t);
     }
 
