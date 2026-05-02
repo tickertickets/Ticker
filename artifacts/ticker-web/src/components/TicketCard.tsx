@@ -1450,7 +1450,19 @@ function FeedCard({ ticket, onLongPress }: { ticket: Ticket; onLongPress?: (t: T
                 links={captionLinks}
                 entityType="caption"
                 entityId={ticket.id}
-                onSaved={setCaptionLinks}
+                onSaved={(newLinks) => {
+                  setCaptionLinks(newLinks);
+                  queryClient.setQueryData([`/api/tickets/${ticket.id}`], (old: any) =>
+                    old ? { ...old, captionLinks: newLinks } : old
+                  );
+                  queryClient.setQueriesData({ queryKey: ["mixed-feed"] }, (old: any) => {
+                    if (!old?.items) return old;
+                    return { ...old, items: old.items.map((item: any) =>
+                      item.type === "ticket" && item.ticket?.id === ticket.id
+                        ? { ...item, ticket: { ...item.ticket, captionLinks: newLinks } } : item
+                    )};
+                  });
+                }}
               />
             )}
           </>

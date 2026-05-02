@@ -986,7 +986,25 @@ export function ChainCard({ chain }: { chain: ChainItem }) {
               links={descLinks}
               entityType="chain"
               entityId={chain.id}
-              onSaved={setDescLinks}
+              onSaved={(newLinks) => {
+                setDescLinks(newLinks);
+                qc.setQueryData(["/api/chains", chain.id], (old: any) =>
+                  old ? { ...old, descriptionLinks: newLinks } : old
+                );
+                qc.setQueriesData({ queryKey: ["mixed-feed"] }, (old: any) => {
+                  if (!old?.items) return old;
+                  return { ...old, items: old.items.map((item: any) =>
+                    item.type === "chain" && item.chain?.id === chain.id
+                      ? { ...item, chain: { ...item.chain, descriptionLinks: newLinks } } : item
+                  )};
+                });
+                qc.setQueryData(["chains-feed"], (old: any) => {
+                  if (!old?.chains) return old;
+                  return { ...old, chains: old.chains.map((c: any) =>
+                    c.id === chain.id ? { ...c, descriptionLinks: newLinks } : c
+                  )};
+                });
+              }}
             />
           )}
           {tags.length > 0 && (

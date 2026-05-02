@@ -31,6 +31,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useLang } from "@/lib/i18n";
 import type { Ticket } from "@workspace/api-client-react";
 import { ReportSheet } from "@/components/ReportSheet";
+import { Input } from "@/components/ui/input";
 import { SocialLinkRow } from "@/components/SocialLinkRow";
 import { SocialLinkPlatformIcon } from "@/components/SocialLinkPlatformIcon";
 import { AddLinkSheet } from "@/components/AddLinkSheet";
@@ -420,11 +421,11 @@ function EditProfileSheet({
                     ? <SocialLinkPlatformIcon platform={linkDetected.platform} size={18} className="text-foreground shrink-0" />
                     : <Globe className="w-[18px] h-[18px] shrink-0 text-muted-foreground" />
                   }
-                  <input
+                  <Input
                     value={linkUrlInput}
                     onChange={e => setLinkUrlInput(e.target.value)}
                     placeholder={t.addLinkPlaceholder}
-                    className="flex-1 h-10 px-3 rounded-2xl border border-border bg-secondary text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-foreground/20"
+                    className="flex-1 h-9 text-sm bg-background border-border text-foreground"
                     onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); handleAddLink(); } }}
                     autoCapitalize="none"
                     autoCorrect="off"
