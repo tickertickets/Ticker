@@ -135,8 +135,7 @@ self.addEventListener("push", (event: PushEvent) => {
   const body  = data.body  || "";
   const url   = data.url   || "/";
   const tag   = data.tag   || "ticker";
-  // Android does not support SVG notification icons — must use PNG.
-  const icon  = data.icon  || "/icon-192.png";
+  const icon  = data.icon  || "/icon.svg";
 
   // Visible diagnostic in DevTools → Application → Service Workers → console
   console.log("[sw push]", { title, body, tag, url, icon, raw });
@@ -145,9 +144,7 @@ self.addEventListener("push", (event: PushEvent) => {
     self.registration.showNotification(title, {
       body,
       icon,
-      // badge must be PNG on Android — SVG is silently ignored/unsupported.
-      // icon-192.png is a solid square so it works as a monochrome badge too.
-      badge: "/icon-192.png",
+      badge: "/notification-badge.svg",
       tag,
       data: { url },
       requireInteraction: true,
