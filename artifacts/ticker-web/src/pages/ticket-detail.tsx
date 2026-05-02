@@ -19,6 +19,9 @@ import { useAuth } from "@/hooks/use-auth";
 import { cn, fmtCount } from "@/lib/utils";
 import { ReportSheet } from "@/components/ReportSheet";
 import { useSocketTicketUpdates, patchCommentCount } from "@/hooks/use-socket";
+import { SocialLinkRow } from "@/components/SocialLinkRow";
+import { AddLinkSheet } from "@/components/AddLinkSheet";
+import type { SocialLink } from "@/lib/socialLinks";
 
 type LocalComment = {
   id: string;
@@ -53,6 +56,8 @@ export default function TicketDetail() {
   const [deleteSheetOpen, setDeleteSheetOpen] = useState(false);
   const [deleteSheetVisible, setDeleteSheetVisible] = useState(false);
   const deleteSheetCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [captionLinks, setCaptionLinks] = useState<SocialLink[]>([]);
+  const [linkSheetOpen, setLinkSheetOpen] = useState(false);
 
   useEffect(() => {
     let cleanup: (() => void) | undefined;
@@ -124,6 +129,13 @@ export default function TicketDetail() {
     setReactionBreakdown(null);
     setTagRating(null);
   }, [ticketId]);
+
+  // Sync caption links from loaded ticket
+  useEffect(() => {
+    if (!ticket) return;
+    const td = ticket as unknown as Record<string, unknown>;
+    setCaptionLinks((td["captionLinks"] as SocialLink[] | undefined) ?? []);
+  }, [(ticket as any)?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const tx = ticket as unknown as Record<string, unknown>;
   const effectiveHasReacted   = hasReacted       !== null ? hasReacted       : (tx?.["hasReacted"]       as boolean               ?? ticket?.isLiked   ?? false);
@@ -457,6 +469,27 @@ export default function TicketDetail() {
               />
             )}
           </div>
+        )}
+
+        {/* Caption social links */}
+        {(captionLinks.length > 0 || isOwner) && (
+          <div className="mx-4 mt-3">
+            <SocialLinkRow
+              links={captionLinks}
+              isOwner={isOwner}
+              onManage={() => setLinkSheetOpen(true)}
+            />
+          </div>
+        )}
+        {isOwner && linkSheetOpen && ticketId && (
+          <AddLinkSheet
+            open={linkSheetOpen}
+            onClose={() => setLinkSheetOpen(false)}
+            links={captionLinks}
+            entityType="caption"
+            entityId={ticketId}
+            onSaved={setCaptionLinks}
+          />
         )}
 
         {/* Tag rating */}

@@ -34,7 +34,7 @@ export function AddLinkSheet({ open, onClose, links: initialLinks, entityType, e
   const [urlInput, setUrlInput] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const preview = urlInput.trim() ? (isValidUrl(urlInput.trim()) ? detectPlatform(urlInput.trim()) : null) : null;
+  const detectedPlatform = urlInput.trim() && isValidUrl(urlInput.trim()) ? detectPlatform(urlInput.trim()) : null;
 
   const handleAdd = useCallback(() => {
     const raw = urlInput.trim();
@@ -87,8 +87,6 @@ export function AddLinkSheet({ open, onClose, links: initialLinks, entityType, e
     }
   };
 
-  const previewMeta = preview ? (PLATFORM_META[preview.platform as Platform] ?? PLATFORM_META.generic) : null;
-
   return (
     <Sheet open={open} onOpenChange={v => { if (!v) onClose(); }}>
       <SheetContent side="bottom" className="rounded-t-2xl max-h-[85dvh] flex flex-col pb-safe">
@@ -96,7 +94,7 @@ export function AddLinkSheet({ open, onClose, links: initialLinks, entityType, e
           <SheetTitle className="text-base">{t.manageLinks}</SheetTitle>
         </SheetHeader>
 
-        <div className="flex-1 overflow-y-auto min-h-0 space-y-3 pb-2">
+        <div className="flex-1 overflow-y-auto min-h-0 space-y-2 pb-2">
           {links.length === 0 && (
             <p className="text-sm text-muted-foreground text-center py-4">{t.noLinksYet}</p>
           )}
@@ -110,10 +108,7 @@ export function AddLinkSheet({ open, onClose, links: initialLinks, entityType, e
                   link.hidden && "opacity-60",
                 )}
               >
-                <span
-                  className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
-                  style={{ backgroundColor: meta.bg, color: meta.fg }}
-                >
+                <span className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 bg-foreground text-background">
                   <SocialLinkPlatformIcon platform={link.platform as Platform} size={16} />
                 </span>
                 <div className="flex-1 min-w-0">
@@ -149,19 +144,16 @@ export function AddLinkSheet({ open, onClose, links: initialLinks, entityType, e
         {links.length < MAX_LINKS && (
           <div className="shrink-0 pt-2 border-t border-border">
             <div className="flex gap-2 items-center">
-              {previewMeta && (
-                <span
-                  className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
-                  style={{ backgroundColor: previewMeta.bg, color: previewMeta.fg }}
-                >
-                  <SocialLinkPlatformIcon platform={preview!.platform as Platform} size={16} />
+              {detectedPlatform && (
+                <span className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-foreground text-background">
+                  <SocialLinkPlatformIcon platform={detectedPlatform.platform as Platform} size={16} />
                 </span>
               )}
               <Input
                 value={urlInput}
                 onChange={e => setUrlInput(e.target.value)}
                 placeholder={t.addLinkPlaceholder}
-                className="flex-1 h-9 text-sm"
+                className="flex-1 h-9 text-sm bg-background border-border"
                 onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); handleAdd(); } }}
                 autoCapitalize="none"
                 autoCorrect="off"
@@ -170,7 +162,7 @@ export function AddLinkSheet({ open, onClose, links: initialLinks, entityType, e
                 type="button"
                 size="icon"
                 variant="default"
-                className="h-9 w-9 shrink-0"
+                className="h-9 w-9 shrink-0 bg-foreground text-background hover:bg-foreground/80"
                 onClick={handleAdd}
                 disabled={!urlInput.trim()}
               >
@@ -184,11 +176,7 @@ export function AddLinkSheet({ open, onClose, links: initialLinks, entityType, e
         )}
 
         <div className="shrink-0 pt-2">
-          <Button
-            className="w-full"
-            onClick={handleSave}
-            disabled={saving}
-          >
+          <Button className="w-full bg-foreground text-background hover:bg-foreground/80" onClick={handleSave} disabled={saving}>
             {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
             {saving ? "..." : t.manageLinks}
           </Button>

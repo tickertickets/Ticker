@@ -1,8 +1,7 @@
-import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { type SocialLink, PLATFORM_META, MAX_LINKS } from "@/lib/socialLinks";
+import { type SocialLink, MAX_LINKS } from "@/lib/socialLinks";
 import { SocialLinkPlatformIcon } from "./SocialLinkPlatformIcon";
-import { Link2 } from "lucide-react";
+import { Globe } from "lucide-react";
 import { useLang } from "@/lib/i18n";
 
 interface Props {
@@ -17,18 +16,16 @@ interface Props {
 export function SocialLinkRow({ links, isOwner, showHidden, onManage, className, size = "sm" }: Props) {
   const { t } = useLang();
   const visible = links.filter(l => showHidden || !l.hidden);
-  const hasHidden = isOwner && links.some(l => l.hidden);
 
   if (visible.length === 0 && !isOwner) return null;
 
-  const pillH = size === "md" ? "h-8" : "h-7";
-  const pillPx = size === "md" ? "px-2.5" : "px-2";
+  const iconBox = size === "md" ? "w-8 h-8 rounded-xl" : "w-7 h-7 rounded-xl";
   const iconSize = size === "md" ? 17 : 15;
+  const labelCls = size === "md" ? "text-xs" : "text-[11px]";
 
   return (
-    <div className={cn("flex flex-wrap items-center gap-1.5", className)}>
+    <div className={cn("flex flex-wrap items-center justify-center gap-2 w-full", className)}>
       {visible.map(link => {
-        const meta = PLATFORM_META[link.platform as keyof typeof PLATFORM_META] ?? PLATFORM_META.generic;
         const isHidden = !!link.hidden;
         return (
           <a
@@ -38,17 +35,19 @@ export function SocialLinkRow({ links, isOwner, showHidden, onManage, className,
             rel="noopener noreferrer"
             onClick={e => e.stopPropagation()}
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-full border border-transparent",
-              "transition-opacity active:scale-95 select-none",
-              pillH, pillPx,
+              "inline-flex items-center gap-1.5 transition-opacity active:scale-95 select-none",
               isHidden && "opacity-40",
             )}
-            style={{ backgroundColor: meta.bg, color: meta.fg }}
-            title={link.label ? `${meta.name} ${link.label}` : meta.name}
+            title={link.label ? `${link.label}` : link.platform}
           >
-            <SocialLinkPlatformIcon platform={link.platform as any} size={iconSize} />
+            <span className={cn(
+              "flex items-center justify-center flex-shrink-0 bg-foreground text-background",
+              iconBox,
+            )}>
+              <SocialLinkPlatformIcon platform={link.platform as any} size={iconSize} />
+            </span>
             {link.label && (
-              <span className="text-[11px] font-semibold leading-none max-w-[100px] truncate">
+              <span className={cn("font-semibold leading-none text-foreground max-w-[90px] truncate", labelCls)}>
                 {link.label}
               </span>
             )}
@@ -56,38 +55,21 @@ export function SocialLinkRow({ links, isOwner, showHidden, onManage, className,
         );
       })}
 
-      {isOwner && links.length < MAX_LINKS && (
+      {isOwner && (
         <button
           type="button"
           onClick={e => { e.stopPropagation(); onManage?.(); }}
           className={cn(
-            "inline-flex items-center gap-1 rounded-full border border-dashed border-border",
-            "text-muted-foreground hover:text-foreground hover:border-foreground/40",
-            "transition-colors",
-            pillH, pillPx,
+            "inline-flex items-center justify-center gap-1 bg-secondary text-muted-foreground",
+            "hover:text-foreground hover:bg-secondary/80 transition-colors rounded-xl",
+            links.length === 0 ? "px-3 h-7 gap-1.5" : iconBox,
           )}
-          title={t.addLink}
+          title={links.length < MAX_LINKS ? t.addLink : t.manageLinks}
         >
-          <Link2 className="w-3.5 h-3.5" />
+          <Globe className="w-3.5 h-3.5 flex-shrink-0" />
           {links.length === 0 && (
-            <span className="text-[11px] font-medium leading-none">{t.addLink}</span>
+            <span className="text-[11px] font-medium leading-none whitespace-nowrap">{t.addLink}</span>
           )}
-        </button>
-      )}
-
-      {isOwner && links.length >= MAX_LINKS && onManage && (
-        <button
-          type="button"
-          onClick={e => { e.stopPropagation(); onManage?.(); }}
-          className={cn(
-            "inline-flex items-center gap-1 rounded-full border border-dashed border-border",
-            "text-muted-foreground hover:text-foreground hover:border-foreground/40",
-            "transition-colors",
-            pillH, pillPx,
-          )}
-          title={t.manageLinks}
-        >
-          <Link2 className="w-3.5 h-3.5" />
         </button>
       )}
     </div>

@@ -24,7 +24,7 @@ import type { ChainItem } from "@/components/ChainsSection";
 import {
   Loader2, Settings, Link2, Users, X, User as UserIcon,
   Camera, MessageCircle, Lock, Unlock, Flag, MoreHorizontal, ChevronLeft, Bookmark,
-  Heart, Send, Pencil, Trash2, Ticket as TicketIcon, AtSign, Check, Search,
+  Heart, Send, Pencil, Trash2, Ticket as TicketIcon, AtSign, Check, Search, EyeOff, Eye, Plus,
 } from "lucide-react";
 import { cn, fmtCount } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
@@ -32,8 +32,9 @@ import { useLang } from "@/lib/i18n";
 import type { Ticket } from "@workspace/api-client-react";
 import { ReportSheet } from "@/components/ReportSheet";
 import { SocialLinkRow } from "@/components/SocialLinkRow";
+import { SocialLinkPlatformIcon } from "@/components/SocialLinkPlatformIcon";
 import { AddLinkSheet } from "@/components/AddLinkSheet";
-import type { SocialLink } from "@/lib/socialLinks";
+import { type SocialLink, type Platform, detectPlatform, normalizeUrl, isValidUrl, PLATFORM_META, MAX_LINKS } from "@/lib/socialLinks";
 import { VerifiedBadge, isVerified } from "@/components/VerifiedBadge";
 import { BadgeIcon } from "@/components/BadgeIcon";
 import { useToast } from "@/hooks/use-toast";
@@ -172,11 +173,12 @@ function FollowListSheet({
 // ── EditProfileSheet ───────────────────────────────────────────────────────
 
 function EditProfileSheet({
-  profile, onClose, onUpdated,
+  profile, onClose, onUpdated, initialBioLinks = [],
 }: {
   profile: { displayName?: string | null; bio?: string | null; avatarUrl?: string | null; username?: string | null };
   onClose: () => void;
   onUpdated: () => void;
+  initialBioLinks?: SocialLink[];
 }) {
   const { t } = useLang();
   const qcEdit = useQueryClient();
@@ -194,6 +196,9 @@ function EditProfileSheet({
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
   const [usernameError, setUsernameError] = useState<string | null>(null);
   const usernameDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [bioLinksState, setBioLinksState] = useState<SocialLink[]>(initialBioLinks);
+  const [linkUrlInput, setLinkUrlInput] = useState("");
 
   const isUsernameValid = /^[a-zA-Z0-9_]{3,30}$/.test(usernameValue);
   const isUsernameUnchanged = usernameValue.toLowerCase() === (profile.username ?? "").toLowerCase();
@@ -255,6 +260,23 @@ function EditProfileSheet({
     }
   };
 
+  const linkDetected = linkUrlInput.trim() && isValidUrl(linkUrlInput.trim())
+    ? detectPlatform(linkUrlInput.trim()) : null;
+
+  const handleAddLink = () => {
+    const raw = linkUrlInput.trim();
+    if (!raw || !isValidUrl(raw) || bioLinksState.length >= MAX_LINKS) return;
+    const { platform, label } = detectPlatform(raw);
+    setBioLinksState(prev => [...prev, {
+      id: crypto.randomUUID().slice(0, 10),
+      url: normalizeUrl(raw),
+      platform,
+      label,
+      hidden: false,
+    }]);
+    setLinkUrlInput("");
+  };
+
   async function handleSave() {
     if (!displayName.trim()) { setError(t.errDisplayNameEmpty); return; }
     if (!isUsernameUnchanged && !isUsernameValid) { setError(t.errUsernameInvalid); return; }
@@ -263,6 +285,14 @@ function EditProfileSheet({
     setError("");
     setUsernameError(null);
     try {
+      // Save bio links (best-effort, parallel)
+      fetch("/api/users/me/bio-links", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ links: bioLinksState }),
+      }).catch(() => {});
+
       const res = await fetch("/api/users/me/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -360,6 +390,63 @@ function EditProfileSheet({
                 <p className={`absolute bottom-2 right-3 text-[10px] font-medium ${bio.length >= 200 ? "text-red-500" : "text-muted-foreground"}`}>
                   {bio.length}/200
                 </p>
+              )}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="text-[11px] font-semibold text-muted-foreground tracking-widest">{t.manageLinks}</label>
+            <div className="space-y-2">
+              {bioLinksState.length === 0 && (
+                <p className="text-xs text-muted-foreground px-1">{t.noLinksYet}</p>
+              )}
+              {bioLinksState.map(link => {
+                const meta = PLATFORM_META[link.platform as Platform] ?? PLATFORM_META.generic;
+                return (
+                  <div key={link.id} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-2xl bg-secondary/60", link.hidden && "opacity-60")}>
+                    <span className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 bg-foreground text-background">
+                      <SocialLinkPlatformIcon platform={link.platform as Platform} size={16} />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-foreground truncate">{link.label ?? meta.name}</p>
+                      <p className="text-[10px] text-muted-foreground truncate">{link.url}</p>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button type="button" onClick={() => setBioLinksState(prev => prev.map(l => l.id === link.id ? { ...l, hidden: !l.hidden } : l))}
+                        className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground transition-colors" title={link.hidden ? t.showLink : t.hideLink}>
+                        {link.hidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                      <button type="button" onClick={() => setBioLinksState(prev => prev.filter(l => l.id !== link.id))}
+                        className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive transition-colors">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+              {bioLinksState.length < MAX_LINKS && (
+                <div className="flex gap-2 items-center">
+                  {linkDetected && (
+                    <span className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-foreground text-background">
+                      <SocialLinkPlatformIcon platform={linkDetected.platform as Platform} size={16} />
+                    </span>
+                  )}
+                  <input
+                    value={linkUrlInput}
+                    onChange={e => setLinkUrlInput(e.target.value)}
+                    placeholder={t.addLinkPlaceholder}
+                    className="flex-1 h-10 px-3 rounded-2xl border border-border bg-secondary text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-foreground/20"
+                    onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); handleAddLink(); } }}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                  />
+                  <button type="button" onClick={handleAddLink} disabled={!linkUrlInput.trim() || !isValidUrl(linkUrlInput.trim())}
+                    className="w-10 h-10 flex items-center justify-center rounded-2xl bg-foreground text-background disabled:opacity-40 flex-shrink-0">
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+              {linkUrlInput.trim() && !isValidUrl(linkUrlInput.trim()) && (
+                <p className="text-[11px] text-destructive px-1">{t.invalidUrl}</p>
               )}
             </div>
           </div>
@@ -1068,7 +1155,6 @@ export default function Profile() {
 
   const isMyProfile = !!me && me.id === profileUserId;
   const [bioLinks, setBioLinks] = useState<SocialLink[]>(() => ((profile as any).bioLinks ?? []) as SocialLink[]);
-  const [bioLinkSheetOpen, setBioLinkSheetOpen] = useState(false);
 
   useEffect(() => {
     setBioLinks(((profile as any).bioLinks ?? []) as SocialLink[]);
@@ -1198,25 +1284,11 @@ export default function Profile() {
         </div>
 
         {profile.bio && <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap break-words">{profile.bio}</p>}
-        {(bioLinks.length > 0 || isMyProfile) && (
+        {bioLinks.length > 0 && (
           <SocialLinkRow
             links={bioLinks}
-            isOwner={isMyProfile}
-            onManage={() => setBioLinkSheetOpen(true)}
+            showHidden={isMyProfile}
             className="mt-2"
-          />
-        )}
-        {isMyProfile && bioLinkSheetOpen && profileUserId && (
-          <AddLinkSheet
-            open={bioLinkSheetOpen}
-            onClose={() => setBioLinkSheetOpen(false)}
-            links={bioLinks}
-            entityType="bio"
-            entityId={profileUserId}
-            onSaved={saved => {
-              setBioLinks(saved);
-              queryClient.setQueryData([`/api/users/${username}`], (old: any) => old ? { ...old, bioLinks: saved } : old);
-            }}
           />
         )}
 
@@ -1351,6 +1423,7 @@ export default function Profile() {
       {showEditProfile && (
         <EditProfileSheet
           profile={{ ...profile, username }}
+          initialBioLinks={bioLinks}
           onClose={() => setShowEditProfile(false)}
           onUpdated={() => queryClient.invalidateQueries({ queryKey: [`/api/users/${username}`] })}
         />

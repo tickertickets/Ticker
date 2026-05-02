@@ -13,6 +13,9 @@ import { VerifiedBadge, isVerified } from "@/components/VerifiedBadge";
 import { BadgeIcon } from "@/components/BadgeIcon";
 import { useSearchMovies } from "@workspace/api-client-react";
 import { useDebounceValue } from "usehooks-ts";
+import { SocialLinkRow } from "@/components/SocialLinkRow";
+import { AddLinkSheet } from "@/components/AddLinkSheet";
+import type { SocialLink } from "@/lib/socialLinks";
 
 type ChainMovie = {
   id: string;
@@ -123,6 +126,8 @@ export default function ChainDetail() {
   // edit note on existing movie
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editNoteText, setEditNoteText] = useState("");
+  const [descLinks, setDescLinks] = useState<SocialLink[]>([]);
+  const [linkSheetOpen, setLinkSheetOpen] = useState(false);
 
   const { data: addSearchData, isLoading: addSearchLoading } = useSearchMovies(
     { query: debouncedAddQuery, page: 1 },
@@ -136,6 +141,12 @@ export default function ChainDetail() {
   });
   const addSearchResults = ((addSearchData?.movies ?? []) as Array<{ imdbId: string; title: string; year: string | null; posterUrl: string | null }>);
   const trendingSuggestions = ((trendingData?.movies ?? []) as Array<{ imdbId: string; title: string; year: string | null; posterUrl: string | null }>).slice(0, 12);
+
+  // Sync description links from chain
+  useEffect(() => {
+    if (!chain) return;
+    setDescLinks(((chain as any).descriptionLinks as SocialLink[] | undefined) ?? []);
+  }, [chain?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const addMovieMutation = useMutation({
     mutationFn: async ({ movie, note }: { movie: { imdbId: string; title: string; year: string | null; posterUrl: string | null }; note: string }) => {
@@ -376,6 +387,27 @@ export default function ChainDetail() {
               className="text-sm text-muted-foreground leading-relaxed"
             />
           </div>
+        )}
+
+        {/* Description social links */}
+        {(descLinks.length > 0 || isOwner) && (
+          <div className="!mt-3">
+            <SocialLinkRow
+              links={descLinks}
+              isOwner={isOwner}
+              onManage={() => setLinkSheetOpen(true)}
+            />
+          </div>
+        )}
+        {isOwner && linkSheetOpen && (
+          <AddLinkSheet
+            open={linkSheetOpen}
+            onClose={() => setLinkSheetOpen(false)}
+            links={descLinks}
+            entityType="chain"
+            entityId={chainId}
+            onSaved={setDescLinks}
+          />
         )}
 
         {/* ── Movie horizontal preview ── */}
