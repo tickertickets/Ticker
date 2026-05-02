@@ -108,9 +108,7 @@ export function AddLinkSheet({ open, onClose, links: initialLinks, entityType, e
                   link.hidden && "opacity-60",
                 )}
               >
-                <span className="w-7 h-7 rounded-md flex items-center justify-center shrink-0 bg-foreground text-background">
-                  <SocialLinkPlatformIcon platform={link.platform as Platform} size={14} />
-                </span>
+                <SocialLinkPlatformIcon platform={link.platform as Platform} size={18} className="text-foreground shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-semibold text-foreground truncate">
                     {link.label ?? meta.name}
@@ -145,9 +143,7 @@ export function AddLinkSheet({ open, onClose, links: initialLinks, entityType, e
           <div className="shrink-0 pt-2 border-t border-border">
             <div className="flex gap-2 items-center">
               {detectedPlatform && (
-                <span className="w-8 h-8 rounded-md flex items-center justify-center shrink-0 bg-foreground text-background">
-                  <SocialLinkPlatformIcon platform={detectedPlatform.platform as Platform} size={14} />
-                </span>
+                <SocialLinkPlatformIcon platform={detectedPlatform.platform as Platform} size={18} className="text-foreground shrink-0" />
               )}
               <Input
                 value={urlInput}

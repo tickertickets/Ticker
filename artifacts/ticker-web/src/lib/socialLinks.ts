@@ -5,7 +5,7 @@ export type Platform =
   | "x"
   | "facebook"
   | "threads"
-  | "line"
+  | "discord"
   | "generic";
 
 export interface SocialLink {
@@ -26,7 +26,7 @@ export const PLATFORM_META: Record<
   x:         { name: "X",         bg: "#000000", fg: "#fff" },
   facebook:  { name: "Facebook",  bg: "#1877F2", fg: "#fff" },
   threads:   { name: "Threads",   bg: "#000000", fg: "#fff" },
-  line:      { name: "LINE",      bg: "#06C755", fg: "#fff" },
+  discord:   { name: "Discord",   bg: "#5865F2", fg: "#fff" },
   generic:   { name: "Link",      bg: "#6B7280", fg: "#fff" },
 };
 
@@ -67,7 +67,10 @@ export function detectPlatform(rawUrl: string): { platform: Platform; label?: st
   if ((m = url.match(/threads\.net\/@?([^/?#\s]+)/))) {
     return { platform: "threads", label: "@" + m[1]!.replace(/^@/, "") };
   }
-  if (/line\.me|lin\.ee/.test(url)) return { platform: "line" };
+  if ((m = url.match(/discord\.(?:gg|com\/invite|com\/channels)\/([^/?#\s]+)/))) {
+    return { platform: "discord", label: m[1] };
+  }
+  if (/discord\.gg|discord\.com/.test(url)) return { platform: "discord" };
   return { platform: "generic" };
 }
 

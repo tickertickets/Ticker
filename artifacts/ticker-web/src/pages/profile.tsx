@@ -226,12 +226,9 @@ function EditProfileSheet({
     const prev = document.documentElement.style.overflow;
     document.documentElement.style.overflow = "hidden";
     document.body.style.overflow = "hidden";
-    const block = (e: TouchEvent) => e.preventDefault();
-    document.addEventListener("touchmove", block, { passive: false });
     return () => {
       document.documentElement.style.overflow = prev;
       document.body.style.overflow = "";
-      document.removeEventListener("touchmove", block);
     };
   }, []);
 
@@ -400,9 +397,7 @@ function EditProfileSheet({
                 const meta = PLATFORM_META[link.platform as Platform] ?? PLATFORM_META.generic;
                 return (
                   <div key={link.id} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-2xl bg-secondary/60", link.hidden && "opacity-60")}>
-                    <span className="w-7 h-7 rounded-md flex items-center justify-center shrink-0 bg-foreground text-background">
-                      <SocialLinkPlatformIcon platform={link.platform as Platform} size={14} />
-                    </span>
+                    <SocialLinkPlatformIcon platform={link.platform as Platform} size={18} className="text-foreground shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-semibold text-foreground truncate">{link.label ?? meta.name}</p>
                       <p className="text-[10px] text-muted-foreground truncate">{link.url}</p>
@@ -423,9 +418,7 @@ function EditProfileSheet({
               {bioLinksState.length < MAX_LINKS && (
                 <div className="flex gap-2 items-center">
                   {linkDetected && (
-                    <span className="w-8 h-8 rounded-md flex items-center justify-center shrink-0 bg-foreground text-background">
-                      <SocialLinkPlatformIcon platform={linkDetected.platform as Platform} size={14} />
-                    </span>
+                    <SocialLinkPlatformIcon platform={linkDetected.platform as Platform} size={18} className="text-foreground shrink-0" />
                   )}
                   <input
                     value={linkUrlInput}
@@ -1151,11 +1144,11 @@ export default function Profile() {
   const { toast } = useToast();
 
   const isMyProfile = !!me && me.id === profileUserId;
-  const [bioLinks, setBioLinks] = useState<SocialLink[]>(() => ((profile as any).bioLinks ?? []) as SocialLink[]);
+  const [bioLinks, setBioLinks] = useState<SocialLink[]>(() => ((profile as any)?.bioLinks ?? []) as SocialLink[]);
 
   useEffect(() => {
-    setBioLinks(((profile as any).bioLinks ?? []) as SocialLink[]);
-  }, [(profile as any).bioLinks]);
+    setBioLinks(((profile as any)?.bioLinks ?? []) as SocialLink[]);
+  }, [(profile as any)?.bioLinks]);
 
   const handleFollow = async () => {
     if (!profile) return;

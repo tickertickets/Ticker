@@ -19,12 +19,11 @@ export function SocialLinkRow({ links, isOwner, showHidden, onManage, className,
 
   if (visible.length === 0 && !isOwner) return null;
 
-  const iconBox = size === "md" ? "w-7 h-7 rounded-md" : "w-6 h-6 rounded-md";
-  const iconSize = size === "md" ? 15 : 13;
+  const iconSize = size === "md" ? 18 : 16;
   const labelCls = size === "md" ? "text-xs" : "text-[11px]";
 
   return (
-    <div className={cn("flex flex-wrap items-center justify-center gap-2 w-full", className)}>
+    <div className={cn("flex flex-wrap items-center justify-center gap-x-3 gap-y-2 w-full", className)}>
       {visible.map(link => {
         const isHidden = !!link.hidden;
         return (
@@ -40,12 +39,11 @@ export function SocialLinkRow({ links, isOwner, showHidden, onManage, className,
             )}
             title={link.label ? `${link.label}` : link.platform}
           >
-            <span className={cn(
-              "flex items-center justify-center flex-shrink-0 bg-foreground text-background",
-              iconBox,
-            )}>
-              <SocialLinkPlatformIcon platform={link.platform as any} size={iconSize} />
-            </span>
+            <SocialLinkPlatformIcon
+              platform={link.platform as any}
+              size={iconSize}
+              className="text-foreground flex-shrink-0"
+            />
             {link.label && (
               <span className={cn("font-semibold leading-none text-foreground max-w-[90px] truncate", labelCls)}>
                 {link.label}
@@ -60,13 +58,13 @@ export function SocialLinkRow({ links, isOwner, showHidden, onManage, className,
           type="button"
           onClick={e => { e.stopPropagation(); onManage?.(); }}
           className={cn(
-            "inline-flex items-center justify-center gap-1 bg-secondary text-muted-foreground",
-            "hover:text-foreground hover:bg-secondary/80 transition-colors rounded-md",
-            links.length === 0 ? "px-3 h-6 gap-1.5" : iconBox,
+            "inline-flex items-center justify-center gap-1 text-muted-foreground",
+            "hover:text-foreground transition-colors",
+            links.length === 0 ? "gap-1.5" : "",
           )}
           title={links.length < MAX_LINKS ? t.addLink : t.manageLinks}
         >
-          <Globe className="w-3.5 h-3.5 flex-shrink-0" />
+          <Globe className="w-4 h-4 flex-shrink-0" />
           {links.length === 0 && (
             <span className="text-[11px] font-medium leading-none whitespace-nowrap">{t.addLink}</span>
           )}

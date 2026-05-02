@@ -536,6 +536,9 @@ importers:
       react-masonry-css:
         specifier: ^1.0.16
         version: 1.0.16(react@19.1.0)
+      simple-icons:
+        specifier: ^16.18.0
+        version: 16.18.0
       socket.io-client:
         specifier: ^4.8.3
         version: 4.8.3
@@ -4732,6 +4735,10 @@ packages:
   signal-exit@4.1.0:
     resolution: {integrity: sha512-bzyZ1e88w9O1iNJbKnOlvYTrWPDl46O1bG0D3XInv+9tkPrxrN8jUUTiFlDkkmKWgn1M6CfIA13SuGqOa9Korw==}
     engines: {node: '>=14'}
+
+  simple-icons@16.18.0:
+    resolution: {integrity: sha512-5KbjcP456Gm1lrk+rhDuX4zFri+3lRX39IjzXAvoMAO8Ne76WlVlM+Z3kA6jdZ7+QHadgXsf++R7g2jaYVbYig==}
+    engines: {node: '>=0.12.18'}
 
   slash@5.1.0:
     resolution: {integrity: sha512-ZA6oR3T/pEyuqwMgAKT0/hAv8oAXckzbkmR0UkUosQ+Mc4RxGoJkRmwHgHufaenlyAgE1Mxgpdcrf75y6XcnDg==}
@@ -9680,6 +9687,8 @@ snapshots:
       side-channel-weakmap: 1.0.2
 
   signal-exit@4.1.0: {}
+
+  simple-icons@16.18.0: {}
 
   slash@5.1.0: {}
 
