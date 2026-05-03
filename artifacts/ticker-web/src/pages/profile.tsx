@@ -23,7 +23,7 @@ import { PosterCollage, ChainCommentSheet, ChainShareModal } from "@/components/
 import type { ChainItem } from "@/components/ChainsSection";
 import {
   Loader2, Settings, Link2, Users, X, User as UserIcon,
-  Camera, MessageCircle, Lock, Unlock, Flag, MoreHorizontal, ChevronLeft, Bookmark,
+  Camera, MessageCircle, Lock, Unlock, Flag, MoreHorizontal, ChevronLeft, Bookmark, Share2,
   Heart, Send, Pencil, Trash2, Ticket as TicketIcon, AtSign, Check, Search, EyeOff, Eye, Plus, Globe,
 } from "lucide-react";
 import { cn, fmtCount } from "@/lib/utils";
