@@ -1250,13 +1250,28 @@ export default function Profile() {
             </button>
           )}
           <span className="font-display font-bold text-white text-xl tracking-tight">Ticker</span>
-          {isOwn ? (
-            <Link href="/settings"><button className="w-9 h-9 flex items-center justify-center"><Settings className="w-6 h-6 text-white" /></button></Link>
-          ) : me && !isVerified(profile.username) ? (
-            <button onClick={() => setReportUserOpen(true)} className="w-9 h-9 flex items-center justify-center">
-              <Flag className="w-6 h-6 text-white/70" />
+          <div className="flex flex-col items-center gap-0.5">
+            <button
+              className="w-9 h-9 flex items-center justify-center"
+              onClick={() => {
+                const url = `${window.location.origin}/@${profile.username}`;
+                navigator.clipboard.writeText(url).then(() => {
+                  toast({ title: "คัดลอกลิงก์แล้ว", duration: 1500 });
+                }).catch(() => {
+                  toast({ title: url, duration: 3000 });
+                });
+              }}
+            >
+              <Link2 className="w-5 h-5 text-white" />
             </button>
-          ) : <div className="w-9 h-9" />}
+            {isOwn ? (
+              <Link href="/settings"><button className="w-9 h-7 flex items-center justify-center"><Settings className="w-5 h-5 text-white/70" /></button></Link>
+            ) : me && !isVerified(profile.username) ? (
+              <button onClick={() => setReportUserOpen(true)} className="w-9 h-7 flex items-center justify-center">
+                <Flag className="w-5 h-5 text-white/60" />
+              </button>
+            ) : <div className="w-9 h-7" />}
+          </div>
         </div>
       </div>
 
