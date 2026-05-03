@@ -115,7 +115,7 @@ function FollowListSheet({
     <>
       <div className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm" onClick={onClose} />
       <div
-        className="fixed bottom-0 z-[70] bg-background rounded-t-3xl flex flex-col"
+        className="fixed bottom-0 z-[70] bg-background rounded-t-3xl border-t border-border flex flex-col"
         style={{
           left: "50%",
           transform: "translateX(-50%)",
@@ -347,7 +347,7 @@ function EditProfileSheet({
     <>
       <div className="fixed inset-0 z-[200] bg-black/40 backdrop-blur-sm" onClick={onClose} />
       <div
-        className="fixed bottom-0 z-[201] bg-background rounded-t-3xl overflow-hidden flex flex-col"
+        className="fixed bottom-0 z-[201] bg-background rounded-t-3xl border-t border-border overflow-hidden flex flex-col"
         style={{ left: "50%", transform: "translateX(-50%)", width: "min(100%, 430px)", maxHeight: "90dvh" }}
       >
         <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-border shrink-0">
@@ -615,7 +615,7 @@ function ChainContextMenu({
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
       <div
         className={cn(
-          "relative w-full bg-background rounded-t-3xl transition-transform duration-300 ease-out",
+          "relative w-full bg-background rounded-t-3xl border-t border-border transition-transform duration-300 ease-out",
           visible ? "translate-y-0" : "translate-y-full",
         )}
         style={{ boxShadow: "0 -4px 32px rgba(0,0,0,0.18)", paddingBottom: "max(env(safe-area-inset-bottom, 0px), 20px)" }}
@@ -1258,21 +1258,15 @@ export default function Profile() {
             {me ? (
               <button
                 className="w-9 h-9 flex items-center justify-center active:opacity-70"
-                onClick={() => {
+                onClick={async () => {
                   const url = `${window.location.origin}/profile/${profile.username}`;
-                  const doShare = async () => {
-                    if (typeof navigator.share === "function") {
-                      try { await navigator.share({ title: profile.displayName ?? profile.username, url }); return; } catch { /* cancelled */ }
-                    }
-                    try { await navigator.clipboard.writeText(url); }
-                    catch {
-                      const el = document.createElement("textarea");
-                      el.value = url; el.style.cssText = "position:fixed;top:-9999px;left:-9999px;";
-                      document.body.appendChild(el); el.select(); document.execCommand("copy"); document.body.removeChild(el);
-                    }
-                    toast({ title: t.copiedLabel, duration: 1500 });
-                  };
-                  doShare();
+                  try { await navigator.clipboard.writeText(url); }
+                  catch {
+                    const el = document.createElement("textarea");
+                    el.value = url; el.style.cssText = "position:fixed;top:-9999px;left:-9999px;";
+                    document.body.appendChild(el); el.select(); document.execCommand("copy"); document.body.removeChild(el);
+                  }
+                  toast({ title: t.copiedLabel, duration: 1500 });
                 }}
               >
                 <Share2 className="w-6 h-6 text-white" />

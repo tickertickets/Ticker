@@ -102,7 +102,7 @@ export function ChainCommentSheet({ chainId, onClose, commentCount: initialComme
     <div className="fixed inset-0 z-[100] flex items-end justify-center" style={{ paddingBottom: keyboardHeight }} onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
-        className="relative bg-background rounded-t-3xl shadow-2xl flex flex-col"
+        className="relative bg-background rounded-t-3xl shadow-2xl flex flex-col border-t border-border"
         style={{ width: "min(100%, 430px)", height: "min(80vh, 600px)" }}
         onClick={e => e.stopPropagation()}
       >

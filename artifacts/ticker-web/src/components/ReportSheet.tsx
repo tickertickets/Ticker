@@ -104,7 +104,7 @@ export function ReportSheet({ type, targetId, onClose }: ReportSheetProps) {
         onTouchEnd={(e) => { e.preventDefault(); onClose(); }}
       />
       <div
-        className="fixed bottom-0 z-[100] bg-background rounded-t-3xl"
+        className="fixed bottom-0 z-[100] bg-background rounded-t-3xl border-t border-border"
         style={{
           left: "50%",
           transform: "translateX(-50%)",

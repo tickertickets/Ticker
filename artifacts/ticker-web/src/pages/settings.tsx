@@ -1552,7 +1552,7 @@ export default function Settings() {
         <>
           <div className="fixed inset-0 z-[190] bg-black/50 backdrop-blur-sm" onClick={() => setPrivacyDialogOpen(false)} />
           <div
-            className="fixed bottom-0 z-[200] bg-background rounded-t-3xl"
+            className="fixed bottom-0 z-[200] bg-background rounded-t-3xl border-t border-border"
             style={{ left: "50%", transform: "translateX(-50%)", width: "min(100%, 430px)", paddingBottom: "max(env(safe-area-inset-bottom, 0px), 20px)" }}
             onClick={e => e.stopPropagation()}
           >
@@ -1597,7 +1597,7 @@ export default function Settings() {
         <>
           <div className="fixed inset-0 z-[190] bg-black/50 backdrop-blur-sm" onClick={() => setPurgeDialog(null)} />
           <div
-            className="fixed bottom-0 z-[200] bg-background rounded-t-3xl"
+            className="fixed bottom-0 z-[200] bg-background rounded-t-3xl border-t border-border"
             style={{ left: "50%", transform: "translateX(-50%)", width: "min(100%, 430px)", paddingBottom: "max(env(safe-area-inset-bottom, 0px), 20px)" }}
             onClick={e => e.stopPropagation()}
           >
@@ -1637,7 +1637,7 @@ export default function Settings() {
         <>
           <div className="fixed inset-0 z-[190] bg-black/50 backdrop-blur-sm" onClick={() => setLogoutDialogOpen(false)} />
           <div
-            className="fixed bottom-0 z-[200] bg-background rounded-t-3xl"
+            className="fixed bottom-0 z-[200] bg-background rounded-t-3xl border-t border-border"
             style={{ left: "50%", transform: "translateX(-50%)", width: "min(100%, 430px)", paddingBottom: "max(env(safe-area-inset-bottom, 0px), 20px)" }}
             onClick={e => e.stopPropagation()}
           >
@@ -1677,7 +1677,7 @@ export default function Settings() {
         <>
           <div className="fixed inset-0 z-[190] bg-black/50 backdrop-blur-sm" onClick={() => { setDeleteAccountConfirm(""); setDeletingAccount(false); setDeleteAccountDialogOpen(false); }} />
           <div
-            className="fixed bottom-0 z-[200] bg-background rounded-t-3xl"
+            className="fixed bottom-0 z-[200] bg-background rounded-t-3xl border-t border-border"
             style={{ left: "50%", transform: "translateX(-50%)", width: "min(100%, 430px)", paddingBottom: "max(env(safe-area-inset-bottom, 0px), 20px)" }}
             onClick={e => e.stopPropagation()}
           >

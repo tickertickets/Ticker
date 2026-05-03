@@ -223,7 +223,7 @@ function MessageContextMenu({ msg, isMine, onClose, onDeleted }: {
     <div className="fixed inset-0 z-[9999] flex items-end" onClick={onClose}>
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
       <div
-        className="relative w-full bg-background rounded-t-3xl overflow-hidden"
+        className="relative w-full bg-background rounded-t-3xl border-t border-border overflow-hidden"
         style={{ boxShadow: "0 -4px 32px rgba(0,0,0,0.22)", paddingBottom: "env(safe-area-inset-bottom, 8px)" }}
         onClick={e => e.stopPropagation()}
       >

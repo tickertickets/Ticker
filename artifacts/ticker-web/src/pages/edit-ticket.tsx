@@ -275,7 +275,7 @@ export default function EditTicket() {
         <div className="fixed inset-0 z-50 flex items-end" onClick={() => setShowDatePicker(false)}>
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
           <div
-            className="relative w-full bg-background rounded-t-3xl"
+            className="relative w-full bg-background rounded-t-3xl border-t border-border"
             style={{ boxShadow: "0 -4px 32px rgba(0,0,0,0.18)", paddingBottom: "max(1.5rem, env(safe-area-inset-bottom, 0px) + 5rem)" }}
             onClick={e => e.stopPropagation()}
           >

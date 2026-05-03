@@ -1541,7 +1541,7 @@ export default function CreateTicket() {
           >
             <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
             <div
-              className="relative w-full bg-background rounded-t-3xl overflow-hidden"
+              className="relative w-full bg-background rounded-t-3xl border-t border-border overflow-hidden"
               style={{ boxShadow: "0 -4px 32px rgba(0,0,0,0.22)", paddingBottom: "env(safe-area-inset-bottom, 12px)" }}
               onClick={e => e.stopPropagation()}
             >
@@ -1607,7 +1607,7 @@ export default function CreateTicket() {
         <div className="fixed inset-0 z-[9999] flex items-end" onClick={() => setShowDraftDialog(false)}>
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
           <div
-            className="relative w-full bg-background rounded-t-3xl px-5 pt-5"
+            className="relative w-full bg-background rounded-t-3xl border-t border-border px-5 pt-5"
             style={{ boxShadow: "0 -4px 32px rgba(0,0,0,0.18)", paddingBottom: "max(1.5rem, env(safe-area-inset-bottom, 0px) + 1rem)" }}
             onClick={e => e.stopPropagation()}
           >

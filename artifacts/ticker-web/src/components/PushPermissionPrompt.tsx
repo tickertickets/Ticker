@@ -110,7 +110,7 @@ export function PushPermissionPrompt() {
       aria-modal="true"
     >
       <div
-        className="w-full max-w-[420px] bg-background rounded-t-3xl sm:rounded-3xl p-6 pb-8 shadow-xl animate-in slide-in-from-bottom-4 duration-300"
+        className="w-full max-w-[420px] bg-background rounded-t-3xl sm:rounded-3xl border-t border-border sm:border p-6 pb-8 shadow-xl animate-in slide-in-from-bottom-4 duration-300"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex flex-col items-center text-center gap-4">

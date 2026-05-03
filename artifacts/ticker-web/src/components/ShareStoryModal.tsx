@@ -185,7 +185,7 @@ export function ShareStoryModal({ ticket, onClose, onOpenChat }: ShareStoryModal
 
       {/* Sheet */}
       <div
-        className="bg-background"
+        className="bg-background border-t border-border"
         style={{
           position: "fixed",
           bottom: 0,

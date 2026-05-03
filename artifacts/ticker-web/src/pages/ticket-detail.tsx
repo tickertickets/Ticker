@@ -763,7 +763,7 @@ export default function TicketDetail() {
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
           <div
             className={cn(
-              "relative w-full bg-background rounded-t-3xl transition-transform duration-300 ease-out",
+              "relative w-full bg-background rounded-t-3xl border-t border-border transition-transform duration-300 ease-out",
               deleteSheetVisible ? "translate-y-0" : "translate-y-full",
             )}
             style={{

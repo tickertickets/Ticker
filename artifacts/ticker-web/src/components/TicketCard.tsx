@@ -845,7 +845,7 @@ function CommentModal({ ticket, onClose }: { ticket: Ticket; onClose: () => void
     <div className="fixed inset-0 z-[100] flex items-end justify-center" style={{ paddingBottom: keyboardHeight }} onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
-        className="relative bg-background rounded-t-3xl shadow-2xl flex flex-col"
+        className="relative bg-background rounded-t-3xl shadow-2xl flex flex-col border-t border-border"
         style={{ width: "min(100%, 430px)", height: "min(80vh, 600px)" }}
         onClick={e => e.stopPropagation()}
       >
@@ -1667,7 +1667,7 @@ export function CardContextMenu({ ticket, onClose }: CardMenuProps) {
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
       <div
         className={cn(
-          "relative w-full bg-background rounded-t-3xl transition-transform duration-300 ease-out",
+          "relative w-full bg-background rounded-t-3xl border-t border-border transition-transform duration-300 ease-out",
           visible ? "translate-y-0" : "translate-y-full",
         )}
         style={{
