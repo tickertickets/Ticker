@@ -196,10 +196,10 @@ export default function AuthLogin() {
           {/* ── Login form ── */}
           {subMode === "login" && (
             <form onSubmit={handleLogin} noValidate>
-              <h1 className="font-black text-[26px] leading-[1.1] text-[#111] mb-1" style={{ fontFamily: "var(--font-display)" }}>
+              <h1 className="font-black text-[26px] leading-[1.1] text-[#111] mb-1 truncate" style={{ fontFamily: "var(--font-display)" }}>
                 {tr("ยินดีต้อนรับกลับมา", "Welcome back")}
               </h1>
-              <p className="text-[13.5px] text-[#888] mb-6 leading-relaxed">
+              <p className="text-[13px] text-[#888] mb-6 truncate">
                 {tr("เข้าสู่ระบบเพื่อดูคอลเลกชันของคุณ", "Sign in to view your collection")}
               </p>
 
@@ -260,11 +260,11 @@ export default function AuthLogin() {
           {/* ── Forgot password form ── */}
           {subMode === "forgot" && (
             <form onSubmit={handleForgot} noValidate>
-              <h1 className="font-black text-[26px] leading-[1.1] text-[#111] mb-1" style={{ fontFamily: "var(--font-display)" }}>
+              <h1 className="font-black text-[26px] leading-[1.1] text-[#111] mb-1 truncate" style={{ fontFamily: "var(--font-display)" }}>
                 {tr("ลืมรหัสผ่าน?", "Forgot password?")}
               </h1>
-              <p className="text-[13.5px] text-[#888] mb-6 leading-relaxed">
-                {tr("กรอกอีเมลที่ใช้ลงทะเบียน เราจะส่งลิงก์รีเซ็ตให้คุณ", "Enter the email you registered with — we'll send you a reset link")}
+              <p className="text-[13px] text-[#888] mb-6 truncate">
+                {tr("กรอกอีเมลที่ลงทะเบียนไว้ เราจะส่งลิงก์รีเซ็ตให้", "Enter your registered email — we'll send a reset link")}
               </p>
 
               <div className="mb-6">
@@ -304,8 +304,8 @@ export default function AuthLogin() {
                   <div className="w-14 h-14 rounded-2xl bg-[#f0fff4] flex items-center justify-center mb-4">
                     <CheckCircle2 className="w-7 h-7 text-emerald-500" />
                   </div>
-                  <h1 className="font-black text-[24px] text-[#111] mb-1" style={{ fontFamily: "var(--font-display)" }}>{tr("ลิงก์รีเซ็ตรหัสผ่าน", "Password reset link")}</h1>
-                  <p className="text-[12px] text-[#888] mb-4">{tr("คัดลอกลิงก์ด้านล่างแล้วเปิดในเบราว์เซอร์ · หมดอายุใน 1 ชั่วโมง", "Copy the link below and open it in your browser · expires in 1 hour")}</p>
+                  <h1 className="font-black text-[24px] text-[#111] mb-1 truncate" style={{ fontFamily: "var(--font-display)" }}>{tr("ลิงก์รีเซ็ตรหัสผ่าน", "Password reset link")}</h1>
+                  <p className="text-[12px] text-[#888] mb-4 truncate">{tr("คัดลอกลิงก์แล้วเปิดในเบราว์เซอร์ · หมดอายุใน 1 ชม.", "Copy the link and open it in your browser · expires in 1h")}</p>
                   <div className="rounded-xl px-3 py-3 mb-3 break-all text-[11px] font-mono text-[#444] select-all" style={{ background: "#f5f5f7", border: "1px solid #e0e0e0" }}>
                     {forgotResetUrl}
                   </div>
@@ -336,10 +336,10 @@ export default function AuthLogin() {
           {/* ── Reset password form ── */}
           {subMode === "reset-password" && (
             <form onSubmit={handleResetPassword} noValidate>
-              <h1 className="font-black text-[26px] leading-[1.1] text-[#111] mb-1" style={{ fontFamily: "var(--font-display)" }}>
+              <h1 className="font-black text-[26px] leading-[1.1] text-[#111] mb-1 truncate" style={{ fontFamily: "var(--font-display)" }}>
                 {tr("ตั้งรหัสผ่านใหม่", "Set a new password")}
               </h1>
-              <p className="text-[13.5px] text-[#888] mb-6 leading-relaxed">{tr("สร้างรหัสผ่านใหม่ที่คุณจำได้", "Create a new password you'll remember")}</p>
+              <p className="text-[13px] text-[#888] mb-6 truncate">{tr("สร้างรหัสผ่านใหม่ที่จำได้ง่าย", "Create a new password you'll remember")}</p>
               <div className="mb-6">
                 <label className="block text-[11px] font-bold text-[#111]/40 tracking-wide mb-1.5">{tr("รหัสผ่านใหม่", "New password")}</label>
                 <div className="relative">
@@ -378,8 +378,8 @@ export default function AuthLogin() {
               <div className="w-16 h-16 rounded-2xl bg-[#f0fff4] flex items-center justify-center mb-4">
                 <CheckCircle2 className="w-8 h-8 text-emerald-500" />
               </div>
-              <h2 className="font-black text-[24px] text-[#111] mb-1" style={{ fontFamily: "var(--font-display)" }}>{tr("ตั้งรหัสผ่านใหม่สำเร็จ", "Password updated")}</h2>
-              <p className="text-[13px] text-[#888] mb-7">{tr("ตอนนี้คุณสามารถเข้าสู่ระบบด้วยรหัสผ่านใหม่ได้แล้ว", "You can now sign in with your new password")}</p>
+              <h2 className="font-black text-[24px] text-[#111] mb-1 truncate" style={{ fontFamily: "var(--font-display)" }}>{tr("ตั้งรหัสผ่านใหม่สำเร็จ", "Password updated")}</h2>
+              <p className="text-[13px] text-[#888] mb-7 truncate">{tr("เข้าสู่ระบบด้วยรหัสผ่านใหม่ได้เลย", "You can now sign in with your new password")}</p>
               <button
                 onClick={() => { setSubMode("login"); setPassword(""); }}
                 className="w-full h-[52px] rounded-2xl font-bold text-[15px] flex items-center justify-center gap-2"

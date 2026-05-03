@@ -498,6 +498,17 @@ export default function TicketDetail() {
               queryClient.setQueryData([`/api/tickets/${ticketId}`], (old: any) =>
                 old ? { ...old, captionLinks: newLinks } : old
               );
+              queryClient.setQueryData(["mixed-feed"], (old: any) => {
+                if (!old) return old;
+                return {
+                  ...old,
+                  items: (old.items ?? []).map((item: any) =>
+                    item.ticket?.id === ticketId
+                      ? { ...item, ticket: { ...item.ticket, captionLinks: newLinks } }
+                      : item
+                  ),
+                };
+              });
             }}
           />
         )}

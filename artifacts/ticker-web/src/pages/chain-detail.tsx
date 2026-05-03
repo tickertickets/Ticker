@@ -417,6 +417,26 @@ export default function ChainDetail() {
               qc.setQueryData(["/api/chains", chainId], (old: any) =>
                 old ? { ...old, descriptionLinks: newLinks } : old
               );
+              qc.setQueryData(["chains-feed"], (old: any) => {
+                if (!old) return old;
+                return {
+                  ...old,
+                  chains: (old.chains ?? []).map((c: any) =>
+                    c.id === chainId ? { ...c, descriptionLinks: newLinks } : c
+                  ),
+                };
+              });
+              qc.setQueryData(["mixed-feed"], (old: any) => {
+                if (!old) return old;
+                return {
+                  ...old,
+                  items: (old.items ?? []).map((item: any) =>
+                    item.chain?.id === chainId
+                      ? { ...item, chain: { ...item.chain, descriptionLinks: newLinks } }
+                      : item
+                  ),
+                };
+              });
             }}
           />
         )}

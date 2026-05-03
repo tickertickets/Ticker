@@ -105,11 +105,11 @@ export default function AuthSignup() {
         {/* Content */}
         <div className="flex-1 flex flex-col px-5 overflow-y-auto" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
             <form onSubmit={handleSubmit} noValidate>
-              <h1 className="font-black text-[26px] leading-[1.1] text-[#111] mb-1" style={{ fontFamily: "var(--font-display)" }}>
+              <h1 className="font-black text-[26px] leading-[1.1] text-[#111] mb-1 truncate" style={{ fontFamily: "var(--font-display)" }}>
                 {tr("สร้างบัญชีใหม่", "Create your account")}
               </h1>
-              <p className="text-[13.5px] text-[#888] mb-6 leading-relaxed">
-                {tr("เริ่มบันทึกความทรงจำหนัง และแชร์ให้คนที่คุณรัก", "Start saving your movie memories and share them with people you love")}
+              <p className="text-[13px] text-[#888] mb-6 truncate">
+                {tr("บันทึกหนังที่คุณรัก แชร์ให้คนที่คุณรัก", "Log movies you love. Share them with people you care about.")}
               </p>
 
               <div className="mb-3">
@@ -157,8 +157,8 @@ export default function AuthSignup() {
                 {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <>{tr("สมัครสมาชิก", "Sign up")} <ArrowRight className="w-4 h-4" /></>}
               </button>
 
-              <p className="text-center text-[11px] text-[#ccc] mt-5 leading-relaxed px-2">
-                {tr("การสมัครถือว่าคุณยอมรับ Terms of Service และ Privacy Policy ของ Ticker", "By signing up you agree to Ticker's Terms of Service and Privacy Policy")}
+              <p className="text-center text-[11px] text-[#ccc] mt-5 truncate">
+                {tr("สมัครหมายถึงยอมรับ Terms & Privacy Policy ของ Ticker", "Sign up = agree to Ticker's Terms & Privacy Policy")}
               </p>
             </form>
         </div>

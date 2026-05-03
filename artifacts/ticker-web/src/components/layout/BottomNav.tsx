@@ -68,7 +68,17 @@ function GuestBottomNav() {
           {[{ href: "/", icon: Home }, { href: "/search", icon: Search }].map(item => {
             const isActive = location === item.href;
             return (
-              <Link key={item.href} href={item.href} className="outline-none flex-1 flex justify-center">
+              <Link
+                key={item.href}
+                href={item.href}
+                className="outline-none flex-1 flex justify-center"
+                onClick={(e) => {
+                  if (isActive) {
+                    e.preventDefault();
+                    window.dispatchEvent(new CustomEvent("nav-refresh", { detail: { href: item.href } }));
+                  }
+                }}
+              >
                 <div className="flex items-center justify-center p-3">
                   <item.icon
                     className={cn("w-6 h-6 transition-all", isActive ? "text-foreground" : "text-muted-foreground")}

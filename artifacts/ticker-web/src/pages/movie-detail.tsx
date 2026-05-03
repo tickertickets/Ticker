@@ -498,18 +498,17 @@ export default function MovieDetail() {
 
 
         {/* Rank + effect badges — below bookmark, centred with it */}
-        {/* Wrapper has SAME right & width as the bookmark button,            */}
-        {/* so flexbox centering always aligns badge center to button center. */}
+        {/* For regular tiers: badge = 26px (px.side 20 + PAD*2 6).          */}
+        {/* right:21 → badge right edge at 21px → badge center = 21+13 = 34. */}
+        {/* Bookmark center = right(16) + w-9/2(18) = 34. Perfect alignment. */}
+        {/* For legendary/cult_classic: right:16 aligns wide badge to button. */}
         {movie && (
           <div
             ref={badgeColRef}
             className="absolute"
             style={{
-              top:            "calc(max(1rem, env(safe-area-inset-top, 0px)) + 2.75rem)",
-              right:          16,
-              width:          36,
-              display:        "flex",
-              justifyContent: (_rank === "legendary" || _rank === "cult_classic") ? "flex-end" : "center",
+              top:   "calc(max(1rem, env(safe-area-inset-top, 0px)) + 2.75rem)",
+              right: (_rank === "legendary" || _rank === "cult_classic") ? 16 : 21,
             }}
           >
             <MovieBadges
