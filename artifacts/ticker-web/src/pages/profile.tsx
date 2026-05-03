@@ -1259,12 +1259,20 @@ export default function Profile() {
               <button
                 className="w-9 h-9 flex items-center justify-center active:opacity-70"
                 onClick={() => {
-                  const url = `${window.location.origin}/@${profile.username}`;
-                  navigator.clipboard.writeText(url).then(() => {
-                    toast({ title: "คัดลอกลิงก์แล้ว", duration: 1500 });
-                  }).catch(() => {
-                    toast({ title: url, duration: 3000 });
-                  });
+                  const url = `${window.location.origin}/profile/${profile.username}`;
+                  const doShare = async () => {
+                    if (typeof navigator.share === "function") {
+                      try { await navigator.share({ title: profile.displayName ?? profile.username, url }); return; } catch { /* cancelled */ }
+                    }
+                    try { await navigator.clipboard.writeText(url); }
+                    catch {
+                      const el = document.createElement("textarea");
+                      el.value = url; el.style.cssText = "position:fixed;top:-9999px;left:-9999px;";
+                      document.body.appendChild(el); el.select(); document.execCommand("copy"); document.body.removeChild(el);
+                    }
+                    toast({ title: t.copiedLabel, duration: 1500 });
+                  };
+                  doShare();
                 }}
               >
                 <Share2 className="w-6 h-6 text-white" />
