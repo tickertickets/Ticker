@@ -142,13 +142,6 @@ export default function ChainDetail() {
   const addSearchResults = ((addSearchData?.movies ?? []) as Array<{ imdbId: string; title: string; year: string | null; posterUrl: string | null }>);
   const trendingSuggestions = ((trendingData?.movies ?? []) as Array<{ imdbId: string; title: string; year: string | null; posterUrl: string | null }>).slice(0, 12);
 
-  // Sync description links whenever chain data changes (including after feed-side saves)
-  useEffect(() => {
-    if (!chain) return;
-    setDescLinks(((chain as any).descriptionLinks as SocialLink[] | undefined) ?? []);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chain?.id, JSON.stringify((chain as any)?.descriptionLinks ?? null)]);
-
   const addMovieMutation = useMutation({
     mutationFn: async ({ movie, note }: { movie: { imdbId: string; title: string; year: string | null; posterUrl: string | null }; note: string }) => {
       const res = await fetch(`/api/chains/${chainId}/movies`, {
@@ -236,6 +229,14 @@ export default function ChainDetail() {
     enabled: !!chainId,
     refetchInterval: 30000,
   });
+
+  // Sync description links whenever chain data changes (including after feed-side saves).
+  // Must be AFTER the `chain` const declaration to avoid TDZ ReferenceError.
+  useEffect(() => {
+    if (!chain) return;
+    setDescLinks(((chain as any).descriptionLinks as SocialLink[] | undefined) ?? []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chain?.id, JSON.stringify((chain as any)?.descriptionLinks ?? null)]);
 
   const startRunMutation = useMutation({
     mutationFn: async () => {
