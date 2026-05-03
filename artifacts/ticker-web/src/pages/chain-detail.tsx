@@ -156,6 +156,8 @@ export default function ChainDetail() {
     },
     onSuccess: (data) => {
       qc.setQueryData(["/api/chains", chainId], data);
+      qc.invalidateQueries({ queryKey: ["chains-feed"] });
+      qc.invalidateQueries({ queryKey: ["mixed-feed"] });
       setShowAddMovie(false);
       setAddQuery("");
       setPendingMovie(null);
@@ -176,6 +178,8 @@ export default function ChainDetail() {
     },
     onSuccess: (data) => {
       qc.setQueryData(["/api/chains", chainId], data);
+      qc.invalidateQueries({ queryKey: ["chains-feed"] });
+      qc.invalidateQueries({ queryKey: ["mixed-feed"] });
       setRemovingMovieId(null);
     },
     onError: () => setRemovingMovieId(null),
@@ -195,6 +199,8 @@ export default function ChainDetail() {
     },
     onSuccess: (data) => {
       qc.setQueryData(["/api/chains", chainId], data);
+      qc.invalidateQueries({ queryKey: ["chains-feed"] });
+      qc.invalidateQueries({ queryKey: ["mixed-feed"] });
       setEditingNoteId(null);
       setEditNoteText("");
     },

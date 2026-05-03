@@ -319,12 +319,18 @@ export default function Home() {
 
   const triggerRefresh = () => {
     const el = refMap[activeKey]?.current;
-    if (el) el.scrollTo({ top: 0, behavior: "smooth" });
+    if (el) {
+      // instant jump avoids smooth-scroll being interrupted by re-renders
+      el.scrollTop = 0;
+      scrollStore.set(`home-${activeKey}`, 0);
+    }
     setHeaderHidden(false);
     setIsRefreshing(true);
     Promise.all([
       qc.invalidateQueries({ queryKey: ["feed"] }),
+      qc.invalidateQueries({ queryKey: ["/api/tickets"] }),
       qc.invalidateQueries({ queryKey: ["chains-feed"] }),
+      qc.invalidateQueries({ queryKey: ["mixed-feed"] }),
     ]).then(() => setTimeout(() => setIsRefreshing(false), 400));
   };
 

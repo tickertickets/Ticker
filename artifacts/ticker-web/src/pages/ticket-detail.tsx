@@ -511,6 +511,7 @@ export default function TicketDetail() {
                   ),
                 };
               });
+              queryClient.invalidateQueries({ queryKey: ["/api/tickets"] });
             }}
           />
         )}
