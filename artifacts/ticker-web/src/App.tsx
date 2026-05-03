@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, Component, type ReactNode } from "react";
 import { LangProvider } from "@/lib/i18n";
 import { Switch, Route, Router as WouterRouter, useLocation, Redirect } from "wouter";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -120,9 +120,40 @@ function PersistentTab({
   );
 }
 
+// ── Error boundary — catches JS crashes in sub-pages ─────────────────────
+class PageErrorBoundary extends Component<
+  { children: ReactNode },
+  { crashed: boolean; error: string }
+> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { crashed: false, error: "" };
+  }
+  static getDerivedStateFromError(err: unknown) {
+    return { crashed: true, error: err instanceof Error ? err.message : String(err) };
+  }
+  componentDidCatch() {}
+  render() {
+    if (this.state.crashed) {
+      return (
+        <div className="h-full bg-background flex flex-col items-center justify-center gap-4 px-6">
+          <p className="text-sm text-muted-foreground text-center">เกิดข้อผิดพลาด กรุณากลับหน้าหลัก</p>
+          <button
+            onClick={() => { this.setState({ crashed: false, error: "" }); window.location.href = "/"; }}
+            className="text-sm text-foreground underline"
+          >
+            กลับหน้าหลัก
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // ── Plain wrapper (legacy name kept; just renders children) ───────────────
 function ShimmerActiveWrapper({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={className}>{children}</div>;
+  return <div className={className}><PageErrorBoundary>{children}</PageErrorBoundary></div>;
 }
 
 // ── Always-mounted guest tab shells ──────────────────────────────────────

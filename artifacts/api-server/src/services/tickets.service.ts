@@ -721,6 +721,7 @@ export async function buildTicket(
     cardDirector: ticket.cardDirector,
     cardProducer: ticket.cardProducer,
     cardActors: ticket.cardActors,
+    captionLinks: Array.isArray(ticket.captionLinks) ? ticket.captionLinks : [],
     clipUrl: ticket.clipUrl,
     episodeLabel: ticket.episodeLabel,
     createdAt: ticket.createdAt,

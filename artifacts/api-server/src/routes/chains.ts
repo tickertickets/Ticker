@@ -231,6 +231,7 @@ export async function buildChain(
     })),
     myRun,
     ownerRun,
+    descriptionLinks: Array.isArray(chain.descriptionLinks) ? chain.descriptionLinks : [],
     challengeDurationMs: chain.challengeDurationMs ?? null,
     hideComments: chain.hideComments ?? false,
     hideLikes: chain.hideLikes ?? false,

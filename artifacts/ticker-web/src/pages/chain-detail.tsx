@@ -337,7 +337,7 @@ export default function ChainDetail() {
       </div>
     );
     return (
-      <div className="bg-background flex flex-col items-center justify-center py-32 gap-3">
+      <div className="h-full bg-background flex flex-col items-center justify-center gap-3">
         <p className="text-muted-foreground">ไม่พบ Chain นี้</p>
         <button onClick={() => navBack(navigate)} className="text-sm underline">ย้อนกลับ</button>
       </div>
