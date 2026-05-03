@@ -203,7 +203,7 @@ export default function AuthLogin() {
                 {tr("เข้าสู่ระบบเพื่อดูคอลเลกชันของคุณ", "Sign in to view your collection")}
               </p>
 
-              <div className="mb-3">
+              <div className="mb-4">
                 <label className="block text-[11px] font-bold text-[#111]/40 tracking-wide mb-1.5">{tr("อีเมล", "Email")}</label>
                 <input
                   type="email" autoComplete="email" value={email} required
@@ -216,7 +216,7 @@ export default function AuthLogin() {
                 />
               </div>
 
-              <div className="mb-2">
+              <div className="mb-4">
                 <label className="block text-[11px] font-bold text-[#111]/40 tracking-wide mb-1.5">{tr("รหัสผ่าน", "Password")}</label>
                 <div className="relative">
                   <input
@@ -234,7 +234,7 @@ export default function AuthLogin() {
                 </div>
               </div>
 
-              <div className="text-right mb-5">
+              <div className="text-right mb-4">
                 <button type="button" onClick={() => { setSubMode("forgot"); setError(""); }} className="text-[12px] text-[#888]">
                   {tr("ลืมรหัสผ่าน?", "Forgot password?")}
                 </button>
@@ -267,7 +267,7 @@ export default function AuthLogin() {
                 {tr("กรอกอีเมลที่ลงทะเบียนไว้ เราจะส่งลิงก์รีเซ็ตให้", "Enter your registered email — we'll send a reset link")}
               </p>
 
-              <div className="mb-6">
+              <div className="mb-4">
                 <label className="block text-[11px] font-bold text-[#111]/40 tracking-wide mb-1.5">{tr("อีเมล", "Email")}</label>
                 <input
                   type="email" autoComplete="email" value={email} required

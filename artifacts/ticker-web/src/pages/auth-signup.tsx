@@ -109,10 +109,10 @@ export default function AuthSignup() {
                 {tr("สร้างบัญชีใหม่", "Create your account")}
               </h1>
               <p className="text-[13px] text-[#888] mb-6 truncate">
-                {tr("บันทึกหนังที่คุณรัก แชร์ให้คนที่คุณรัก", "Log movies you love. Share them with people you care about.")}
+                {tr("บันทึกหนังที่คุณรัก แชร์ให้คนที่คุณรัก", "Log movies. Share with people you care about.")}
               </p>
 
-              <div className="mb-3">
+              <div className="mb-4">
                 <label className="block text-[11px] font-bold text-[#111]/40 tracking-wide mb-1.5">{tr("อีเมล", "Email")}</label>
                 <input
                   type="email" autoComplete="email" value={email} required
@@ -125,7 +125,7 @@ export default function AuthSignup() {
                 />
               </div>
 
-              <div className="mb-5">
+              <div className="mb-4">
                 <label className="block text-[11px] font-bold text-[#111]/40 tracking-wide mb-1.5">{tr("รหัสผ่าน", "Password")}</label>
                 <div className="relative">
                   <input
@@ -157,8 +157,8 @@ export default function AuthSignup() {
                 {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <>{tr("สมัครสมาชิก", "Sign up")} <ArrowRight className="w-4 h-4" /></>}
               </button>
 
-              <p className="text-center text-[11px] text-[#ccc] mt-5 truncate">
-                {tr("สมัครหมายถึงยอมรับ Terms & Privacy Policy ของ Ticker", "Sign up = agree to Ticker's Terms & Privacy Policy")}
+              <p className="text-center text-[11px] text-[#ccc] mt-4 truncate">
+                {tr("การสมัครถือว่ายอมรับ Terms of Service และ Privacy Policy", "Signing up means you agree to Ticker's Terms of Service and Privacy Policy")}
               </p>
             </form>
         </div>

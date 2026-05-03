@@ -384,7 +384,7 @@ export default function Onboarding() {
                   {/* Display name field */}
                   <div>
                     <label className="block text-[11px] font-bold tracking-wide mb-1.5" style={{ color: "rgba(0,0,0,0.45)" }}>
-                      {tr("ชื่อที่แสดง", "Display name")} <span className="normal-case font-normal text-[#bbb]">{tr("(ไม่บังคับ)", "(optional)")}</span>
+                      {tr("ชื่อที่แสดง", "Display name")}
                     </label>
                     <input
                       className="w-full h-[52px] rounded-xl px-4 text-[14px] text-[#111] placeholder:text-[#bbb] outline-none transition-all"
@@ -399,7 +399,7 @@ export default function Onboarding() {
                   </div>
                 </div>
 
-                <div className="pt-8 pb-2">
+                <div className="pt-6 pb-2">
                   <button
                     onClick={() => goStep(2, 1)}
                     disabled={!canNext1}
@@ -531,11 +531,10 @@ export default function Onboarding() {
                     >
                       Privacy Policy
                     </button>
-                    {tr(" และยืนยันว่าฉันมีอายุ 13 ปีขึ้นไป", ", and confirm I am 13 or older")}
                   </span>
                 </button>
 
-                <div className="pt-8 pb-2">
+                <div className="pt-6 pb-2">
                   <button
                     onClick={handleSubmit}
                     disabled={!canNext3 || isPending}
