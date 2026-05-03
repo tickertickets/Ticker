@@ -1253,7 +1253,7 @@ export default function Profile() {
           <div className="flex flex-col items-center gap-1">
             {me ? (
               <button
-                className="w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center border border-white/20 active:opacity-70"
+                className="w-9 h-9 flex items-center justify-center active:opacity-70"
                 onClick={() => {
                   const url = `${window.location.origin}/@${profile.username}`;
                   navigator.clipboard.writeText(url).then(() => {
@@ -1263,7 +1263,7 @@ export default function Profile() {
                   });
                 }}
               >
-                <Share2 className="w-[18px] h-[18px] text-white" />
+                <Share2 className="w-6 h-6 text-white" />
               </button>
             ) : <div className="w-9 h-9" />}
             {isOwn ? (

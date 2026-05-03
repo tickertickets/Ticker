@@ -62,7 +62,7 @@ function GuestBottomNav() {
       {authOpen && <GuestAuthMenu onClose={() => setAuthOpen(false)} />}
       <div
         className="shrink-0 bg-background border-t border-border"
-        style={{ paddingBottom: "env(safe-area-inset-bottom)", transform: "translateZ(0)" }}
+        style={{ paddingBottom: "var(--sab, env(safe-area-inset-bottom, 0px))", transform: "translateZ(0)" }}
       >
         <div className="flex items-center justify-around px-2 py-2">
           {[{ href: "/", icon: Home }, { href: "/search", icon: Search }].map(item => {
@@ -181,7 +181,7 @@ export function BottomNav() {
       {createOpen && <CreateMenu onClose={() => setCreateOpen(false)} />}
       <nav
         className="shrink-0 bg-background border-t border-border"
-        style={{ paddingBottom: "env(safe-area-inset-bottom)", transform: "translateZ(0)" }}
+        style={{ paddingBottom: "var(--sab, env(safe-area-inset-bottom, 0px))", transform: "translateZ(0)" }}
       >
         <div className="flex items-center justify-around px-2 py-2">
           {navItems.map((item, idx) => {

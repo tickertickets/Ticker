@@ -65,14 +65,17 @@ const DOMAIN_SLUG: Record<string, string> = {
   "wa.me": "whatsapp",
 };
 
-// Domains where we can extract a @username label
+// Platforms that don't conventionally use "@" prefix for usernames
+const NO_AT_PLATFORMS = new Set(["facebook", "linkedin", "discord", "youtube"]);
+
+// Domains where we can extract a username label
 const USERNAME_PATTERNS: { pattern: RegExp; slug: string; skip?: string[] }[] = [
   { pattern: /instagram\.com\/([^/?#\s]+)/, slug: "instagram", skip: ["p", "reel", "stories", "explore", "tv"] },
   { pattern: /youtube\.com\/@?(?:c\/|user\/|channel\/)?([^/?#\s]+)/, slug: "youtube", skip: ["watch", "playlist", "shorts", "results", "feed"] },
   { pattern: /tiktok\.com\/@?([^/?#\s]+)/, slug: "tiktok" },
   { pattern: /(?:twitter|x)\.com\/([^/?#\s]+)/, slug: "x", skip: ["home", "explore", "notifications", "messages", "search", "i", "settings"] },
   { pattern: /threads\.net\/@?([^/?#\s]+)/, slug: "threads" },
-  { pattern: /facebook\.com\/([^/?#\s]+)/, slug: "facebook", skip: ["pages", "groups", "events", "watch", "gaming", "marketplace", "profile.php"] },
+  { pattern: /facebook\.com\/([^/?#\s]+)/, slug: "facebook", skip: ["pages", "groups", "events", "watch", "gaming", "marketplace", "profile.php", "share", "sharer", "permalink", "photo", "video", "login", "dialog", "plugins"] },
   { pattern: /discord\.(?:gg|com\/invite|com\/channels)\/([^/?#\s]+)/, slug: "discord" },
   { pattern: /github\.com\/([^/?#\s]+)/, slug: "github", skip: ["orgs", "topics", "trending", "explore"] },
   { pattern: /linkedin\.com\/in\/([^/?#\s]+)/, slug: "linkedin" },
@@ -87,7 +90,8 @@ export function detectPlatform(rawUrl: string): { platform: Platform; label?: st
     const m = url.match(pattern);
     if (m) {
       const u = m[1]!.replace(/^@/, "");
-      const label = skip && skip.includes(u) ? undefined : "@" + u;
+      if (skip && skip.includes(u)) return { platform: slug };
+      const label = NO_AT_PLATFORMS.has(slug) ? u : "@" + u;
       return { platform: slug, label };
     }
   }

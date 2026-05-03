@@ -10,6 +10,27 @@ import { initPerfProbe } from "@/lib/perf-probe";
 applyTheme(getTheme());
 initPerfProbe();
 
+// ── Safe-area-inset-bottom fix ──────────────────────────────────────────────
+// On Android Chrome and PWA, env(safe-area-inset-bottom) can return 0 on the
+// first paint after a hard redirect (e.g. after login). Reading the value via
+// a measured element and storing it as --sab forces a reliable pixel value
+// that survives hard navigations.
+(function initSafeArea() {
+  const el = document.createElement("div");
+  el.style.cssText =
+    "position:fixed;bottom:0;width:0;height:env(safe-area-inset-bottom,0px);pointer-events:none;visibility:hidden;z-index:-1";
+  document.documentElement.appendChild(el);
+  function update() {
+    const h = el.getBoundingClientRect().height;
+    document.documentElement.style.setProperty("--sab", `${h}px`);
+  }
+  update();
+  requestAnimationFrame(update);
+  setTimeout(update, 150);
+  setTimeout(update, 600);
+  window.addEventListener("resize", update, { passive: true });
+})();
+
 // Suppress browser-extension errors from Vite's error overlay.
 // Extensions like Firefox Reader, MetaMask, DarkReader inject their own globals
 // and throw errors that have nothing to do with this app.
