@@ -382,7 +382,7 @@ export function ChainShareModal({ chain, onClose }: { chain: ChainItem; onClose:
         onClick={onClose}
       />
       <div
-        className="bg-background"
+        className="bg-background border-t border-border"
         style={{
           position: "fixed",
           bottom: 0,
@@ -537,7 +537,7 @@ function ChainSendToChatModal({ chain, onClose }: { chain: ChainItem; onClose: (
         onClick={onClose}
       />
       <div
-        className="bg-background"
+        className="bg-background border-t border-border"
         style={{
           position: "fixed",
           bottom: 0,
