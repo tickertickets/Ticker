@@ -28,7 +28,20 @@ initPerfProbe();
   requestAnimationFrame(update);
   setTimeout(update, 150);
   setTimeout(update, 600);
+  setTimeout(update, 1200);
+  setTimeout(update, 2500);
   window.addEventListener("resize", update, { passive: true });
+  // Re-measure after SPA navigations: the browser chrome may expand/collapse
+  // (showing/hiding the address bar) after a login redirect, and env()
+  // won't change until the next paint cycle on some Android browsers.
+  window.addEventListener("pageshow", update, { passive: true });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      update();
+      setTimeout(update, 200);
+    }
+  }, { passive: true });
+  window.addEventListener("focus", update, { passive: true });
 })();
 
 // Suppress browser-extension errors from Vite's error overlay.

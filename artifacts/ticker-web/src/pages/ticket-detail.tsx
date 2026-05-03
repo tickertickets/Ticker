@@ -191,6 +191,8 @@ export default function TicketDetail() {
     queryClient.invalidateQueries({ queryKey: [`/api/tickets/${id}`] });
     queryClient.invalidateQueries({ queryKey: [`/api/tickets/${id}/comments`] });
     queryClient.invalidateQueries({ queryKey: ["mixed-feed"] });
+    // Home discovery feed (useListTickets → key ["/api/tickets", params])
+    queryClient.invalidateQueries({ queryKey: ["/api/tickets"] });
     // Profile tickets (keyed as /api/users/:username/tickets)
     if (ticket?.user?.username) {
       queryClient.invalidateQueries({ queryKey: [`/api/users/${ticket.user.username}/tickets`] });
