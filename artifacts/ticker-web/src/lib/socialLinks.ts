@@ -90,7 +90,12 @@ export function detectPlatform(rawUrl: string): { platform: Platform; label?: st
     const m = url.match(pattern);
     if (m) {
       const u = m[1]!.replace(/^@/, "");
-      if (skip && skip.includes(u)) return { platform: slug };
+      if (skip && skip.includes(u)) {
+        // Can't extract a meaningful username — fall back to platform display name
+        // for no-@ platforms (Facebook, LinkedIn, etc.) so the chip still has a label
+        const label = NO_AT_PLATFORMS.has(slug) ? getPlatformName(slug) : undefined;
+        return { platform: slug, label };
+      }
       const label = NO_AT_PLATFORMS.has(slug) ? u : "@" + u;
       return { platform: slug, label };
     }
