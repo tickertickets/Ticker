@@ -614,7 +614,7 @@ export default function ChainDetail() {
                   {/* Clickable: poster + title area → movie detail */}
                   <div className="flex-1 min-w-0">
                     <Link
-                      to={(() => {
+                      href={(() => {
                         const qs = new URLSearchParams();
                         if (movie.posterUrl) qs.set("srcposter", movie.posterUrl);
                         if (movie.movieTitle) qs.set("srctitle", movie.movieTitle);
