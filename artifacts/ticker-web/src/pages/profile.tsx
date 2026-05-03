@@ -1239,40 +1239,45 @@ export default function Profile() {
         )}
         <div className="absolute inset-0 bg-gradient-to-b from-black/20 to-black/60" />
         <div
-          className="absolute top-0 inset-x-0 flex items-center justify-between px-4 pt-4"
+          className="absolute top-0 inset-x-0 flex items-center px-4"
           style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 16px)" }}
         >
-          {isOwn ? (
-            <Link href="/bookmarks"><button className="w-9 h-9 flex items-center justify-center"><Bookmark className="w-6 h-6 text-white" /></button></Link>
-          ) : (
-            <button onClick={() => navBack(navigate)} className="w-9 h-9 flex items-center justify-center">
-              <ChevronLeft className="w-7 h-7 text-white" />
-            </button>
-          )}
-          <span className="font-display font-bold text-white text-xl tracking-tight">Ticker</span>
-          {/* Share — exact original position/size of gear */}
-          {me ? (
-            <button
-              className="w-9 h-9 flex items-center justify-center active:opacity-70"
-              onClick={() => {
-                const url = `${window.location.origin}/@${profile.username}`;
-                navigator.clipboard.writeText(url).then(() => {
-                  toast({ title: "คัดลอกลิงก์แล้ว", duration: 1500 });
-                }).catch(() => {
-                  toast({ title: url, duration: 3000 });
-                });
-              }}
-            >
-              <Share2 className="w-6 h-6 text-white" />
-            </button>
-          ) : <div className="w-9 h-9" />}
+          {/* Left — fixed width matches right, keeps Ticker truly centred */}
+          <div className="w-9 h-9 flex items-center justify-start flex-shrink-0">
+            {isOwn ? (
+              <Link href="/bookmarks"><button className="w-9 h-9 flex items-center justify-center"><Bookmark className="w-6 h-6 text-white" /></button></Link>
+            ) : (
+              <button onClick={() => navBack(navigate)} className="w-9 h-9 flex items-center justify-center">
+                <ChevronLeft className="w-7 h-7 text-white" />
+              </button>
+            )}
+          </div>
+          <span className="flex-1 text-center font-display font-bold text-white text-xl tracking-tight">Ticker</span>
+          {/* Right — Share, same w-9 h-9 as original gear slot */}
+          <div className="w-9 h-9 flex items-center justify-end flex-shrink-0">
+            {me ? (
+              <button
+                className="w-9 h-9 flex items-center justify-center active:opacity-70"
+                onClick={() => {
+                  const url = `${window.location.origin}/@${profile.username}`;
+                  navigator.clipboard.writeText(url).then(() => {
+                    toast({ title: "คัดลอกลิงก์แล้ว", duration: 1500 });
+                  }).catch(() => {
+                    toast({ title: url, duration: 3000 });
+                  });
+                }}
+              >
+                <Share2 className="w-6 h-6 text-white" />
+              </button>
+            ) : null}
+          </div>
         </div>
 
-        {/* Gear / Flag — absolute, right-aligned under Share, same width so centers match */}
+        {/* Gear / Flag — absolute, right-aligned just below Share */}
         {isOwn ? (
           <Link href="/settings">
             <button
-              className="absolute w-9 h-9 flex items-center justify-center right-4"
+              className="absolute w-9 h-9 flex items-center justify-center right-3"
               style={{ top: "calc(env(safe-area-inset-top, 0px) + 16px + 36px + 8px)" }}
             >
               <Settings className="w-6 h-6 text-white" />
@@ -1281,7 +1286,7 @@ export default function Profile() {
         ) : me && !isVerified(profile.username) ? (
           <button
             onClick={() => setReportUserOpen(true)}
-            className="absolute w-9 h-9 flex items-center justify-center right-4"
+            className="absolute w-9 h-9 flex items-center justify-center right-3"
             style={{ top: "calc(env(safe-area-inset-top, 0px) + 16px + 36px + 8px)" }}
           >
             <Flag className="w-6 h-6 text-white/70" />
