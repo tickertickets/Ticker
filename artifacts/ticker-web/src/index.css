@@ -1,0 +1,403 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  --font-sans: 'DM Sans Variable', 'DM Sans', sans-serif;
+  --font-display: 'Space Grotesk Variable', 'Space Grotesk', sans-serif;
+  --font-mono: ui-monospace, monospace;
+}
+
+@theme {
+  --color-background: hsl(0 0% 100%);
+  --color-foreground: hsl(0 0% 7%);
+  --color-card: hsl(0 0% 100%);
+  --color-card-foreground: hsl(0 0% 7%);
+  --color-popover: hsl(0 0% 100%);
+  --color-popover-foreground: hsl(0 0% 7%);
+  --color-primary: hsl(0 0% 7%);
+  --color-primary-foreground: hsl(0 0% 100%);
+  --color-secondary: hsl(0 0% 96%);
+  --color-secondary-foreground: hsl(0 0% 20%);
+  --color-muted: hsl(0 0% 96%);
+  --color-muted-foreground: hsl(0 0% 45%);
+  --color-accent: hsl(0 0% 92%);
+  --color-accent-foreground: hsl(0 0% 7%);
+  --color-destructive: hsl(0 84% 60%);
+  --color-destructive-foreground: hsl(0 0% 100%);
+  --color-border: hsl(0 0% 91%);
+  --color-input: hsl(0 0% 96%);
+  --color-ring: hsl(0 0% 7%);
+  --color-sidebar: hsl(0 0% 100%);
+  --color-sidebar-foreground: hsl(0 0% 7%);
+  --color-sidebar-border: hsl(0 0% 91%);
+  --color-sidebar-primary: hsl(0 0% 7%);
+  --color-sidebar-primary-foreground: hsl(0 0% 100%);
+  --color-sidebar-accent: hsl(0 0% 96%);
+  --color-sidebar-accent-foreground: hsl(0 0% 20%);
+  --color-sidebar-ring: hsl(0 0% 7%);
+}
+
+:root {
+  --background: 0 0% 100%;
+  --foreground: 0 0% 7%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 7%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 0% 7%;
+  --primary: 0 0% 7%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 0 0% 96%;
+  --secondary-foreground: 0 0% 20%;
+  --muted: 0 0% 96%;
+  --muted-foreground: 0 0% 45%;
+  --accent: 0 0% 92%;
+  --accent-foreground: 0 0% 7%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 0 0% 91%;
+  --input: 0 0% 96%;
+  --ring: 0 0% 7%;
+  --sidebar: 0 0% 100%;
+  --sidebar-foreground: 0 0% 7%;
+  --sidebar-border: 0 0% 91%;
+  --sidebar-primary: 0 0% 7%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 0 0% 96%;
+  --sidebar-accent-foreground: 0 0% 20%;
+  --sidebar-ring: 0 0% 7%;
+  --radius: 0.75rem;
+  --app-chrome: #F2F2F7;
+  --ticket-shadow:             0 4px 16px rgba(0,0,0,0.44), 0 1px 5px rgba(0,0,0,0.24);
+  --ticket-shadow-poster:      0 4px 16px rgba(0,0,0,0.44), 0 1px 5px rgba(0,0,0,0.24);
+  --ticket-shadow-back-poster: 0 4px 16px rgba(0,0,0,0.44), 0 1px 5px rgba(0,0,0,0.24);
+  --card-back-bg: #ffffff;
+  --card-back-border: #e4e4e7;
+  --card-back-text: #71717a;
+  --card-back-text-muted: #a1a1aa;
+  --card-back-text-faint: #d4d4d8;
+}
+
+html.dark {
+  --ticket-shadow:             0 4px 18px rgba(255,255,255,0.08), 0 2px 8px rgba(0,0,0,0.45);
+  --ticket-shadow-poster:      0 4px 18px rgba(255,255,255,0.08), 0 2px 8px rgba(0,0,0,0.45);
+  --ticket-shadow-back-poster: 0 4px 18px rgba(255,255,255,0.08), 0 2px 8px rgba(0,0,0,0.45);
+  --card-back-bg: #1c1c1e;
+  --card-back-border: #3a3a3c;
+  --card-back-text: #a1a1aa;
+  --card-back-text-muted: #71717a;
+  --card-back-text-faint: #52525b;
+  --color-background: hsl(0 0% 0%);
+  --color-foreground: hsl(0 0% 93%);
+  --color-card: hsl(0 0% 4%);
+  --color-card-foreground: hsl(0 0% 93%);
+  --color-popover: hsl(0 0% 9%);
+  --color-popover-foreground: hsl(0 0% 93%);
+  --color-primary: hsl(0 0% 93%);
+  --color-primary-foreground: hsl(0 0% 0%);
+  --color-secondary: hsl(0 0% 11%);
+  --color-secondary-foreground: hsl(0 0% 75%);
+  --color-muted: hsl(0 0% 11%);
+  --color-muted-foreground: hsl(0 0% 50%);
+  --color-accent: hsl(0 0% 15%);
+  --color-accent-foreground: hsl(0 0% 93%);
+  --color-destructive: hsl(0 84% 60%);
+  --color-destructive-foreground: hsl(0 0% 100%);
+  --color-border: hsl(0 0% 15%);
+  --color-input: hsl(0 0% 11%);
+  --color-ring: hsl(0 0% 93%);
+  --color-sidebar: hsl(0 0% 0%);
+  --color-sidebar-foreground: hsl(0 0% 93%);
+  --color-sidebar-border: hsl(0 0% 15%);
+  --color-sidebar-primary: hsl(0 0% 93%);
+  --color-sidebar-primary-foreground: hsl(0 0% 0%);
+  --color-sidebar-accent: hsl(0 0% 11%);
+  --color-sidebar-accent-foreground: hsl(0 0% 75%);
+  --color-sidebar-ring: hsl(0 0% 93%);
+  --app-chrome: #000000;
+}
+
+/* ── Hunt chain cover — black in light mode, white in dark mode ── */
+.hunt-cover-bg {
+  background-color: #000000;
+}
+html.dark .hunt-cover-bg {
+  background-color: #ffffff;
+}
+.hunt-cover-icon {
+  color: rgba(255, 255, 255, 0.35);
+}
+html.dark .hunt-cover-icon {
+  color: rgba(0, 0, 0, 0.35);
+}
+
+/* ── Dark mode card shadows — white glow instead of invisible black ── */
+html.dark .card-shadow {
+  box-shadow: 0 2px 16px rgba(255, 255, 255, 0.06), 0 0 0 1px rgba(255,255,255,0.07);
+}
+html.dark .card-shadow-lg {
+  box-shadow: 0 8px 40px rgba(255, 255, 255, 0.08), 0 0 0 1px rgba(255,255,255,0.09);
+}
+html.dark .market-card {
+  box-shadow: 0 2px 16px rgba(255, 255, 255, 0.06), 0 0 0 1px rgba(255,255,255,0.07);
+}
+
+/* ── View Transition: cross-fade for theme switch (all colors change at once) ── */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 220ms;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── Smooth theme transition (fallback for older browsers) — only active during dark/light switch ── */
+html.theme-transitioning,
+html.theme-transitioning *,
+html.theme-transitioning *::before,
+html.theme-transitioning *::after {
+  transition:
+    background-color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+    color            200ms cubic-bezier(0.4, 0, 0.2, 1),
+    border-color     200ms cubic-bezier(0.4, 0, 0.2, 1),
+    fill             200ms cubic-bezier(0.4, 0, 0.2, 1),
+    stroke           200ms cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow       200ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  input, textarea, [contenteditable] {
+    user-select: text;
+    -webkit-user-select: text;
+  }
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  /* PWA: force GPU compositing + proper touch handling (iOS & Android) */
+  .overflow-y-auto {
+    -webkit-overflow-scrolling: touch;
+    will-change: scroll-position;
+    transform: translateZ(0);
+    touch-action: pan-y;
+  }
+  /* ── Modal / bottom-sheet scroll lock ── */
+  html[data-scroll-lock] .overflow-y-auto {
+    overflow: hidden !important;
+    touch-action: none !important;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+  #root {
+    height: 100%;
+    overflow: hidden;
+  }
+  ::-webkit-scrollbar { display: none; width: 0; height: 0; }
+  * { scrollbar-width: none; -ms-overflow-style: none; }
+  /* Prevent browser native long-press callout / context menu on mobile.
+     Applied to images, links, and buttons — the things iOS users typically
+     long-press by mistake on touch UIs.  Inputs / textareas / contenteditable
+     are excluded so users can still select & copy text inside form fields.
+     The Save-to-Story modal explicitly opts back in via inline style so users
+     CAN long-press the rendered card image to save to Photos. */
+  img,
+  a,
+  button,
+  [role="button"] {
+    -webkit-touch-callout: none;
+    -webkit-user-drag: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  input, textarea, [contenteditable="true"] {
+    -webkit-touch-callout: default;
+    user-select: text;
+    -webkit-user-select: text;
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: var(--font-display);
+  }
+
+  /* ── Hide scrollbar (keeps scroll functionality) ── */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* ── Card Shadow ── */
+  .card-shadow {
+    box-shadow: 0 2px 16px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0,0,0,0.04);
+  }
+  .card-shadow-lg {
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0,0,0,0.04);
+  }
+
+  /* ── Filter Pill Tab ── */
+  .filter-pill {
+    @apply inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition-all whitespace-nowrap;
+    @apply bg-secondary text-foreground/70;
+  }
+  .filter-pill.active {
+    @apply bg-foreground text-background;
+  }
+
+  /* ── Search Bar ── */
+  .search-bar {
+    @apply w-full bg-secondary rounded-2xl px-4 h-12 text-sm font-medium text-foreground placeholder:text-muted-foreground border-none outline-none;
+  }
+
+  /* ── Marketplace Card (Feed) ── */
+  .market-card {
+    @apply bg-card rounded-3xl overflow-hidden w-full;
+    box-shadow: 0 2px 16px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0,0,0,0.04);
+  }
+
+  /* ── Collect Grid — 2 per row, cards fixed 100×140 (same as Explore) ── */
+  .collect-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 16px;
+    justify-content: center;
+  }
+
+  /* ── NFT Profile Stats ── */
+  .profile-stat {
+    @apply flex flex-col items-center gap-0.5;
+  }
+  .profile-stat-value {
+    @apply font-display font-bold text-base text-foreground;
+  }
+  .profile-stat-label {
+    @apply text-[11px] text-muted-foreground;
+  }
+
+  /* ── Action Button Pair ── */
+  .btn-pair {
+    @apply flex gap-2;
+  }
+  .btn-outline-dark {
+    @apply flex-1 flex items-center justify-center gap-1.5 h-11 rounded-2xl border border-border text-foreground text-sm font-semibold transition-colors hover:bg-secondary;
+  }
+  .btn-filled-dark {
+    @apply flex-1 flex items-center justify-center gap-1.5 h-11 rounded-2xl bg-foreground text-background text-sm font-semibold transition-opacity hover:opacity-80;
+  }
+
+  /* ── Light micro-animations (still used by various UI surfaces) ── */
+
+  @keyframes float-gentle {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-8px); }
+  }
+
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .animate-fade-up {
+    animation: fade-up 0.4s ease-out forwards;
+  }
+
+  /* SECRET RARE: gold-glow tier label (still used by Legendary badge text) */
+  .badge-tier-secret {
+    text-shadow: 0 0 6px rgba(245, 158, 11, 0.70),
+                 0 0 2px rgba(251, 191, 36, 0.50);
+    letter-spacing: 0.06em;
+  }
+
+  /* Badge ticket outline — dark in light mode, white in dark mode */
+  :root { --badge-outline-color: #0d0d0d; }
+  html.dark { --badge-outline-color: rgba(255, 255, 255, 0.82); }
+
+  /* Reset border/shadow on small movie thumbnail cards (legacy class) */
+  .shimmer-no-border {
+    border-color: var(--color-border) !important;
+    box-shadow: none !important;
+  }
+
+  /* ─────────────────────────────────────────────────────────────────────────
+     CARD BACKGROUND GRADIENTS — ใช้เป็น backdrop สำหรับ card tier
+  ───────────────────────────────────────────────────────────────────────── */
+
+  .card-bg-common       { background: linear-gradient(160deg, #1c1c1e 0%, #27272a 100%); }
+  .card-bg-uncommon     { background: linear-gradient(160deg, #1e2533 0%, #1e293b 100%); }
+  .card-bg-rare         { background: linear-gradient(160deg, #0f1e18 0%, #0d2d1e 100%); }
+  .card-bg-super-rare   { background: linear-gradient(160deg, #0f1729 0%, #1e3a5f 100%); }
+  .card-bg-ultra-rare   { background: linear-gradient(160deg, #150d2a 0%, #2e1065 100%); }
+  .card-bg-legendary    { background: linear-gradient(160deg, #1c1200 0%, #3d2700 100%); }
+  .card-bg-cult         { background: linear-gradient(160deg, #200010 0%, #3d0a1a 100%); }
+
+  /* ── Edit-mode card wiggle (iOS home-screen style) ── */
+  @keyframes card-wiggle {
+    0%  { transform: rotate(-1.5deg) scale(1); }
+    50% { transform: rotate(1.5deg)  scale(1); }
+    100%{ transform: rotate(-1.5deg) scale(1); }
+  }
+  .edit-mode-wiggle {
+    animation: card-wiggle 0.22s ease-in-out infinite;
+    transform-origin: center center;
+  }
+
+  @keyframes like-pop {
+    0%   { transform: scale(1); }
+    30%  { transform: scale(1.55); }
+    60%  { transform: scale(0.88); }
+    80%  { transform: scale(1.15); }
+    100% { transform: scale(1); }
+  }
+  .animate-like-pop {
+    animation: like-pop 0.38s cubic-bezier(0.36, 0.07, 0.19, 0.97) forwards;
+  }
+
+  /* Reduced motion — disable date-slide & wiggle animations */
+  @media (prefers-reduced-motion: reduce) {
+    .upcoming-date-slide-once,
+    .edit-mode-wiggle {
+      animation: none !important;
+    }
+  }
+
+}
+
+/* ── Remove focus rings on all buttons — touch-first mobile app ── */
+button:focus,
+button:focus-visible,
+a:focus,
+a:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ── Upcoming-card date slides out once from beneath "COMING SOON" badge ── */
+@keyframes upcoming-date-slide-once {
+  0%   { transform: translateX(-110%); opacity: 0; }
+  100% { transform: translateX(0);     opacity: 1; }
+}
+.upcoming-date-slide-once {
+  animation: upcoming-date-slide-once 0.9s cubic-bezier(0.22, 0.61, 0.36, 1) 0.35s both;
+}
+
+/* ── Double-tap heart burst (like via double-tap on card / chain cover) ── */
+@keyframes doubletap-heart {
+  0%   { transform: scale(0);    opacity: 0.95; }
+  22%  { transform: scale(1.35); opacity: 1;    }
+  60%  { transform: scale(1.05); opacity: 1;    }
+  100% { transform: scale(1.05); opacity: 0;    }
+}
+

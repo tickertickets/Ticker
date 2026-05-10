@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <script>(function () {
+  var P = ['__firefox__','ethereum','DarkReader','chrome-extension','moz-extension','safari-extension','playlistLongPressed'];
+  function ext(s) { return P.some(function(p){ return s && s.indexOf(p) !== -1; }); }
+  function drop(e) {
+    var msg = e.message || '';
+    var file = e.filename || '';
+    var stack = (e.error && e.error.stack) || '';
+    if (ext(msg) || ext(file) || (!stack && (ext(msg) || !msg || msg === '(unknown runtime error)'))) {
+      e.stopImmediatePropagation(); e.preventDefault();
+    }
+  }
+  function dropRej(e) {
+    var msg = String((e.reason && e.reason.message) || e.reason || '');
+    if (ext(msg)) { e.stopImmediatePropagation(); e.preventDefault(); }
+  }
+  window.addEventListener('error', drop, true);
+  window.addEventListener('unhandledrejection', dropRej, true);
+})();</script>
+
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, viewport-fit=cover" />
+    <title>Ticker — Movie Social Platform</title>
+    <meta name="description" content="Drop a Ticket every time you watch. Build Chains, explore what friends are watching, and discover your next obsession — all in one place." />
+    <meta name="keywords" content="Ticker, Tickets, Chains, movie app, รีวิวหนัง, ดูหนัง, movie review, film diary, movie tracker, watchlist, movie social, ซีรีย์, film community" />
+    <link rel="canonical" href="https://ticker-tickets.vercel.app/" />
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    <!-- ── iOS Add-to-Home-Screen / PWA install ─────────────────────────────
+         iOS Safari ignores manifest.icons and only honours `apple-touch-icon`
+         + `apple-mobile-web-app-*` meta tags. Without these, the home-screen
+         icon shows a screenshot thumbnail instead of the Ticker logo and the
+         standalone display flags don't apply. Sizes 180 covers iPhone 12 Pro
+         Max (highest pixel-density target). The status-bar style is
+         "black-translucent" so the app draws under the notch (safe-area
+         insets are already handled by the React layout).
+    -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Ticker" />
+    <meta name="theme-color" content="#000000" />
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Ticker — Movie Social Platform" />
+    <meta property="og:description" content="Drop a Ticket every time you watch. Build Chains, explore what friends are watching, and discover your next obsession — all in one place." />
+    <meta property="og:url" content="https://ticker-tickets.vercel.app/" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Ticker — Movie Social Platform" />
+    <meta name="twitter:description" content="Drop a Ticket every time you watch. Build Chains, explore what friends are watching, and discover your next obsession — all in one place." />
+
+    <!-- Google Search Console verification -->
+    <meta name="google-site-verification" content="eRrNlnK3-oXxOmqJFMtLSgmQF0aSD__hFBmlk1XydhA" />
+
+    <!-- Theme: prevent flash before Tailwind CSS loads -->
+    <style>
+      html            { background-color: #ffffff; color: #121212; }
+      html.dark       { background-color: #000000; color: #ededed; }
+      body            { background-color: inherit; }
+    </style>
+    <script>
+      (function () {
+        try {
+          for (var i = 0; i < localStorage.length; i++) {
+            var k = localStorage.key(i);
+            if (k && k.startsWith('ticker_theme') && localStorage.getItem(k) === 'dark') {
+              document.documentElement.classList.add('dark');
+              break;
+            }
+          }
+        } catch (e) {}
+      })();
+    </script>
+
+    <script type="module" crossorigin src="/assets/index-BUHSX51D.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/vendor-0VU5cs31.js">
+    <link rel="modulepreload" crossorigin href="/assets/tanstack-DO-A4nf0.js">
+    <link rel="modulepreload" crossorigin href="/assets/router-DNVmQSku.js">
+    <link rel="modulepreload" crossorigin href="/assets/radix-BzcoWsuO.js">
+    <link rel="modulepreload" crossorigin href="/assets/lucide-jdWkUii3.js">
+    <link rel="modulepreload" crossorigin href="/assets/framer-motion-LpcbD145.js">
+    <link rel="stylesheet" crossorigin href="/assets/vendor-KkClGO-_.css">
+    <link rel="stylesheet" crossorigin href="/assets/index-DYQyvKlG.css">
+  <link rel="manifest" href="/manifest.webmanifest"><script id="vite-plugin-pwa:inline-sw">if('serviceWorker' in navigator) {window.addEventListener('load', () => {navigator.serviceWorker.register('/sw.js', { scope: '/' })})}</script></head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
