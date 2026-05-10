@@ -370,21 +370,55 @@ function AppRoutes() {
   );
 }
 
+// ── Root-level catch-all boundary — prevents blank white screen on any crash ──
+class RootErrorBoundary extends Component<
+  { children: ReactNode },
+  { crashed: boolean }
+> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { crashed: false };
+  }
+  static getDerivedStateFromError() { return { crashed: true }; }
+  componentDidCatch() {}
+  render() {
+    if (this.state.crashed) {
+      const isEn = (() => { try { return localStorage.getItem("ticker_lang") !== "th"; } catch { return true; } })();
+      return (
+        <div style={{ height: "100dvh", background: "var(--background, #fff)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: "0 24px" }}>
+          <p style={{ fontSize: 14, color: "var(--muted-foreground, #666)", textAlign: "center" }}>
+            {isEn ? "Something went wrong. Tap below to reload." : "เกิดข้อผิดพลาด กดด้านล่างเพื่อโหลดใหม่"}
+          </p>
+          <button
+            onClick={() => window.location.href = "/"}
+            style={{ fontSize: 14, textDecoration: "underline", background: "none", border: "none", cursor: "pointer" }}
+          >
+            {isEn ? "Reload app" : "โหลดแอปใหม่"}
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // ── Root ───────────────────────────────────────────────────────────────────
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <LangProvider>
-        <TooltipProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <AuthProvider>
-              <AppRoutes />
-            </AuthProvider>
-          </WouterRouter>
-          <Toaster />
-        </TooltipProvider>
-      </LangProvider>
-    </QueryClientProvider>
+    <RootErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <LangProvider>
+          <TooltipProvider>
+            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+              <AuthProvider>
+                <AppRoutes />
+              </AuthProvider>
+            </WouterRouter>
+            <Toaster />
+          </TooltipProvider>
+        </LangProvider>
+      </QueryClientProvider>
+    </RootErrorBoundary>
   );
 }
 

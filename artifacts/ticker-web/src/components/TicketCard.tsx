@@ -628,7 +628,6 @@ function CompactCard({ ticket, onLongPress, viewHref, onDoubleTap }: { ticket: T
       style={{
         width: "100%",
         aspectRatio: "2/3",
-        perspective: 1000,
         transform: pressing ? "scale(0.96)" : "scale(1)",
         transition: pressing ? "transform 0.1s ease-out" : "transform 0.35s cubic-bezier(0.23,1,0.32,1)",
       }}
@@ -644,6 +643,8 @@ function CompactCard({ ticket, onLongPress, viewHref, onDoubleTap }: { ticket: T
           <Lock className="w-2.5 h-2.5 text-white/75" />
         </div>
       )}
+      {/* Perspective wrapper isolates 3D context from the HeartBurst sibling */}
+      <div style={{ position: "absolute", inset: 0, perspective: "1000px" }}>
       <div
         className="relative w-full h-full"
         style={{
@@ -754,6 +755,7 @@ function CompactCard({ ticket, onLongPress, viewHref, onDoubleTap }: { ticket: T
           </div>
         </div>
       </div>
+      </div>{/* end perspective wrapper */}
       <HeartBurst visible={heartBurstVisible} onDone={() => setHeartBurstVisible(false)} />
     </div>
   );
@@ -1341,7 +1343,9 @@ function FeedCard({ ticket, onLongPress }: { ticket: Ticket; onLongPress?: (t: T
 
       {/* Ticket card — tap to flip */}
       <div className="flex justify-center px-4 mb-2">
-        <div style={{ width: 160, aspectRatio: "2/3", position: "relative", perspective: "1000px" }}>
+        <div style={{ width: 160, aspectRatio: "2/3", position: "relative" }}>
+          {/* Perspective wrapper isolates 3D context so HeartBurst centres cleanly */}
+          <div style={{ position: "absolute", inset: 0, perspective: "1000px" }}>
           {/* 3D flip container */}
           <div
             style={{
@@ -1490,6 +1494,7 @@ function FeedCard({ ticket, onLongPress }: { ticket: Ticket; onLongPress?: (t: T
             );
           })()}
           </div>
+          </div>{/* end perspective wrapper */}
 
           <HeartBurst visible={heartBurstVisible} onDone={() => setHeartBurstVisible(false)} />
         </div>
