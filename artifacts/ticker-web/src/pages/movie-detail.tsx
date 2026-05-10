@@ -146,28 +146,29 @@ export default function MovieDetail() {
   const episodeRatingsRef = useRef<HTMLDivElement>(null);
   const [collectionSort, setCollectionSort] = useState<"chronological" | "year">("chronological");
 
-  // SCROLL GUARD: when the community inner-scroll is at the top and the user
-  // swipes upward (finger moves down), hand the gesture off to the outer scroll
-  // container instead of letting the inner element absorb it.
+  // SCROLL GUARD: while the outer container is actively scrolling, lock the
+  // inner community scroll (overflow: hidden) so an ongoing outer-scroll gesture
+  // cannot accidentally scroll the captions. 300 ms after the outer scroll event
+  // stops firing (momentum ends), the inner is unlocked and the user can
+  // deliberately scroll it with a fresh touch.
   useEffect(() => {
     const inner = communityScrollRef.current;
     const outer = scrollRef.current;
     if (!inner || !outer) return;
-    let startY = 0;
-    const onStart = (e: TouchEvent) => { startY = e.touches[0]?.clientY ?? 0; };
-    const onMove = (e: TouchEvent) => {
-      const dy = (e.touches[0]?.clientY ?? 0) - startY;
-      if (dy > 0 && inner.scrollTop === 0) {
-        e.preventDefault();
-      }
+    let lockTimer: ReturnType<typeof setTimeout> | null = null;
+    const onOuterScroll = () => {
+      inner.style.overflowY = "hidden";
+      if (lockTimer) clearTimeout(lockTimer);
+      lockTimer = setTimeout(() => { inner.style.overflowY = ""; }, 300);
     };
-    inner.addEventListener("touchstart", onStart, { passive: true });
-    inner.addEventListener("touchmove", onMove, { passive: false });
+    outer.addEventListener("scroll", onOuterScroll, { passive: true });
     return () => {
-      inner.removeEventListener("touchstart", onStart);
-      inner.removeEventListener("touchmove", onMove);
+      outer.removeEventListener("scroll", onOuterScroll);
+      if (lockTimer) clearTimeout(lockTimer);
+      inner.style.overflowY = "";
     };
-  });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [movieId]);
 
   // FORCE-TOP: whenever the movie changes, immediately reset scroll to 0.
   // This runs before the restore effect so spinoff navigation always starts at top.
@@ -1036,7 +1037,7 @@ export default function MovieDetail() {
       {community.length >= 5 && (
       <>
           <div className="mx-5 mb-4 border-t border-border" />
-          <div className="px-5 pb-8">
+          <div className="px-5 pb-4">
             <div className="flex items-center gap-2 mb-4">
               <Users className="w-4 h-4 text-muted-foreground" />
               <h4 className="font-display font-bold text-sm text-foreground">{t.postedCards}</h4>
@@ -1137,7 +1138,7 @@ export default function MovieDetail() {
       {/* Bottom spacer — small breathing room above the nav bar.
           The nav bar itself is outside this scroll container (it's a flex
           sibling in Layout.tsx), so we only need a visual gap here. */}
-      <div className="shrink-0" style={{ height: "1.5rem" }} aria-hidden />
+      <div className="shrink-0" style={{ height: "0.75rem" }} aria-hidden />
     </div>
   );
 }

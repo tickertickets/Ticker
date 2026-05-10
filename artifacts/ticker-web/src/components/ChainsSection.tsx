@@ -1064,7 +1064,7 @@ export function ChainCard({ chain }: { chain: ChainItem }) {
               )}
               {/* Double-tap heart burst */}
               {coverHeartBurst && (
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30">
+                <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none", zIndex: 30 }}>
                   <Heart
                     className="fill-foreground text-foreground"
                     style={{ width: 56, height: 56, animation: "doubletap-heart 0.6s ease-out forwards", filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.25))" }}
