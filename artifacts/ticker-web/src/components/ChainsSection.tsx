@@ -833,10 +833,53 @@ export function ChainCard({ chain }: { chain: ChainItem }) {
   useEffect(() => { setDescLinks(((chain as any).descriptionLinks ?? []) as SocialLink[]); }, [JSON.stringify((chain as any).descriptionLinks ?? null)]);
 
   const isOwner = user?.id === chain.user?.id;
+  const lastCoverTapRef = useRef(0);
+  const coverNavTimerRef = useRef<ReturnType<typeof setTimeout>| null>(null);
+  const [coverHeartBurst, setCoverHeartBurst] = useState(false);
+  const [, navigate] = useLocation();
+
+  useEffect(() => {
+    return () => { if (coverNavTimerRef.current) clearTimeout(coverNavTimerRef.current); };
+  }, []);
 
   const avatarUrl = chain.user?.avatarUrl;
   const posters = chain.movies.slice(0, 4).map(m => m.posterUrl).filter(Boolean) as string[];
   const tags = getGenreTags(chain.movies);
+
+  const handleDoubleTapLike = async () => {
+    if (!user) { toast({ title: t.signInToLike, duration: 1500 }); return; }
+    if (liked) return;
+    const next = true;
+    setLiked(next);
+    setLikeCount(c => c + 1);
+    const patchChainList = (old: { chains: ChainItem[] } | undefined) => ({
+      ...old,
+      chains: (old?.chains ?? []).map((c: ChainItem) =>
+        c.id === chain.id ? { ...c, isLiked: true, likeCount: (c.likeCount ?? 0) + 1 } : c
+      ),
+    });
+    const patchMixedFeed = (old: any) => {
+      if (!old?.items) return old;
+      return {
+        ...old,
+        items: old.items.map((item: any) =>
+          item.type === "chain" && item.chain?.id === chain.id
+            ? { ...item, chain: { ...item.chain, isLiked: true, likeCount: (item.chain.likeCount ?? 0) + 1 } }
+            : item
+        ),
+      };
+    };
+    qc.setQueryData(["chains-feed"], patchChainList);
+    qc.setQueriesData({ queryKey: ["mixed-feed"] }, patchMixedFeed);
+    qc.invalidateQueries({ queryKey: ["profile-chains-created"] });
+    qc.invalidateQueries({ queryKey: ["profile-chains-played"] });
+    try {
+      await fetch(`/api/chains/${chain.id}/like`, { method: "POST", credentials: "include" });
+    } catch {
+      setLiked(false);
+      setLikeCount(c => Math.max(0, c - 1));
+    }
+  };
 
   const handleLike = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -965,7 +1008,26 @@ export function ChainCard({ chain }: { chain: ChainItem }) {
         </div>
 
         {/* Poster collage — centered 160px wide, 2:3 ratio (same as TCG card) */}
-        <Link href={`/chain/${chain.id}`}>
+        {/* Single tap → navigate to chain; double-tap → like */}
+        <div
+          style={{ cursor: "pointer" }}
+          onClick={() => {
+            const now = Date.now();
+            const diff = now - lastCoverTapRef.current;
+            lastCoverTapRef.current = now;
+            if (diff < 300) {
+              if (coverNavTimerRef.current) { clearTimeout(coverNavTimerRef.current); coverNavTimerRef.current = null; }
+              handleDoubleTapLike();
+              setCoverHeartBurst(true);
+              return;
+            }
+            if (coverNavTimerRef.current) clearTimeout(coverNavTimerRef.current);
+            coverNavTimerRef.current = setTimeout(() => {
+              coverNavTimerRef.current = null;
+              navigate(`/chain/${chain.id}`);
+            }, 250);
+          }}
+        >
           <div className="flex justify-center px-4">
             <div
               style={{ width: 160, aspectRatio: "2/3", position: "relative", overflow: "hidden", borderRadius: "0.75rem" }}
@@ -1000,9 +1062,19 @@ export function ChainCard({ chain }: { chain: ChainItem }) {
                   <span className="text-[9px] font-bold text-white">{t.moviesCount(chain.movieCount)}</span>
                 </div>
               )}
+              {/* Double-tap heart burst */}
+              {coverHeartBurst && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30">
+                  <Heart
+                    className="fill-foreground text-foreground"
+                    style={{ width: 56, height: 56, animation: "doubletap-heart 0.6s ease-out forwards", filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.25))" }}
+                    onAnimationEnd={() => setCoverHeartBurst(false)}
+                  />
+                </div>
+              )}
             </div>
           </div>
-        </Link>
+        </div>
 
         {/* Title + description + tags (caption area) */}
         <div className="px-4 mt-5 text-center flex flex-col items-center">

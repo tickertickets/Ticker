@@ -1134,6 +1134,14 @@ function FeedCard({ ticket, onLongPress }: { ticket: Ticket; onLongPress?: (t: T
     };
   }, [pendingLikeHighlight]);
 
+  const lastTapRef = useRef(0);
+  const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [heartBurstVisible, setHeartBurstVisible] = useState(false);
+
+  useEffect(() => {
+    return () => { if (tapTimerRef.current) clearTimeout(tapTimerRef.current); };
+  }, []);
+
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const deleteTicket = useDeleteTicket();
@@ -1353,11 +1361,23 @@ function FeedCard({ ticket, onLongPress }: { ticket: Ticket; onLongPress?: (t: T
             onPointerCancel={() => setCardPressing(false)}
             onClick={(e) => {
               setCardPressing(false);
-              if (!flipped) {
-                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                setFlipSign(e.clientX - rect.left < rect.width / 2 ? -1 : 1);
+              const now = Date.now();
+              const diff = now - lastTapRef.current;
+              lastTapRef.current = now;
+              if (diff < 300) {
+                if (tapTimerRef.current) { clearTimeout(tapTimerRef.current); tapTimerRef.current = null; }
+                if (!hasReacted) handleReact({ heart: 1 });
+                setHeartBurstVisible(true);
+                return;
               }
-              setFlipped(f => !f);
+              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+              const isRight = e.clientX - rect.left >= rect.width / 2;
+              if (tapTimerRef.current) clearTimeout(tapTimerRef.current);
+              tapTimerRef.current = setTimeout(() => {
+                tapTimerRef.current = null;
+                if (!flipped) setFlipSign(isRight ? 1 : -1);
+                setFlipped(f => !f);
+              }, 250);
             }}
           >
           {/* ── FRONT — seed-scaled ── */}
@@ -1471,6 +1491,7 @@ function FeedCard({ ticket, onLongPress }: { ticket: Ticket; onLongPress?: (t: T
           })()}
           </div>
 
+          <HeartBurst visible={heartBurstVisible} onDone={() => setHeartBurstVisible(false)} />
         </div>
       </div>
 
