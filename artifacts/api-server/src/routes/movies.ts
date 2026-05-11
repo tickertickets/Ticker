@@ -2786,4 +2786,69 @@ router.get(
   }),
 );
 
+// ── GET /movies/:movieId/credits ─────────────────────────────────────────────
+router.get(
+  "/:movieId/credits",
+  asyncHandler(async (req, res) => {
+    const movieId = String(req.params["movieId"]);
+    const lang = (req.query["lang"] as string) || "en-US";
+
+    let tmdbId: number;
+    let isTv = false;
+
+    if (movieId.startsWith("tmdb_tv:")) {
+      tmdbId = parseInt(movieId.slice(8), 10);
+      isTv = true;
+    } else if (movieId.startsWith("tmdb:")) {
+      tmdbId = parseInt(movieId.slice(5), 10);
+    } else if (/^\d+$/.test(movieId)) {
+      tmdbId = parseInt(movieId, 10);
+    } else {
+      const findData = await tmdbFetch<{
+        movie_results?: Array<{ id: number }>;
+        tv_results?: Array<{ id: number }>;
+      }>(`/find/${encodeURIComponent(movieId)}`, {
+        external_source: "imdb_id",
+      });
+      if (findData.tv_results?.length) {
+        tmdbId = findData.tv_results[0]!.id;
+        isTv = true;
+      } else if (findData.movie_results?.length) {
+        tmdbId = findData.movie_results[0]!.id;
+      } else {
+        res.json({ cast: [], directors: [] });
+        return;
+      }
+    }
+
+    const PROFILE_BASE = "https://image.tmdb.org/t/p/w185";
+
+    const creditsData = await tmdbFetch<{
+      cast?: Array<{ id: number; name: string; character?: string; profile_path?: string | null; order?: number }>;
+      crew?: Array<{ id: number; name: string; job: string; profile_path?: string | null }>;
+    }>(`/${isTv ? "tv" : "movie"}/${tmdbId}/credits`, { language: lang });
+
+    const cast = (creditsData.cast ?? [])
+      .filter(c => (c.order ?? 99) < 10)
+      .sort((a, b) => (a.order ?? 99) - (b.order ?? 99))
+      .map(c => ({
+        id: c.id,
+        name: c.name,
+        character: c.character || "",
+        profileUrl: c.profile_path ? `${PROFILE_BASE}${c.profile_path}` : null,
+      }));
+
+    const directors = (creditsData.crew ?? [])
+      .filter(c => c.job === "Director")
+      .slice(0, 5)
+      .map(c => ({
+        id: c.id,
+        name: c.name,
+        profileUrl: c.profile_path ? `${PROFILE_BASE}${c.profile_path}` : null,
+      }));
+
+    res.json({ cast, directors });
+  }),
+);
+
 export default router;

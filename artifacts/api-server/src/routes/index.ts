@@ -25,6 +25,7 @@ import adminRouter from "./admin";
 import draftsRouter from "./drafts";
 import settingsRouter from "./settings";
 import wikiRouter from "./wiki";
+import personRouter from "./person";
 
 const router: IRouter = Router();
 
@@ -54,5 +55,6 @@ router.use("/admin", adminRouter);
 router.use("/drafts", draftsRouter);
 router.use("/settings", settingsRouter);
 router.use("/wiki", wikiRouter);
+router.use("/person", personRouter);
 
 export default router;

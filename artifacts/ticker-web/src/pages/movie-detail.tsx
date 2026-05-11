@@ -5,7 +5,7 @@ import { BadgeIcon } from "@/components/BadgeIcon";
 import { MovieBadges, BADGE_DESC_TH, BADGE_DESC_EN } from "@/components/MovieBadges";
 import { computeCardTier, computeEffectTags, TIER_VISUAL } from "@/lib/ranks";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { ChevronLeft, Film, Star, Users, Bookmark, ChevronDown, ChevronUp, Tv, Flag, Loader2, EyeOff, Lock, ArrowUpDown } from "lucide-react";
+import { ChevronLeft, Film, Star, Users, Bookmark, ChevronDown, ChevronUp, Tv, Flag, Loader2, EyeOff, Lock, ArrowUpDown, User } from "lucide-react";
 import { useState, useRef, useEffect, useMemo } from "react";
 import { cn, fmtCount } from "@/lib/utils";
 import { scrollStore } from "@/lib/scroll-store";
@@ -395,6 +395,19 @@ export default function MovieDetail() {
       return res.json();
     },
     enabled: !!movieId,
+  });
+
+  type CreditPerson = { id: number; name: string; character?: string; profileUrl: string | null };
+  const { data: creditsData } = useQuery<{ cast: CreditPerson[]; directors: CreditPerson[] }>({
+    queryKey: ["/api/movies", movieId, "credits", lang],
+    queryFn: async () => {
+      const apiLang = lang === "en" ? "en-US" : "th-TH";
+      const res = await fetch(`/api/movies/${encodeURIComponent(movieId)}/credits?lang=${apiLang}`);
+      if (!res.ok) return { cast: [], directors: [] };
+      return res.json();
+    },
+    enabled: !!movieId,
+    staleTime: 30 * 60 * 1000,
   });
 
 
@@ -995,6 +1008,71 @@ export default function MovieDetail() {
                       </Link>
                     ))}
                   </div>
+              </>
+            )}
+
+            {/* ── Director cards ── */}
+            {(creditsData?.directors ?? []).length > 0 && (
+              <>
+                <div className="px-5 mt-4 mb-3 flex items-center gap-2">
+                  <User className="w-3.5 h-3.5 text-muted-foreground" />
+                  <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">
+                    {t.directorLabel}
+                  </p>
+                </div>
+                <div className="flex overflow-x-auto gap-2.5 px-5 pb-1 scrollbar-hide" style={{ WebkitOverflowScrolling: "touch" }}>
+                  {(creditsData?.directors ?? []).map(p => (
+                    <Link
+                      key={p.id}
+                      href={`/person/${p.id}${navSrclang ? `?srclang=${encodeURIComponent(navSrclang)}` : ""}`}
+                    >
+                      <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
+                        <div className="relative" style={{ aspectRatio: "2/3" }}>
+                          {p.profileUrl
+                            ? <img src={p.profileUrl} alt={p.name} className="w-full h-full object-cover" loading="lazy" />
+                            : <div className="w-full h-full flex items-center justify-center bg-zinc-900"><User className="w-4 h-4 text-muted-foreground" /></div>
+                          }
+                        </div>
+                        <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
+                          <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{p.name}</p>
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* ── Cast cards ── */}
+            {(creditsData?.cast ?? []).length > 0 && (
+              <>
+                <div className="px-5 mt-4 mb-3 flex items-center gap-2">
+                  <Users className="w-3.5 h-3.5 text-muted-foreground" />
+                  <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">
+                    {t.castLabel}
+                  </p>
+                </div>
+                <div className="flex overflow-x-auto gap-2.5 px-5 pb-1 scrollbar-hide" style={{ WebkitOverflowScrolling: "touch" }}>
+                  {(creditsData?.cast ?? []).map(p => (
+                    <Link
+                      key={p.id}
+                      href={`/person/${p.id}${navSrclang ? `?srclang=${encodeURIComponent(navSrclang)}` : ""}`}
+                    >
+                      <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
+                        <div className="relative" style={{ aspectRatio: "2/3" }}>
+                          {p.profileUrl
+                            ? <img src={p.profileUrl} alt={p.name} className="w-full h-full object-cover" loading="lazy" />
+                            : <div className="w-full h-full flex items-center justify-center bg-zinc-900"><User className="w-4 h-4 text-muted-foreground" /></div>
+                          }
+                        </div>
+                        <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
+                          <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{p.name}</p>
+                          {p.character && <p className="text-[8px] text-muted-foreground mt-0.5 truncate">{p.character}</p>}
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
               </>
             )}
           </div>

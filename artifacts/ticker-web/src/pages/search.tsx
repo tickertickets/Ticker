@@ -17,11 +17,12 @@ import {
   Film, Loader2, Search as SearchIcon, TrendingUp, Crown, Skull,
   Moon, Smile, Zap, AlertCircle, Clapperboard, X as XIcon,
   Sparkles, Globe, Wand2, Ghost, Sword, HeartCrack, Shield,
-  Dice5,
+  Dice5, Swords,
   type LucideIcon,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { RandomMoviePicker } from "@/components/RandomMoviePicker";
+import { MovieVsPicker } from "@/components/MovieVsPicker";
 import { cn } from "@/lib/utils";
 import {
   computeCardTier, computeEffectTags, TIER_VISUAL, type ScoreInput,
@@ -371,6 +372,7 @@ export default function Search() {
   });
   const [visitedCategories, setVisitedCategories] = useState<Set<string>>(() => new Set([activeCategory]));
   const [showRandomPicker, setShowRandomPicker]   = useState(false);
+  const [showVsPicker, setShowVsPicker]           = useState(false);
   const [showDiceTab, setShowDiceTab]             = useState(false);
   const diceHintTimers                            = useRef<ReturnType<typeof setTimeout>[]>([]);
 
@@ -584,13 +586,22 @@ export default function Search() {
                 transition: "opacity 500ms ease-in-out",
               }}
             >
-              <button
-                onClick={() => setShowRandomPicker(true)}
-                className="w-10 h-10 rounded-2xl bg-secondary border border-border flex items-center justify-center active:opacity-60 transition-opacity shadow-sm"
-                title="สุ่มหนัง"
-              >
-                <Dice5 className="w-5 h-5 text-foreground" />
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setShowRandomPicker(true)}
+                  className="w-10 h-10 rounded-2xl bg-secondary border border-border flex items-center justify-center active:opacity-60 transition-opacity shadow-sm"
+                  title="สุ่มหนัง"
+                >
+                  <Dice5 className="w-5 h-5 text-foreground" />
+                </button>
+                <button
+                  onClick={() => setShowVsPicker(true)}
+                  className="w-10 h-10 rounded-2xl bg-secondary border border-border flex items-center justify-center active:opacity-60 transition-opacity shadow-sm"
+                  title="VS"
+                >
+                  <Swords className="w-5 h-5 text-foreground" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -711,6 +722,13 @@ export default function Search() {
         <RandomMoviePicker
           onClose={() => setShowRandomPicker(false)}
           isGuest={!user}
+        />
+      )}
+
+      {/* ── VS Movie Picker ── */}
+      {showVsPicker && (
+        <MovieVsPicker
+          onClose={() => setShowVsPicker(false)}
         />
       )}
 

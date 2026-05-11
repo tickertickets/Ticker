@@ -1,0 +1,133 @@
+import { Router } from "express";
+import { asyncHandler } from "../middlewares/error-handler";
+import { tmdbFetch, posterUrl } from "../lib/tmdb-client";
+
+const router = Router();
+
+const PROFILE_BASE = "https://image.tmdb.org/t/p/w185";
+
+function getUILang(req: any): string {
+  const q = req.query?.lang as string;
+  if (q) return q;
+  const h = req.headers?.["x-ui-lang"] as string;
+  if (h === "th") return "th";
+  return "en-US";
+}
+
+// ── GET /person/:personId ─────────────────────────────────────────────────────
+router.get(
+  "/:personId",
+  asyncHandler(async (req, res) => {
+    const personId = parseInt(String(req.params["personId"]), 10);
+    if (isNaN(personId)) {
+      res.status(400).json({ error: "Invalid person ID" });
+      return;
+    }
+    const lang = getUILang(req);
+
+    const [personData, creditsData] = await Promise.all([
+      tmdbFetch<{
+        id: number;
+        name: string;
+        biography?: string;
+        profile_path?: string | null;
+        birthday?: string | null;
+        known_for_department?: string;
+      }>(`/person/${personId}`, { language: lang }),
+      tmdbFetch<{
+        cast?: Array<{
+          id: number;
+          title?: string;
+          name?: string;
+          media_type: string;
+          release_date?: string;
+          first_air_date?: string;
+          poster_path?: string | null;
+          vote_average?: number;
+          vote_count?: number;
+          popularity?: number;
+          genre_ids?: number[];
+          character?: string;
+          belongs_to_collection?: { id: number } | null;
+        }>;
+        crew?: Array<{
+          id: number;
+          title?: string;
+          name?: string;
+          media_type: string;
+          release_date?: string;
+          first_air_date?: string;
+          poster_path?: string | null;
+          vote_average?: number;
+          vote_count?: number;
+          popularity?: number;
+          genre_ids?: number[];
+          job?: string;
+          belongs_to_collection?: { id: number } | null;
+        }>;
+      }>(`/person/${personId}/combined_credits`, { language: lang }),
+    ]);
+
+    const seen = new Set<string>();
+    const allMovies: {
+      imdbId: string;
+      tmdbId: number;
+      mediaType: string;
+      title: string;
+      year: string | null;
+      releaseDate: string | null;
+      posterUrl: string | null;
+      tmdbRating: string | null;
+      voteCount: number;
+      genreIds: number[];
+      popularity: number;
+      franchiseIds: number[];
+    }[] = [];
+
+    for (const item of [...(creditsData.cast ?? []), ...(creditsData.crew ?? [])]) {
+      const key = `${item.id}_${item.media_type}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const title = item.title || item.name || "";
+      if (!title) continue;
+      const releaseDate = item.release_date || item.first_air_date || null;
+      const year = releaseDate ? releaseDate.slice(0, 4) : null;
+      const imdbId = item.media_type === "tv" ? `tmdb_tv:${item.id}` : `tmdb:${item.id}`;
+      const bc = (item as any).belongs_to_collection as { id: number } | null | undefined;
+      allMovies.push({
+        imdbId,
+        tmdbId: item.id,
+        mediaType: item.media_type,
+        title,
+        year,
+        releaseDate,
+        posterUrl: item.poster_path ? posterUrl(item.poster_path) : null,
+        tmdbRating: item.vote_average != null ? String(item.vote_average) : null,
+        voteCount: item.vote_count ?? 0,
+        genreIds: item.genre_ids ?? [],
+        popularity: item.popularity ?? 0,
+        franchiseIds: bc ? [bc.id] : [],
+      });
+    }
+
+    allMovies.sort((a, b) => {
+      const popDiff = (b.popularity ?? 0) - (a.popularity ?? 0);
+      if (Math.abs(popDiff) > 5) return popDiff;
+      const aYear = parseInt(a.year ?? "0", 10);
+      const bYear = parseInt(b.year ?? "0", 10);
+      return bYear - aYear;
+    });
+
+    res.json({
+      id: personData.id,
+      name: personData.name,
+      biography: personData.biography || null,
+      profileUrl: personData.profile_path ? `${PROFILE_BASE}${personData.profile_path}` : null,
+      birthday: personData.birthday || null,
+      knownForDepartment: personData.known_for_department || null,
+      movies: allMovies.slice(0, 60),
+    });
+  }),
+);
+
+export default router;

@@ -527,6 +527,9 @@ export interface Strings {
   castLabel: string;
   watchOnLabel: string;
   seeMore: string;
+  // ── Person detail ────────────────────────────────────────────────
+  personNotFound: string;
+  allWorksLabel: string;
   // ── Chains feed ──────────────────────────────────────────────────
   noChainsFeed: string;
 
@@ -1105,6 +1108,8 @@ const TH: Strings = {
   castLabel: "นักแสดง",
   watchOnLabel: "ดูได้ที่",
   seeMore: "... ดูเพิ่มเติม",
+  personNotFound: "ไม่พบบุคคลนี้",
+  allWorksLabel: "ผลงานทั้งหมด",
   // Chains feed
   noChainsFeed: "ยังไม่มีโพสต์ Chains",
 
@@ -1683,6 +1688,8 @@ const EN: Strings = {
   castLabel: "Cast",
   watchOnLabel: "Available on",
   seeMore: "... see more",
+  personNotFound: "Person not found",
+  allWorksLabel: "All Works",
   // Chains feed
   noChainsFeed: "No Chains posts yet",
 
