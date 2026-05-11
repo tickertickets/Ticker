@@ -64,7 +64,7 @@ export function MovieVsPicker({ onClose }: { onClose: () => void }) {
     const ctrl = new AbortController();
     setSearching(true);
     const apiLang = lang === "en" ? "en-US" : "th";
-    fetch(`/api/movies/search?q=${encodeURIComponent(debouncedQuery)}&lang=${apiLang}`, { signal: ctrl.signal })
+    fetch(`/api/movies/search?query=${encodeURIComponent(debouncedQuery)}&lang=${apiLang}`, { signal: ctrl.signal })
       .then(r => r.json())
       .then(data => { setSearchResults(data.results ?? []); setSearching(false); })
       .catch(() => { setSearching(false); });

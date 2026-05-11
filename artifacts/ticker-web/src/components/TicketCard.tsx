@@ -649,7 +649,8 @@ function CompactCard({ ticket, onLongPress, viewHref, onDoubleTap }: { ticket: T
         className="relative w-full h-full"
         style={{
           transformStyle: "preserve-3d",
-          transition: "transform 0.5s cubic-bezier(0.23, 1, 0.32, 1)",
+          willChange: "transform",
+          transition: "transform 0.45s cubic-bezier(0.23, 1, 0.32, 1)",
           transform: flipped ? `rotateY(${flipSign * 180}deg)` : "rotateY(0deg)",
         }}
       >
@@ -1352,9 +1353,10 @@ function FeedCard({ ticket, onLongPress }: { ticket: Ticket; onLongPress?: (t: T
               position: "absolute",
               inset: 0,
               transformStyle: "preserve-3d",
+              willChange: "transform",
               transition: cardPressing
                 ? "transform 0.1s ease-out"
-                : "transform 0.5s cubic-bezier(0.23, 1, 0.32, 1)",
+                : "transform 0.45s cubic-bezier(0.23, 1, 0.32, 1)",
               transform: cardPressing
                 ? `${flipped ? `rotateY(${flipSign * 180}deg)` : "rotateY(0deg)"} scale(0.95)`
                 : (flipped ? `rotateY(${flipSign * 180}deg)` : "rotateY(0deg)"),
@@ -1374,14 +1376,11 @@ function FeedCard({ ticket, onLongPress }: { ticket: Ticket; onLongPress?: (t: T
                 setHeartBurstVisible(true);
                 return;
               }
+              if (tapTimerRef.current) { clearTimeout(tapTimerRef.current); tapTimerRef.current = null; }
               const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
               const isRight = e.clientX - rect.left >= rect.width / 2;
-              if (tapTimerRef.current) clearTimeout(tapTimerRef.current);
-              tapTimerRef.current = setTimeout(() => {
-                tapTimerRef.current = null;
-                if (!flipped) setFlipSign(isRight ? 1 : -1);
-                setFlipped(f => !f);
-              }, 250);
+              if (!flipped) setFlipSign(isRight ? 1 : -1);
+              setFlipped(f => !f);
             }}
           >
           {/* ── FRONT — seed-scaled ── */}

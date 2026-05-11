@@ -530,6 +530,9 @@ export interface Strings {
   // ── Person detail ────────────────────────────────────────────────
   personNotFound: string;
   allWorksLabel: string;
+  awardsLabel: string;
+  noPersonBookmarks: string;
+  noPersonBookmarksDesc: string;
   // ── Chains feed ──────────────────────────────────────────────────
   noChainsFeed: string;
 
@@ -1110,6 +1113,9 @@ const TH: Strings = {
   seeMore: "... ดูเพิ่มเติม",
   personNotFound: "ไม่พบบุคคลนี้",
   allWorksLabel: "ผลงานทั้งหมด",
+  awardsLabel: "รางวัล",
+  noPersonBookmarks: "ยังไม่มีนักแสดงที่บุ๊กมาร์ก",
+  noPersonBookmarksDesc: "บุ๊กมาร์กนักแสดงหรือผู้กำกับที่คุณชอบ",
   // Chains feed
   noChainsFeed: "ยังไม่มีโพสต์ Chains",
 
@@ -1690,6 +1696,9 @@ const EN: Strings = {
   seeMore: "... see more",
   personNotFound: "Person not found",
   allWorksLabel: "All Works",
+  awardsLabel: "Awards",
+  noPersonBookmarks: "No people bookmarked yet",
+  noPersonBookmarksDesc: "Bookmark your favorite actors and directors",
   // Chains feed
   noChainsFeed: "No Chains posts yet",
 

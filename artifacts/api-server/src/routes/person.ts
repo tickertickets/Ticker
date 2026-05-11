@@ -1,6 +1,10 @@
 import { Router } from "express";
 import { asyncHandler } from "../middlewares/error-handler";
 import { tmdbFetch, posterUrl } from "../lib/tmdb-client";
+import { db } from "@workspace/db";
+import { personBookmarksTable } from "@workspace/db/schema";
+import { eq, and } from "drizzle-orm";
+import { UnauthorizedError } from "../lib/errors";
 
 const router = Router();
 
@@ -127,6 +131,122 @@ router.get(
       knownForDepartment: personData.known_for_department || null,
       movies: allMovies.slice(0, 60),
     });
+  }),
+);
+
+// ── GET /person/:personId/awards ──────────────────────────────────────────────
+router.get(
+  "/:personId/awards",
+  asyncHandler(async (req, res) => {
+    const personId = parseInt(String(req.params["personId"]), 10);
+    if (isNaN(personId)) {
+      res.status(400).json({ error: "Invalid person ID" });
+      return;
+    }
+
+    type AwardEntry = {
+      year: string;
+      status?: string;
+      award_category: string;
+      participants?: Array<{ person_id: number; name: string; character?: string }>;
+    };
+    type AwardResult = {
+      department: string;
+      name: string;
+      winners: AwardEntry[];
+      nominees: AwardEntry[];
+    };
+
+    const data = await tmdbFetch<{ id?: number; results?: AwardResult[] }>(
+      `/person/${personId}/awards`,
+    ).catch(() => ({ results: [] as AwardResult[] }));
+
+    const results = (data.results ?? []).filter(
+      r => (r.winners?.length ?? 0) > 0 || (r.nominees?.length ?? 0) > 0,
+    );
+
+    res.json({ results });
+  }),
+);
+
+// ── GET /person/:personId/bookmark ────────────────────────────────────────────
+router.get(
+  "/:personId/bookmark",
+  asyncHandler(async (req, res) => {
+    const personId = String(req.params["personId"]);
+    const userId = (req as any).session?.userId as string | undefined;
+    if (!userId) {
+      res.json({ isBookmarked: false });
+      return;
+    }
+
+    const [row] = await db
+      .select()
+      .from(personBookmarksTable)
+      .where(
+        and(
+          eq(personBookmarksTable.userId, userId),
+          eq(personBookmarksTable.personId, personId),
+        ),
+      )
+      .limit(1);
+
+    res.json({ isBookmarked: !!row });
+  }),
+);
+
+// ── POST /person/:personId/bookmark ──────────────────────────────────────────
+router.post(
+  "/:personId/bookmark",
+  asyncHandler(async (req, res) => {
+    const personId = String(req.params["personId"]);
+    const userId = (req as any).session?.userId as string | undefined;
+    if (!userId) throw new UnauthorizedError();
+
+    const [existing] = await db
+      .select()
+      .from(personBookmarksTable)
+      .where(
+        and(
+          eq(personBookmarksTable.userId, userId),
+          eq(personBookmarksTable.personId, personId),
+        ),
+      )
+      .limit(1);
+
+    if (existing) {
+      await db
+        .delete(personBookmarksTable)
+        .where(
+          and(
+            eq(personBookmarksTable.userId, userId),
+            eq(personBookmarksTable.personId, personId),
+          ),
+        );
+      res.json({ bookmarked: false });
+    } else {
+      await db
+        .insert(personBookmarksTable)
+        .values({ userId, personId });
+      res.json({ bookmarked: true });
+    }
+  }),
+);
+
+// ── GET /person/bookmarked ────────────────────────────────────────────────────
+router.get(
+  "/bookmarked",
+  asyncHandler(async (req, res) => {
+    const userId = (req as any).session?.userId as string | undefined;
+    if (!userId) throw new UnauthorizedError();
+
+    const rows = await db
+      .select({ personId: personBookmarksTable.personId })
+      .from(personBookmarksTable)
+      .where(eq(personBookmarksTable.userId, userId))
+      .orderBy(personBookmarksTable.createdAt);
+
+    res.json({ personIds: rows.map(r => r.personId) });
   }),
 );
 
