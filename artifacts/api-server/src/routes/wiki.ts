@@ -93,7 +93,7 @@ function classifyDescription(desc: string): { category: string; isFiction: boole
   // === Block disambiguation pages immediately ===
   if (/\b(disambiguation|topics referred to|may refer to|several (terms|meanings|uses)|multiple meanings)\b/.test(d)) return { category: "other", isFiction: false };
 
-  // === Characters ===
+  // === Characters — explicit "fictional" prefix ===
   if (/fictional character|comic.?book character|film character|tv character|anime character|manga character|video game character/.test(d)) return { category: "character", isFiction: true };
   if (/\bcharacter (in|from|of) (the |a |an )/.test(d)) return { category: "character", isFiction: true };
   if (/fictional (human|person|being|creature|animal|monster|kaiju|titan|beast|giant|spirit|demon|deity|god|goddess|hero|villain|anti.?hero|protagonist|antagonist|wizard|witch|superhero|supervillain|robot|android|alien|elf|dwarf|hobbit|jedi|sith|ninja|pirate|vampire|werewolf|mutant|cyborg|ghost|mage|warrior|dragon|yokai|oni|specter|phantom|wraith)/.test(d)) return { category: "character", isFiction: true };
@@ -105,12 +105,18 @@ function classifyDescription(desc: string): { category: string; isFiction: boole
   if (/\b(appears|appeared|appearing)\b.*(film|movie|series|show|anime|manga|comic|game)/i.test(d)) return { category: "character", isFiction: true };
   if (/\b(marvel|dc comics|pixar|disney|studio ghibli|dreamworks|warner bros animation)\b.*(character|hero|villain|superhero)/i.test(d)) return { category: "character", isFiction: true };
   if (/\b(video game character|game character|playable character|npc|protagonist of the)\b/i.test(d)) return { category: "character", isFiction: true };
+  // Catches: "character in Jujutsu Kaisen", "villain in Berserk", "hero from One Piece" (no "fictional" required)
+  if (/\b(character|villain|hero|anti.?hero|protagonist|antagonist|sidekick|ally|rival|supporting character)\b/i.test(d) && /\b(in|from|of)\b/i.test(d) && !/\b(historical|real.?life|actual person|non.?fictional|based on (a |the )?real)\b/i.test(d)) return { category: "character", isFiction: true };
 
   // === Fictional Locations ===
   if (/fictional (place|location|world|realm|planet|kingdom|town|village|city|school|castle|land|country|continent|island|dimension|universe|setting|territory|region|district|neighborhood|area)/.test(d)) return { category: "location", isFiction: true };
+  // Catches: "planet in Star Wars", "kingdom in Berserk", "school in My Hero Academia"
+  if (/\b(place|location|world|realm|planet|kingdom|land|city|town|village|school|castle|dungeon|dimension|region|country|island|continent|district|forest|mountain|temple|fortress|sanctuary)\b/i.test(d) && /\b(in|from|of)\b/i.test(d) && /\b(series|franchise|film|movie|anime|manga|comic|comics|game|show|cartoon|animation|novel|light novel|universe|saga|fantasy|sci.?fi)\b/i.test(d)) return { category: "location", isFiction: true };
 
   // === Fictional Items ===
   if (/fictional (weapon|sword|shield|armor|armour|staff|wand|artifact|artefact|object|item|tool|device|crystal|ring|relic|lightsaber|gauntlet|spellbook|talisman|amulet|gem|stone)/.test(d)) return { category: "item", isFiction: true };
+  // Catches: "artifact in Berserk", "energy sword from Star Wars", "tome from the Evil Dead franchise"
+  if (/\b(weapon|sword|blade|spear|bow|axe|staff|wand|artifact|artefact|relic|tome|codex|grimoire|scroll|ring|amulet|talisman|gem|crystal|orb|gauntlet|saber|lightsaber|shield|spellbook|dagger|lance|trident|mace|hammer|gun|pistol|rifle|cannon)\b/i.test(d) && /\b(in|from|of)\b/i.test(d) && /\b(series|franchise|film|movie|anime|manga|comic|comics|game|show|cartoon|animation|novel|light novel|universe|saga|fantasy|sci.?fi|horror)\b/i.test(d)) return { category: "item", isFiction: true };
 
   // === Movies ===
   if (/\b\d{4} .*(film|animated film|feature film|short film)\b/.test(d) && !/television series/.test(d)) return { category: "movie", isFiction: true };
@@ -127,8 +133,6 @@ function classifyDescription(desc: string): { category: string; isFiction: boole
   if (/^(anime|manga)$/.test(d.trim())) return { category: "series", isFiction: true };
   if (/\b(season \d|episode \d|aired on|premiered on|first aired|first episode)\b/.test(d)) return { category: "series", isFiction: true };
   if (/\b(manga|manhwa|manhua|webtoon|light novel)\b/.test(d)) {
-    // Block only if description is clearly ABOUT a real-world creator (e.g. "manga artist", "manhwa author")
-    // but NOT when describing a work (e.g. "manga series written and illustrated by X")
     const isAboutCreator = /\b(manga|manhwa|manhua|webtoon) (artist|author|writer|creator|cartoonist)\b/.test(d)
       && !/\b(series|franchise|adaptation|chapter|volume|written and illustrated|story|anthology)\b/.test(d);
     if (!isAboutCreator) return { category: "series", isFiction: true };
@@ -138,11 +142,14 @@ function classifyDescription(desc: string): { category: string; isFiction: boole
   if (/\b(media franchise|film franchise|anime franchise|cinematic universe|film series|comic book series)\b/.test(d)) return { category: "series", isFiction: true };
 
   // Generic fiction signal
-  if (/\bfictional\b/.test(d)) return { category: "character", isFiction: true };
+  if (/\bfictional\b/.test(d)) return { category: "other", isFiction: true };
 
   // === Video Games ===
   if (/\b(video game|role-playing game|rpg|action-adventure game|action game|puzzle game|fighting game|platform game)\b/.test(d)) return { category: "other", isFiction: true };
   if (/\b(developed by|published by)\b.*(game|studio|games|entertainment)\b/.test(d)) return { category: "other", isFiction: true };
+
+  // === General "in/from [media type]" — catches cross-media items without "fictional" prefix ===
+  if (/\b(in|from)\b.{0,100}\b(series|franchise|film|movie|anime|manga|comic|comics|cartoon|animation|novel|light novel|game|universe|saga|show)\b/i.test(d) && !/\b(study|research|academic|scientific|real.?world|non.?fiction|based on (a |the )?real)\b/i.test(d)) return { category: "other", isFiction: true };
 
   // === Thai-language descriptions — strict: require explicit entertainment keywords ===
   const hasThai = /[\u0E00-\u0E7F]{3,}/.test(d);
@@ -180,19 +187,34 @@ function classifyDescription(desc: string): { category: string; isFiction: boole
     return { category: "other", isFiction: false };
   }
 
-  // === Default: only block when there are clear real-world signals ===
-  // Explicit real-world professions / roles that are never fictional entities
-  const isRealWorldPerson =
+  // === Expanded real-world blocklist ===
+  const isRealWorld =
+    // Real people by profession
     /\b(politician|senator|congressman|member of parliament|prime minister|president|governor|mayor|minister|diplomat|ambassador|chancellor)\b/.test(d) ||
     /\b(physicist|chemist|biologist|astronomer|mathematician|geologist|neuroscientist|archaeologist|anthropologist|economist|sociologist)\b/.test(d) ||
     /\b(footballer|soccer player|basketball player|tennis player|golfer|baseball player|olympic athlete|sprinter|marathon runner|swimmer|gymnast)\b/.test(d) ||
+    /\b(born in \d{4}|died in \d{4}|\b\d{4}[–\-]\d{4}\b|b\.\s*\d{4}|d\.\s*\d{4})\b/.test(d) ||
+    // Music industry
     /\b(pop star|rock band|boy band|girl group|rapper|hip.?hop artist|country singer|classical musician|jazz musician|record label)\b/.test(d) ||
+    /\b(singer|songwriter|vocalist|recording artist|lead singer|frontman|frontwoman)\b/i.test(d) ||
+    /\b(music (group|act|collective|duo|trio|quartet|ensemble)|musical (group|act|ensemble|duo|trio))\b/i.test(d) ||
+    // Companies / businesses
+    /\b(company|corporation|manufacturer|enterprise|conglomerate|subsidiary|multinational|incorporated|startup)\b/i.test(d) ||
+    /\b(founded in \d{4}|headquartered in|publicly traded|stock exchange|market cap|revenue of)\b/i.test(d) ||
+    // Measurement & science
+    /\b(unit of (measurement|length|mass|time|energy|force|pressure|temperature|volume|speed|current|power))\b/i.test(d) ||
+    /\b(si unit|metric unit|imperial unit|chemical element|element in the periodic|periodic table|atomic number)\b/i.test(d) ||
+    // Sports organisations
+    /\b(sports team|football club|soccer club|basketball team|baseball team|cricket team|sports franchise|esports team)\b/i.test(d) ||
+    // Administrative / geographic real-world entities
     /\b(municipality|prefecture|province|administrative region|borough|township|hamlet|unincorporated community)\b/.test(d) ||
-    /\b(born in \d{4}|died in \d{4}|\b\d{4}[–\-]\d{4}\b|b\.\s*\d{4}|d\.\s*\d{4})\b/.test(d);
-  if (isRealWorldPerson) return { category: "other", isFiction: false };
-  // Anything else not explicitly matched but not clearly real-world: pass through
-  // (better to show a borderline item than to block legitimate entertainment content)
-  return { category: "other", isFiction: true };
+    // Automotive & products
+    /\b(automobile manufacturer|automotive manufacturer|motor vehicle|production car|car model)\b/i.test(d);
+
+  if (isRealWorld) return { category: "other", isFiction: false };
+
+  // === Default: block — better to miss a borderline item than show real-world content ===
+  return { category: "other", isFiction: false };
 }
 
 function inferCategory(p31ids: string[], description: string): string {
@@ -525,21 +547,40 @@ router.get("/search", async (req, res) => {
   }
 
   const doSearch = async (): Promise<unknown[]> => {
-    // ── Step 1: Wikipedia REST search in parallel per language (~200ms) ────────
+    // ── Step 1: Wikipedia REST search + Wikidata entity search in parallel ─────
     const searchLangs = lang === "en" ? ["en"] : [lang, "en"];
     type WpRestPage = { key: string; title: string; description?: string; thumbnail?: { url: string } };
+    type WdSearchItem = { id: string; label: string; description?: string };
 
-    const restResults = await Promise.all(
-      searchLangs.map(async (sl): Promise<(WpRestPage & { sl: string })[]> => {
+    const [restResults, wdSearchItems] = await Promise.all([
+      // 1a: Wikipedia REST search per language
+      Promise.all(
+        searchLangs.map(async (sl): Promise<(WpRestPage & { sl: string })[]> => {
+          try {
+            const url = `https://${sl}.wikipedia.org/w/rest.php/v1/search/page?q=${encodeURIComponent(q)}&limit=20`;
+            const data = await wdFetch<{ pages?: WpRestPage[] }>(url, 4000);
+            return (data.pages ?? []).map(p => ({ ...p, sl }));
+          } catch { return []; }
+        })
+      ),
+      // 1b: Wikidata entity search — finds fictional entities by label even if Wikipedia rank is low
+      (async (): Promise<WdSearchItem[]> => {
         try {
-          const url = `https://${sl}.wikipedia.org/w/rest.php/v1/search/page?q=${encodeURIComponent(q)}&limit=20`;
-          const data = await wdFetch<{ pages?: WpRestPage[] }>(url, 4000);
-          return (data.pages ?? []).map(p => ({ ...p, sl }));
+          const url = new URL("https://www.wikidata.org/w/api.php");
+          url.searchParams.set("action", "wbsearchentities");
+          url.searchParams.set("search", q);
+          url.searchParams.set("language", lang === "en" ? "en" : lang);
+          url.searchParams.set("uselang", "en");
+          url.searchParams.set("type", "item");
+          url.searchParams.set("limit", "20");
+          url.searchParams.set("format", "json");
+          const data = await wdFetch<{ search?: WdSearchItem[] }>(url.toString(), 4000);
+          return data.search ?? [];
         } catch { return []; }
-      })
-    );
+      })(),
+    ]);
 
-    // Merge + deduplicate by sl:key
+    // Merge + deduplicate Wikipedia results by sl:key
     const seenKeys = new Set<string>();
     const allPages: (WpRestPage & { sl: string })[] = [];
     for (const pages of restResults) {
@@ -548,9 +589,8 @@ router.get("/search", async (req, res) => {
         if (!seenKeys.has(k)) { seenKeys.add(k); allPages.push(p); }
       }
     }
-    if (allPages.length === 0) return [];
 
-    // ── Step 2: Wikipedia pageprops batch per language (QID + HD thumb + extract) ──
+    // ── Step 2: Wikipedia pageprops + Wikidata P31 batch in parallel ──────────
     const titlesByLang = new Map<string, string[]>();
     for (const p of allPages) {
       const arr = titlesByLang.get(p.sl) ?? [];
@@ -562,33 +602,39 @@ router.get("/search", async (req, res) => {
     const qidMap = new Map<string, string>();
     const wpThumbMap = new Map<string, string>();
     const extractMap = new Map<string, string>();
+    const wdQids = wdSearchItems.map(r => r.id);
 
-    await Promise.all(Array.from(titlesByLang.entries()).map(async ([sl, titles]) => {
-      try {
-        const url = new URL(`https://${sl}.wikipedia.org/w/api.php`);
-        url.searchParams.set("action", "query");
-        url.searchParams.set("titles", titles.join("|"));
-        url.searchParams.set("prop", "pageprops|pageimages|extracts");
-        url.searchParams.set("ppprop", "wikibase_item");
-        url.searchParams.set("pithumbsize", "400");
-        url.searchParams.set("pilicense", "any");
-        url.searchParams.set("exintro", "1");
-        url.searchParams.set("explaintext", "1");
-        url.searchParams.set("exsentences", "3");
-        url.searchParams.set("format", "json");
-        url.searchParams.set("origin", "*");
-        const data = await wdFetch<{ query?: { pages?: Record<string, WpPageDetail> } }>(url.toString(), 4000);
-        for (const page of Object.values(data.query?.pages ?? {})) {
-          if (!page.title) continue;
-          const k = `${sl}:${page.title}`;
-          if (page.pageprops?.wikibase_item) qidMap.set(k, page.pageprops.wikibase_item);
-          if (page.thumbnail?.source) wpThumbMap.set(k, page.thumbnail.source);
-          if (page.extract) extractMap.set(k, page.extract.slice(0, 500));
-        }
-      } catch { /* ignore */ }
-    }));
+    const [, wdEntityMap] = await Promise.all([
+      // 2a: Wikipedia pageprops per language (QID + HD thumb + extract)
+      Promise.all(Array.from(titlesByLang.entries()).map(async ([sl, titles]) => {
+        try {
+          const url = new URL(`https://${sl}.wikipedia.org/w/api.php`);
+          url.searchParams.set("action", "query");
+          url.searchParams.set("titles", titles.join("|"));
+          url.searchParams.set("prop", "pageprops|pageimages|extracts");
+          url.searchParams.set("ppprop", "wikibase_item");
+          url.searchParams.set("pithumbsize", "400");
+          url.searchParams.set("pilicense", "any");
+          url.searchParams.set("exintro", "1");
+          url.searchParams.set("explaintext", "1");
+          url.searchParams.set("exsentences", "3");
+          url.searchParams.set("format", "json");
+          url.searchParams.set("origin", "*");
+          const data = await wdFetch<{ query?: { pages?: Record<string, WpPageDetail> } }>(url.toString(), 4000);
+          for (const page of Object.values(data.query?.pages ?? {})) {
+            if (!page.title) continue;
+            const k = `${sl}:${page.title}`;
+            if (page.pageprops?.wikibase_item) qidMap.set(k, page.pageprops.wikibase_item);
+            if (page.thumbnail?.source) wpThumbMap.set(k, page.thumbnail.source);
+            if (page.extract) extractMap.set(k, page.extract.slice(0, 500));
+          }
+        } catch { /* ignore */ }
+      })),
+      // 2b: Wikidata P31 batch for entity search results (sitelinks for English Wikipedia URL)
+      fetchEntityBatch(wdQids),
+    ]);
 
-    // ── Step 3: Build results using description classification (no Wikidata batch) ──
+    // ── Step 3a: Build results from Wikipedia REST ────────────────────────────
     const seenQids = new Set<string>();
     const results: {
       wikiPageId: string; title: string; excerpt: string;
@@ -604,13 +650,11 @@ router.get("/search", async (req, res) => {
 
       const descText = page.description ?? "";
       const extractText = extractMap.get(k) ?? "";
-      // Use extract as fallback when REST description is missing (common on non-English Wikipedias)
       const classifyText = descText || extractText.slice(0, 300);
       const { category, isFiction } = classifyDescription(classifyText);
       if (!isFiction) continue;
 
       seenQids.add(wikiPageId);
-      // Prefer high-res pageimages thumb; fall back to REST thumbnail (both are direct URLs)
       const thumbnailUrl = wpThumbMap.get(k) || page.thumbnail?.url || null;
       const excerpt = extractText || descText || "";
 
@@ -621,6 +665,33 @@ router.get("/search", async (req, res) => {
         thumbnailUrl,
         url: `https://${page.sl}.wikipedia.org/wiki/${encodeURIComponent(page.key)}`,
         lang: page.sl,
+        category,
+      });
+    }
+
+    // ── Step 3b: Add Wikidata entity search results (P31-filtered, fills gaps) ─
+    for (const wdItem of wdSearchItems) {
+      if (results.length >= 15) break;
+      const wikiPageId = `wd:${wdItem.id}`;
+      if (seenQids.has(wikiPageId)) continue;
+      const entityInfo = wdEntityMap.get(wdItem.id);
+      if (!entityInfo) continue;
+      // Only accept items with confirmed entertainment P31 — no classifyDescription fallback here
+      const hasEntertainmentP31 = entityInfo.p31ids.some(id => ENTERTAINMENT_P31.has(id));
+      if (!hasEntertainmentP31) continue;
+      seenQids.add(wikiPageId);
+      const category = inferCategory(entityInfo.p31ids, wdItem.description ?? "");
+      const thumbnailUrl = entityInfo.p18 ? commonsThumbUrl(entityInfo.p18, 400) : null;
+      const enTitle = entityInfo.sitelinkEnTitle;
+      results.push({
+        wikiPageId,
+        title: wdItem.label,
+        excerpt: wdItem.description ?? "",
+        thumbnailUrl,
+        url: enTitle
+          ? `https://en.wikipedia.org/wiki/${encodeURIComponent(enTitle)}`
+          : `https://www.wikidata.org/wiki/${wdItem.id}`,
+        lang: "en",
         category,
       });
     }
@@ -660,7 +731,11 @@ router.get("/search", async (req, res) => {
   };
 
   const promise = doSearch().then(items => {
-    searchCache.set(cacheKey, { ts: Date.now(), items });
+    // Only cache non-empty results — empty results often mean a transient API timeout;
+    // caching them for 30 minutes would cause "sometimes found, sometimes not" behaviour.
+    if (items.length > 0) {
+      searchCache.set(cacheKey, { ts: Date.now(), items });
+    }
     searchInflight.delete(cacheKey);
     return items;
   }).catch(err => {
