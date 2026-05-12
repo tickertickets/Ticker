@@ -388,7 +388,9 @@ class RootErrorBoundary extends Component<
     this.state = { crashed: false };
   }
   static getDerivedStateFromError() { return { crashed: true }; }
-  componentDidCatch() {}
+  componentDidCatch(error: unknown) {
+    try { console.error("[RootErrorBoundary]", error); } catch {}
+  }
   render() {
     if (this.state.crashed) {
       const isEn = (() => { try { return localStorage.getItem("ticker_lang") !== "th"; } catch { return true; } })();
@@ -398,7 +400,7 @@ class RootErrorBoundary extends Component<
             {isEn ? "Something went wrong. Tap below to reload." : "เกิดข้อผิดพลาด กดด้านล่างเพื่อโหลดใหม่"}
           </p>
           <button
-            onClick={() => window.location.href = "/"}
+            onClick={() => { this.setState({ crashed: false }); window.location.href = "/"; }}
             style={{ fontSize: 14, textDecoration: "underline", background: "none", border: "none", cursor: "pointer" }}
           >
             {isEn ? "Reload app" : "โหลดแอปใหม่"}

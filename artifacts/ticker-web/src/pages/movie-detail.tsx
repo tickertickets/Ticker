@@ -831,7 +831,7 @@ export default function MovieDetail() {
         <div className="px-5 pt-4">
           <button
             className="w-full flex items-center gap-2 text-left"
-            onClick={() => setShowProviders(v => !v)}
+            onClick={(e) => { const b = e.currentTarget; setShowProviders(v => { if (!v) setTimeout(() => b.scrollIntoView({ behavior: "smooth", block: "start" }), 50); return !v; }); }}
           >
             <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wide flex-1">{t.watchOnLabel}</h3>
             <span className="text-[10px] text-muted-foreground mr-1">{allProviders.length}</span>
@@ -873,7 +873,7 @@ export default function MovieDetail() {
         <div className="px-5 pt-4">
           <button
             className="w-full flex items-center gap-2 text-left"
-            onClick={() => setShowAwards(v => !v)}
+            onClick={(e) => { const b = e.currentTarget; setShowAwards(v => { if (!v) setTimeout(() => b.scrollIntoView({ behavior: "smooth", block: "start" }), 50); return !v; }); }}
           >
             <Trophy className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
             <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wide flex-1">{t.awardsLabel}</h3>
@@ -908,12 +908,12 @@ export default function MovieDetail() {
         </div>
       )}
 
-      {/* ── Character cards — Wikidata (franchise / series only) ── */}
-      {isFranchise && (characterData?.results ?? []).length > 0 && (
+      {/* ── Character cards — Wikidata ── */}
+      {(characterData?.results ?? []).length > 0 && (
         <div className="px-5 pt-4">
           <button
             className="w-full flex items-center gap-2 text-left py-1"
-            onClick={() => setShowCharacters(v => !v)}
+            onClick={(e) => { const b = e.currentTarget; setShowCharacters(v => { if (!v) setTimeout(() => b.scrollIntoView({ behavior: "smooth", block: "start" }), 50); return !v; }); }}
           >
             <User className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
             <h3 className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">
@@ -1038,7 +1038,7 @@ export default function MovieDetail() {
               <div className="px-5 mb-1">
                 <button
                   className="w-full flex items-center gap-2 text-left py-1"
-                  onClick={() => setShowCollection(v => !v)}
+                  onClick={(e) => { const b = e.currentTarget; setShowCollection(v => { if (!v) setTimeout(() => b.scrollIntoView({ behavior: "smooth", block: "start" }), 50); return !v; }); }}
                 >
                   <Film className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                   <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">
@@ -1088,7 +1088,7 @@ export default function MovieDetail() {
               <div className="px-5 mt-3">
                 <button
                   className="w-full flex items-center gap-2 text-left py-1"
-                  onClick={() => setShowSpinoffs(v => !v)}
+                  onClick={(e) => { const b = e.currentTarget; setShowSpinoffs(v => { if (!v) setTimeout(() => b.scrollIntoView({ behavior: "smooth", block: "start" }), 50); return !v; }); }}
                 >
                   <Film className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                   <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">
@@ -1136,7 +1136,7 @@ export default function MovieDetail() {
         <div className="px-5 pt-3">
           <button
             className="w-full flex items-center gap-2 text-left py-1"
-            onClick={() => setShowDirectors(v => !v)}
+            onClick={(e) => { const b = e.currentTarget; setShowDirectors(v => { if (!v) setTimeout(() => b.scrollIntoView({ behavior: "smooth", block: "start" }), 50); return !v; }); }}
           >
             <User className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
             <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">{t.directorLabel}</p>
@@ -1177,7 +1177,7 @@ export default function MovieDetail() {
         <div className="px-5 pt-3">
           <button
             className="w-full flex items-center gap-2 text-left py-1"
-            onClick={() => setShowCast(v => !v)}
+            onClick={(e) => { const b = e.currentTarget; setShowCast(v => { if (!v) setTimeout(() => b.scrollIntoView({ behavior: "smooth", block: "start" }), 50); return !v; }); }}
           >
             <Users className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
             <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">{t.castLabel}</p>
@@ -1219,7 +1219,7 @@ export default function MovieDetail() {
         <div className="px-5 pt-3">
           <button
             className="w-full flex items-center gap-2 text-left py-1"
-            onClick={() => setShowChains(v => !v)}
+            onClick={(e) => { const b = e.currentTarget; setShowChains(v => { if (!v) setTimeout(() => b.scrollIntoView({ behavior: "smooth", block: "start" }), 50); return !v; }); }}
           >
             <ArrowUpDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
             <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">{t.relatedChainsLabel}</p>
