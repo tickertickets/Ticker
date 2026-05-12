@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { asyncHandler } from "../middlewares/error-handler";
 import { tmdbFetch, posterUrl } from "../lib/tmdb-client";
+import { queryAwardsByTmdbPersonId } from "../lib/wikidata";
 import { db } from "@workspace/db";
 import { personBookmarksTable } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
@@ -183,6 +184,13 @@ router.get(
     const results = (data.results ?? []).filter(
       r => (r.winners?.length ?? 0) > 0 || (r.nominees?.length ?? 0) > 0,
     );
+
+    if (results.length === 0) {
+      const wikidataResults = await queryAwardsByTmdbPersonId(personId).catch(() => []);
+      if (wikidataResults.length > 0) {
+        return res.json({ results: wikidataResults });
+      }
+    }
 
     res.json({ results });
   }),

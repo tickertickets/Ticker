@@ -287,7 +287,7 @@ export default function PersonDetail() {
 
         {/* ── Main content ── */}
         {data && (
-          <div className="pb-16">
+          <div>
 
             {/* Bio + dates */}
             {(data.birthday || data.deathday || bio) && (
@@ -396,13 +396,14 @@ export default function PersonDetail() {
                   </p>
                   <span className="text-[10px] text-muted-foreground">{data.movies.length}</span>
                 </div>
-                <div className="px-5 grid grid-cols-3 gap-2">
+                <div className="px-5 grid grid-cols-3 gap-2 pb-2">
                   {data.movies.map(m => (
                     <PersonMovieCard key={m.imdbId} movie={m} navSrclang={srclang} />
                   ))}
                 </div>
               </>
             )}
+            <div style={{ height: "calc(env(safe-area-inset-bottom, 0px) + 4.5rem)" }} aria-hidden />
           </div>
         )}
       </div>

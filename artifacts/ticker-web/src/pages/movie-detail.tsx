@@ -151,6 +151,7 @@ export default function MovieDetail() {
   const [showSpinoffs, setShowSpinoffs] = useState(false);
   const [showDirectors, setShowDirectors] = useState(false);
   const [showCast, setShowCast] = useState(false);
+  const [showCharacters, setShowCharacters] = useState(false);
 
   // SCROLL GUARD: while the outer container is actively scrolling, lock the
   // inner community scroll (overflow: hidden) so an ongoing outer-scroll gesture
@@ -427,6 +428,27 @@ export default function MovieDetail() {
     },
     enabled: !!movieId,
     staleTime: 0,
+  });
+
+  type CharacterMatch = { name: string; wikidataId: string; label: string; description: string; imageUrl: string | null };
+  const characterNames = (creditsData?.cast ?? [])
+    .map(c => c.character)
+    .filter((c): c is string => !!c && c.trim().length > 1)
+    .slice(0, 15);
+  const { data: characterData } = useQuery<{ results: CharacterMatch[] }>({
+    queryKey: ["/api/character/batch-search", characterNames.join(",")],
+    queryFn: async () => {
+      if (characterNames.length === 0) return { results: [] };
+      const res = await fetch("/api/character/batch-search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ characters: characterNames }),
+      });
+      if (!res.ok) return { results: [] };
+      return res.json();
+    },
+    enabled: characterNames.length > 0,
+    staleTime: 60 * 60 * 1000,
   });
 
   const isTvShow = movie?.mediaType === "tv" || movieId.startsWith("tmdb_tv:");
@@ -779,21 +801,47 @@ export default function MovieDetail() {
           </div>
         )}
 
-        <div className="space-y-2">
-          {movie.director && (
-            <div className="flex gap-2">
-              <span className="text-xs text-muted-foreground w-14 flex-shrink-0 pt-0.5">{t.directorLabel}</span>
-              <span className="text-xs text-foreground font-medium">{movie.director}</span>
-            </div>
-          )}
-          {castList.length > 0 && (
-            <div className="flex gap-2">
-              <span className="text-xs text-muted-foreground w-14 flex-shrink-0 pt-0.5">{t.castLabel}</span>
-              <span className="text-xs text-foreground">{castList.slice(0, 4).join(", ")}</span>
-            </div>
-          )}
-        </div>
       </div>
+
+      {/* ── Character cards — Wikidata ── */}
+      {(characterData?.results ?? []).length > 0 && (
+        <div className="px-5 pt-4">
+          <button
+            className="w-full flex items-center gap-2 text-left py-1"
+            onClick={() => setShowCharacters(v => !v)}
+          >
+            <User className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+            <h3 className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">
+              {lang === "th" ? "ตัวละคร" : "Characters"}
+            </h3>
+            <span className="text-[10px] text-muted-foreground mr-1">{(characterData?.results ?? []).length}</span>
+            {showCharacters
+              ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+              : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />}
+          </button>
+          <div style={{ display: "grid", gridTemplateRows: showCharacters ? "1fr" : "0fr", transition: "grid-template-rows 0.25s ease" }}>
+            <div style={{ overflow: "hidden" }}>
+              <div className="flex overflow-x-auto gap-2.5 pb-1 mt-2 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
+                {(characterData?.results ?? []).map(ch => (
+                  <Link key={ch.wikidataId} href={`/character/${ch.wikidataId}`}>
+                    <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
+                      <div className="relative" style={{ aspectRatio: "2/3" }}>
+                        {ch.imageUrl
+                          ? <img src={ch.imageUrl} alt={ch.label} className="w-full h-full object-cover" loading="lazy" />
+                          : <div className="w-full h-full flex items-center justify-center bg-zinc-900"><User className="w-4 h-4 text-muted-foreground" /></div>
+                        }
+                      </div>
+                      <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
+                        <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{ch.label}</p>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Watch Providers — collapsible ── */}
       {allProviders.length > 0 && (
@@ -808,30 +856,32 @@ export default function MovieDetail() {
               ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
               : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />}
           </button>
-          {showProviders && (
-            <div className="flex flex-wrap gap-2 mt-3">
-              {allProviders.map(p => (
-                <img
-                  key={p.providerId}
-                  src={p.logoUrl}
-                  alt={p.name}
-                  title={p.name}
-                  className="w-9 h-9 rounded-xl object-cover border border-border"
-                  loading="eager"
-                  onError={(e) => {
-                    const img = e.currentTarget;
-                    if (!img.dataset.retried) {
-                      img.dataset.retried = "1";
-                      const orig = img.src;
-                      setTimeout(() => { img.src = ""; img.src = orig; }, 1200);
-                    } else {
-                      img.style.display = "none";
-                    }
-                  }}
-                />
-              ))}
+          <div style={{ display: "grid", gridTemplateRows: showProviders ? "1fr" : "0fr", transition: "grid-template-rows 0.25s ease" }}>
+            <div style={{ overflow: "hidden" }}>
+              <div className="flex flex-wrap gap-2 mt-3">
+                {allProviders.map(p => (
+                  <img
+                    key={p.providerId}
+                    src={p.logoUrl}
+                    alt={p.name}
+                    title={p.name}
+                    className="w-9 h-9 rounded-xl object-cover border border-border"
+                    loading="eager"
+                    onError={(e) => {
+                      const img = e.currentTarget;
+                      if (!img.dataset.retried) {
+                        img.dataset.retried = "1";
+                        const orig = img.src;
+                        setTimeout(() => { img.src = ""; img.src = orig; }, 1200);
+                      } else {
+                        img.style.display = "none";
+                      }
+                    }}
+                  />
+                ))}
+              </div>
             </div>
-          )}
+          </div>
         </div>
       )}
 
@@ -849,27 +899,29 @@ export default function MovieDetail() {
               ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
               : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />}
           </button>
-          {showAwards && (
-            <div className="mt-3 flex flex-col gap-3">
-              {awardsData!.results.map((award, i) => (
-                <div key={i}>
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide mb-1.5">{award.name}</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {award.winners.map((w, j) => (
-                      <span key={`w-${j}`} className="text-[10px] bg-amber-500/15 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-full font-semibold">
-                        🏆 {w.award_category}{w.year ? ` (${w.year})` : ""}
-                      </span>
-                    ))}
-                    {award.nominees.map((n, j) => (
-                      <span key={`n-${j}`} className="text-[10px] bg-secondary text-muted-foreground px-2 py-0.5 rounded-full">
-                        ✦ {n.award_category}{n.year ? ` (${n.year})` : ""}
-                      </span>
-                    ))}
+          <div style={{ display: "grid", gridTemplateRows: showAwards ? "1fr" : "0fr", transition: "grid-template-rows 0.25s ease" }}>
+            <div style={{ overflow: "hidden" }}>
+              <div className="mt-3 flex flex-col gap-3">
+                {(awardsData?.results ?? []).map((award, i) => (
+                  <div key={i}>
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide mb-1.5">{award.name}</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {award.winners.map((w, j) => (
+                        <span key={`w-${j}`} className="text-[10px] bg-amber-500/15 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-full font-semibold">
+                          🏆 {w.award_category}{w.year ? ` (${w.year})` : ""}
+                        </span>
+                      ))}
+                      {award.nominees.map((n, j) => (
+                        <span key={`n-${j}`} className="text-[10px] bg-secondary text-muted-foreground px-2 py-0.5 rounded-full">
+                          ✦ {n.award_category}{n.year ? ` (${n.year})` : ""}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          )}
+          </div>
         </div>
       )}
 
@@ -1118,28 +1170,30 @@ export default function MovieDetail() {
               ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
               : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />}
           </button>
-          {showDirectors && (
-            <div className="flex overflow-x-auto gap-2.5 pb-1 mt-2 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
-              {(creditsData?.directors ?? []).map(p => (
-                <Link
-                  key={p.id}
-                  href={`/person/${p.id}${navSrclang ? `?srclang=${encodeURIComponent(navSrclang)}` : ""}`}
-                >
-                  <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
-                    <div className="relative" style={{ aspectRatio: "2/3" }}>
-                      {p.profileUrl
-                        ? <img src={p.profileUrl} alt={p.name} className="w-full h-full object-cover" loading="lazy" />
-                        : <div className="w-full h-full flex items-center justify-center bg-zinc-900"><User className="w-4 h-4 text-muted-foreground" /></div>
-                      }
+          <div style={{ display: "grid", gridTemplateRows: showDirectors ? "1fr" : "0fr", transition: "grid-template-rows 0.25s ease" }}>
+            <div style={{ overflow: "hidden" }}>
+              <div className="flex overflow-x-auto gap-2.5 pb-1 mt-2 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
+                {(creditsData?.directors ?? []).map(p => (
+                  <Link
+                    key={p.id}
+                    href={`/person/${p.id}${navSrclang ? `?srclang=${encodeURIComponent(navSrclang)}` : ""}`}
+                  >
+                    <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
+                      <div className="relative" style={{ aspectRatio: "2/3" }}>
+                        {p.profileUrl
+                          ? <img src={p.profileUrl} alt={p.name} className="w-full h-full object-cover" loading="lazy" />
+                          : <div className="w-full h-full flex items-center justify-center bg-zinc-900"><User className="w-4 h-4 text-muted-foreground" /></div>
+                        }
+                      </div>
+                      <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
+                        <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{p.name}</p>
+                      </div>
                     </div>
-                    <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
-                      <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{p.name}</p>
-                    </div>
-                  </div>
-                </Link>
-              ))}
+                  </Link>
+                ))}
+              </div>
             </div>
-          )}
+          </div>
         </div>
       )}
 
@@ -1157,29 +1211,31 @@ export default function MovieDetail() {
               ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
               : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />}
           </button>
-          {showCast && (
-            <div className="flex overflow-x-auto gap-2.5 pb-1 mt-2 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
-              {(creditsData?.cast ?? []).map(p => (
-                <Link
-                  key={p.id}
-                  href={`/person/${p.id}${navSrclang ? `?srclang=${encodeURIComponent(navSrclang)}` : ""}`}
-                >
-                  <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
-                    <div className="relative" style={{ aspectRatio: "2/3" }}>
-                      {p.profileUrl
-                        ? <img src={p.profileUrl} alt={p.name} className="w-full h-full object-cover" loading="lazy" />
-                        : <div className="w-full h-full flex items-center justify-center bg-zinc-900"><User className="w-4 h-4 text-muted-foreground" /></div>
-                      }
+          <div style={{ display: "grid", gridTemplateRows: showCast ? "1fr" : "0fr", transition: "grid-template-rows 0.25s ease" }}>
+            <div style={{ overflow: "hidden" }}>
+              <div className="flex overflow-x-auto gap-2.5 pb-1 mt-2 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
+                {(creditsData?.cast ?? []).map(p => (
+                  <Link
+                    key={p.id}
+                    href={`/person/${p.id}${navSrclang ? `?srclang=${encodeURIComponent(navSrclang)}` : ""}`}
+                  >
+                    <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
+                      <div className="relative" style={{ aspectRatio: "2/3" }}>
+                        {p.profileUrl
+                          ? <img src={p.profileUrl} alt={p.name} className="w-full h-full object-cover" loading="lazy" />
+                          : <div className="w-full h-full flex items-center justify-center bg-zinc-900"><User className="w-4 h-4 text-muted-foreground" /></div>
+                        }
+                      </div>
+                      <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
+                        <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{p.name}</p>
+                        {p.character && <p className="text-[8px] text-muted-foreground mt-0.5 truncate">{p.character}</p>}
+                      </div>
                     </div>
-                    <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
-                      <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{p.name}</p>
-                      {p.character && <p className="text-[8px] text-muted-foreground mt-0.5 truncate">{p.character}</p>}
-                    </div>
-                  </div>
-                </Link>
-              ))}
+                  </Link>
+                ))}
+              </div>
             </div>
-          )}
+          </div>
         </div>
       )}
 

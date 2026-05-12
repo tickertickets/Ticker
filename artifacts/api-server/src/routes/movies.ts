@@ -29,6 +29,7 @@ import {
   ValidationError,
 } from "../lib/errors";
 import { tmdbFetch, posterUrl, TMDB_IMG_WIDE, isoDate } from "../lib/tmdb-client";
+import { queryAwardsByImdbId } from "../lib/wikidata";
 import {
   detectLanguage,
   normalizeItem,
@@ -2839,6 +2840,13 @@ router.get(
     const results = (data.results ?? []).filter(
       r => (r.winners?.length ?? 0) > 0 || (r.nominees?.length ?? 0) > 0,
     );
+
+    if (results.length === 0 && /^tt\d+$/.test(movieId)) {
+      const wikidataResults = await queryAwardsByImdbId(movieId).catch(() => []);
+      if (wikidataResults.length > 0) {
+        return res.json({ results: wikidataResults });
+      }
+    }
 
     res.json({ results });
   }),
