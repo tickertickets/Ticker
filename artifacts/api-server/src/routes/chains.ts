@@ -236,6 +236,11 @@ export async function buildChain(
     hideComments: chain.hideComments ?? false,
     hideLikes: chain.hideLikes ?? false,
     hideChainCount: chain.hideChainCount ?? false,
+    taggedMovie: chain.taggedMovieImdbId ? {
+      imdbId: chain.taggedMovieImdbId,
+      title: chain.taggedMovieTitle ?? null,
+      posterUrl: chain.taggedMoviePosterUrl ?? null,
+    } : null,
     createdAt: chain.createdAt,
     updatedAt: chain.updatedAt,
     foundMovieCount: foundMovieIds.length,
@@ -791,7 +796,7 @@ router.post("/", async (req, res) => {
   const currentUserId = req.session?.userId;
   if (!currentUserId) { res.status(401).json({ error: "unauthorized" }); return; }
 
-  const { title, description, descriptionAlign, isPrivate, challengeDurationMs, movies, mode } = req.body;
+  const { title, description, descriptionAlign, isPrivate, challengeDurationMs, movies, mode, taggedMovieImdbId, taggedMovieTitle, taggedMoviePosterUrl } = req.body;
   if (!title || typeof title !== "string" || title.trim().length === 0) {
     res.status(400).json({ error: "bad_request", message: "title is required" });
     return;
@@ -814,6 +819,9 @@ router.post("/", async (req, res) => {
     mode: chainMode,
     challengeDurationMs: typeof challengeDurationMs === "number" ? challengeDurationMs : null,
     chainCount: 0,
+    taggedMovieImdbId: taggedMovieImdbId ? String(taggedMovieImdbId) : null,
+    taggedMovieTitle: taggedMovieTitle ? String(taggedMovieTitle) : null,
+    taggedMoviePosterUrl: taggedMoviePosterUrl ? String(taggedMoviePosterUrl) : null,
   });
 
   for (let i = 0; i < movies.length; i++) {
@@ -901,16 +909,22 @@ router.patch("/:chainId", async (req, res) => {
     .where(and(eq(chainsTable.id, chainId), isNull(chainsTable.deletedAt))).limit(1);
   if (!chain) { res.status(404).json({ error: "not_found" }); return; }
   if (chain.userId !== currentUserId) { res.status(403).json({ error: "forbidden" }); return; }
-  const { title, description, descriptionAlign } = req.body;
+  const { title, description, descriptionAlign, taggedMovieImdbId, taggedMovieTitle, taggedMoviePosterUrl } = req.body;
   if (typeof title === "string" && !title.trim()) {
     res.status(400).json({ error: "bad_request", message: "title is required" });
     return;
   }
-  await db.update(chainsTable).set({
+  const updateData: Partial<typeof chainsTable.$inferInsert> = {
     title: typeof title === "string" ? title.trim() : chain.title,
     description: typeof description === "string" ? (description.trim() || null) : chain.description,
     descriptionAlign: (descriptionAlign === "center" || descriptionAlign === "right") ? descriptionAlign : chain.descriptionAlign ?? "left",
-  }).where(eq(chainsTable.id, chainId));
+  };
+  if ("taggedMovieImdbId" in req.body) {
+    updateData.taggedMovieImdbId = taggedMovieImdbId ? String(taggedMovieImdbId) : null;
+    updateData.taggedMovieTitle = taggedMovieTitle ? String(taggedMovieTitle) : null;
+    updateData.taggedMoviePosterUrl = taggedMoviePosterUrl ? String(taggedMoviePosterUrl) : null;
+  }
+  await db.update(chainsTable).set(updateData).where(eq(chainsTable.id, chainId));
   const [updated] = await db.select().from(chainsTable).where(eq(chainsTable.id, chainId)).limit(1);
   const result = await buildChain(updated!, currentUserId);
   res.json(result);

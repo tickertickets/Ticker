@@ -533,6 +533,10 @@ export interface Strings {
   awardsLabel: string;
   noPersonBookmarks: string;
   noPersonBookmarksDesc: string;
+  relatedChainsLabel: string;
+  tagMovieLabel: string;
+  tagMoviePlaceholder: string;
+  tagMovieRemove: string;
   // ── Chains feed ──────────────────────────────────────────────────
   noChainsFeed: string;
 
@@ -1116,6 +1120,10 @@ const TH: Strings = {
   awardsLabel: "รางวัล",
   noPersonBookmarks: "ยังไม่มีนักแสดงที่บุ๊กมาร์ก",
   noPersonBookmarksDesc: "บุ๊กมาร์กนักแสดงหรือผู้กำกับที่คุณชอบ",
+  relatedChainsLabel: "Chains ที่เกี่ยวข้อง",
+  tagMovieLabel: "แท็กหนัง",
+  tagMoviePlaceholder: "ค้นหาหนังที่เกี่ยวข้อง…",
+  tagMovieRemove: "ลบแท็ก",
   // Chains feed
   noChainsFeed: "ยังไม่มีโพสต์ Chains",
 
@@ -1699,6 +1707,10 @@ const EN: Strings = {
   awardsLabel: "Awards",
   noPersonBookmarks: "No people bookmarked yet",
   noPersonBookmarksDesc: "Bookmark your favorite actors and directors",
+  relatedChainsLabel: "Related Chains",
+  tagMovieLabel: "Tag Movie",
+  tagMoviePlaceholder: "Search related movie…",
+  tagMovieRemove: "Remove tag",
   // Chains feed
   noChainsFeed: "No Chains posts yet",
 

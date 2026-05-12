@@ -157,7 +157,7 @@ function formatChallengeDuration(ms: number, labels: { durationHour: string; dur
 
 // ── Main component ─────────────────────────────────────────────────────────
 export default function EditChain() {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const [, params] = useRoute("/chain/:id/edit");
   const chainId = params?.id ?? "";
   const qc = useQueryClient();
@@ -195,6 +195,12 @@ export default function EditChain() {
   const [showSearch,setShowSearch]= useState(false);
   const [sortMode,  setSortMode]  = useState(false);
   const [query,     setQuery]     = useState("");
+  const [taggedMovie, setTaggedMovie] = useState<{ imdbId: string; title: string; posterUrl: string | null } | null>(() => {
+    const tm = (cached as any)?.taggedMovie;
+    return tm ? { imdbId: tm.imdbId, title: tm.title ?? "", posterUrl: tm.posterUrl ?? null } : null;
+  });
+  const [showTagSearch, setShowTagSearch] = useState(false);
+  const [tagQuery, setTagQuery] = useState("");
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -237,6 +243,7 @@ export default function EditChain() {
     }
   }, [showSearch]);
   const [debouncedQuery] = useDebounceValue(query, 400);
+  const [debouncedTagQuery] = useDebounceValue(tagQuery, 400);
 
   // ── Fetch if no cache, OR if only partial cache (need full movie data) ────
   // staleTime:0 when partial — forces real fetch even though cache is brand-new
@@ -250,6 +257,10 @@ export default function EditChain() {
   const { data: searchData, isLoading: searchLoading } = useSearchMovies(
     { query: debouncedQuery, page: 1 },
     { query: { enabled: debouncedQuery.length > 1 } as any },
+  );
+  const { data: tagSearchData, isLoading: tagSearchLoading } = useSearchMovies(
+    { query: debouncedTagQuery, page: 1 },
+    { query: { enabled: debouncedTagQuery.length > 1 } as any },
   );
 
   const { data: trendingData } = useQuery({
@@ -280,6 +291,8 @@ export default function EditChain() {
       setMovies(chainData.movies ?? []);
       setDescAlign(chainData.descriptionAlign ?? "left");
       setMaxMovies(50);
+      const tm = (chainData as any).taggedMovie;
+      if (tm) setTaggedMovie({ imdbId: tm.imdbId, title: tm.title ?? "", posterUrl: tm.posterUrl ?? null });
       setSeeded(true); // unblock form render — data is now complete
     } else if (!seeded) {
       // No cache at all — seed every field from network
@@ -290,6 +303,8 @@ export default function EditChain() {
       setMode(chainData.mode ?? "standard");
       setChallengeDurationMs(chainData.challengeDurationMs ?? null);
       setMaxMovies(50);
+      const tm = (chainData as any).taggedMovie;
+      if (tm) setTaggedMovie({ imdbId: tm.imdbId, title: tm.title ?? "", posterUrl: tm.posterUrl ?? null });
       setSeeded(true);
     }
   }, [chainData]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -356,7 +371,7 @@ export default function EditChain() {
         method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: title.trim(), description: description.trim() || null, descriptionAlign }),
+        body: JSON.stringify({ title: title.trim(), description: description.trim() || null, descriptionAlign, taggedMovieImdbId: taggedMovie?.imdbId ?? null, taggedMovieTitle: taggedMovie?.title ?? null, taggedMoviePosterUrl: taggedMovie?.posterUrl ?? null }),
       });
       if (!res.ok) throw new Error(t.errSaveFailed);
       const updated = await res.json();
@@ -668,6 +683,92 @@ export default function EditChain() {
 
           {movies.length === 0 && !showSearch && (
             <p className="text-sm text-muted-foreground text-center py-4">{t.noMoviesInChain}</p>
+          )}
+        </div>
+
+        {/* ── Tag Movie ── */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2.5">
+              <Film className="w-4 h-4 text-muted-foreground shrink-0" />
+              <div>
+                <p className="text-xs font-black tracking-widest text-foreground">{t.tagMovieLabel}</p>
+              </div>
+            </div>
+            {!taggedMovie && (
+              <button
+                onClick={() => setShowTagSearch(v => !v)}
+                className={cn(
+                  "flex items-center gap-1 px-3 py-1 rounded-xl text-xs font-bold transition-all",
+                  showTagSearch ? "bg-secondary text-foreground" : "bg-foreground text-background",
+                )}
+              >
+                {showTagSearch ? <X className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
+                {showTagSearch ? t.closeBtn : t.addMovieLabel}
+              </button>
+            )}
+          </div>
+          {taggedMovie && (
+            <div className="flex items-center gap-3 bg-secondary rounded-2xl px-3 py-2.5 border border-border">
+              {taggedMovie.posterUrl
+                ? <img src={taggedMovie.posterUrl} alt={taggedMovie.title} className="w-9 h-12 rounded-lg object-cover shrink-0" />
+                : <div className="w-9 h-12 rounded-lg bg-background border border-border/60 flex items-center justify-center shrink-0"><Film className="w-3 h-3 text-muted-foreground" /></div>
+              }
+              <p className="flex-1 text-sm font-semibold text-foreground truncate">{taggedMovie.title}</p>
+              <button onClick={() => setTaggedMovie(null)} className="p-1.5 rounded-full bg-background/80 shrink-0">
+                <X className="w-3.5 h-3.5 text-muted-foreground" />
+              </button>
+            </div>
+          )}
+          {showTagSearch && !taggedMovie && (
+            <div className="bg-secondary rounded-2xl overflow-hidden border border-border">
+              <div className="p-3 border-b border-border">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none z-10" />
+                  <input
+                    autoFocus
+                    className="w-full h-10 bg-background rounded-xl text-sm text-foreground placeholder:text-muted-foreground outline-none"
+                    style={{ paddingLeft: "2.25rem", paddingRight: tagQuery ? "2.75rem" : "0.75rem" }}
+                    placeholder={t.tagMoviePlaceholder}
+                    value={tagQuery}
+                    onChange={e => setTagQuery(e.target.value)}
+                  />
+                  {tagQuery && (
+                    <button
+                      onClick={() => setTagQuery("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-muted-foreground/20 flex items-center justify-center z-10"
+                    >
+                      <X className="w-3 h-3 text-muted-foreground" />
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="h-44 overflow-y-auto">
+                {tagSearchLoading && <div className="flex justify-center py-4"><Loader2 className="w-4 h-4 animate-spin text-muted-foreground" /></div>}
+                {!debouncedTagQuery && !tagSearchLoading && (
+                  <p className="text-center text-sm text-muted-foreground py-5">{t.tagMoviePlaceholder}</p>
+                )}
+                {debouncedTagQuery && !tagSearchLoading && (tagSearchData?.movies ?? []).length === 0 && (
+                  <p className="text-center text-sm text-muted-foreground py-5">{t.noMoviesFound}</p>
+                )}
+                {debouncedTagQuery && (tagSearchData?.movies as unknown as TrendingMovie[] ?? []).map((movie: TrendingMovie) => (
+                  <button
+                    key={movie.imdbId}
+                    onClick={() => { setTaggedMovie({ imdbId: movie.imdbId, title: movie.title, posterUrl: movie.posterUrl }); setShowTagSearch(false); setTagQuery(""); }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 border-b border-border/40 last:border-0 active:bg-background/60 transition-colors text-left"
+                  >
+                    <div className="w-9 h-12 rounded-lg overflow-hidden bg-zinc-900 shrink-0 border border-border">
+                      {movie.posterUrl ? <img src={movie.posterUrl} alt={movie.title} className="w-full h-full object-cover" /> : <Film className="w-4 h-4 text-muted-foreground m-auto mt-4" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-foreground truncate">{movie.title}</p>
+                      <p className="text-[11px] text-muted-foreground">{displayYear(movie.year, lang)}</p>
+                    </div>
+                    <Check className="w-4 h-4 text-muted-foreground shrink-0" />
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
         </div>
 

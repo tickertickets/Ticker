@@ -19,6 +19,10 @@ import {
   followsTable,
   apiCacheTable,
   moviesTable,
+  chainsTable,
+  chainLikesTable,
+  chainMoviesTable,
+  chainBookmarksTable,
 } from "@workspace/db/schema";
 import { eq, desc, count, max, and, inArray, isNull } from "drizzle-orm";
 import { asyncHandler } from "../middlewares/error-handler";
@@ -918,6 +922,76 @@ router.get(
       .orderBy(desc(movieBookmarksTable.createdAt));
 
     res.json({ movieIds: rows.map((r) => r.movieId) });
+  }),
+);
+
+// ── GET /movies/:movieId/chains — chains that have tagged this movie ──────────
+router.get(
+  "/:movieId/chains",
+  asyncHandler(async (req, res) => {
+    const movieId = String(req.params["movieId"]);
+    const currentUserId = req.session?.userId;
+
+    const taggedChains = await db
+      .select()
+      .from(chainsTable)
+      .where(and(eq(chainsTable.taggedMovieImdbId, movieId), isNull(chainsTable.deletedAt), eq(chainsTable.isPrivate, false)))
+      .orderBy(desc(chainsTable.updatedAt))
+      .limit(50);
+
+    if (taggedChains.length === 0) { res.json({ chains: [] }); return; }
+
+    const chainIds = taggedChains.map(c => c.id);
+    const [likeCounts, movieCounts, ownerIds] = await Promise.all([
+      db.select({ chainId: chainLikesTable.chainId, cnt: count() })
+        .from(chainLikesTable).where(inArray(chainLikesTable.chainId, chainIds))
+        .groupBy(chainLikesTable.chainId),
+      db.select({ chainId: chainMoviesTable.chainId, cnt: count() })
+        .from(chainMoviesTable).where(inArray(chainMoviesTable.chainId, chainIds))
+        .groupBy(chainMoviesTable.chainId),
+      db.select().from(usersTable).where(inArray(usersTable.id, [...new Set(taggedChains.map(c => c.userId))])),
+    ]);
+
+    const likeMap = new Map(likeCounts.map(r => [r.chainId, Number(r.cnt)]));
+    const movieMap = new Map(movieCounts.map(r => [r.chainId, Number(r.cnt)]));
+    const ownerMap = new Map(ownerIds.map(u => [u.id, u]));
+
+    let myLikedSet = new Set<string>();
+    let myBookmarkSet = new Set<string>();
+    if (currentUserId) {
+      const [myLikes, myBookmarks] = await Promise.all([
+        db.select({ chainId: chainLikesTable.chainId }).from(chainLikesTable)
+          .where(and(eq(chainLikesTable.userId, currentUserId), inArray(chainLikesTable.chainId, chainIds))),
+        db.select({ chainId: chainBookmarksTable.chainId }).from(chainBookmarksTable)
+          .where(and(eq(chainBookmarksTable.userId, currentUserId), inArray(chainBookmarksTable.chainId, chainIds))),
+      ]);
+      myLikedSet = new Set(myLikes.map(r => r.chainId));
+      myBookmarkSet = new Set(myBookmarks.map(r => r.chainId));
+    }
+
+    const chains = taggedChains
+      .map(c => {
+        const owner = ownerMap.get(c.userId);
+        return {
+          id: c.id,
+          userId: c.userId,
+          user: owner ? { id: owner.id, username: owner.username ?? "", displayName: owner.displayName, avatarUrl: owner.avatarUrl } : null,
+          title: c.title,
+          description: c.description,
+          descriptionAlign: (c.descriptionAlign ?? "left") as "left" | "center" | "right",
+          mode: c.mode ?? "standard",
+          movieCount: movieMap.get(c.id) ?? 0,
+          likeCount: likeMap.get(c.id) ?? 0,
+          isLiked: myLikedSet.has(c.id),
+          isBookmarked: myBookmarkSet.has(c.id),
+          taggedMovie: c.taggedMovieImdbId ? { imdbId: c.taggedMovieImdbId, title: c.taggedMovieTitle, posterUrl: c.taggedMoviePosterUrl } : null,
+          createdAt: c.createdAt,
+          updatedAt: c.updatedAt,
+        };
+      })
+      .sort((a, b) => b.likeCount - a.likeCount);
+
+    res.json({ chains });
   }),
 );
 

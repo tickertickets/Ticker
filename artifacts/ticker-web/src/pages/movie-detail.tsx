@@ -146,6 +146,7 @@ export default function MovieDetail() {
   const episodeRatingsRef = useRef<HTMLDivElement>(null);
   const [showProviders, setShowProviders] = useState(false);
   const [showAwards, setShowAwards] = useState(false);
+  const [showChains, setShowChains] = useState(false);
   const [showCollection, setShowCollection] = useState(false);
   const [showSpinoffs, setShowSpinoffs] = useState(false);
   const [showDirectors, setShowDirectors] = useState(false);
@@ -393,6 +394,26 @@ export default function MovieDetail() {
     staleTime: 30 * 60 * 1000,
   });
 
+  type MovieChain = {
+    id: string;
+    title: string;
+    description?: string | null;
+    user: { id: string; username: string; displayName: string | null; avatarUrl: string | null } | null;
+    movieCount: number;
+    likeCount: number;
+    isLiked: boolean;
+  };
+  const { data: movieChainsData } = useQuery<{ chains: MovieChain[] }>({
+    queryKey: ["/api/movies", movieId, "chains"],
+    queryFn: async () => {
+      const res = await fetch(`/api/movies/${encodeURIComponent(movieId)}/chains`);
+      if (!res.ok) return { chains: [] };
+      return res.json();
+    },
+    enabled: !!movieId,
+    staleTime: 5 * 60 * 1000,
+  });
+
   const { data: videosData } = useQuery<{ trailerKey: string | null; trailerName: string | null }>({
     queryKey: ["/api/movies", movieId, "videos"],
     queryFn: async () => {
@@ -438,9 +459,9 @@ export default function MovieDetail() {
     .filter((c): c is string => !!c && c.trim().length > 1)
     .slice(0, 15);
   const { data: characterData } = useQuery<{ results: CharacterMatch[] }>({
-    queryKey: ["/api/character/batch-search", isFranchise ? characterNames.join(",") : ""],
+    queryKey: ["/api/character/batch-search", characterNames.join(",")],
     queryFn: async () => {
-      if (characterNames.length === 0 || !isFranchise) return { results: [] };
+      if (characterNames.length === 0) return { results: [] };
       const res = await fetch("/api/character/batch-search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -449,7 +470,7 @@ export default function MovieDetail() {
       if (!res.ok) return { results: [] };
       return res.json();
     },
-    enabled: isFranchise && characterNames.length > 0,
+    enabled: characterNames.length > 0,
     staleTime: 60 * 60 * 1000,
   });
 
@@ -1028,9 +1049,9 @@ export default function MovieDetail() {
                     ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                     : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />}
                 </button>
-                {showCollection && (
-                  <>
-                    <div className="flex overflow-x-auto gap-2.5 pb-1 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
+                <div style={{ display: "grid", gridTemplateRows: showCollection ? "1fr" : "0fr", transition: "grid-template-rows 0.25s ease" }}>
+                  <div style={{ overflow: "hidden" }}>
+                    <div className="flex overflow-x-auto gap-2.5 pb-1 mt-2 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
                       {sorted.map(m => (
                         <Link
                           key={m.imdbId}
@@ -1057,8 +1078,8 @@ export default function MovieDetail() {
                         </Link>
                       ))}
                     </div>
-                  </>
-                )}
+                  </div>
+                </div>
               </div>
             )}
 
@@ -1078,30 +1099,32 @@ export default function MovieDetail() {
                     ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                     : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />}
                 </button>
-                {showSpinoffs && (
-                  <div className="flex overflow-x-auto gap-2.5 pb-1 mt-2 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
-                    {spinoffMovies.map(m => (
-                      <Link
-                        key={m.imdbId}
-                        href={`/movie/${encodeURIComponent(m.imdbId)}${navSrclang ? `?srclang=${encodeURIComponent(navSrclang)}` : ""}`}
-                        onClick={() => goToMovie(m.imdbId)}
-                      >
-                        <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
-                          <div className="relative" style={{ aspectRatio: "2/3" }}>
-                            {m.posterUrl
-                              ? <img src={m.posterUrl} alt={m.title} className="w-full h-full object-cover" loading="lazy" />
-                              : <div className="w-full h-full flex items-center justify-center bg-zinc-900"><Film className="w-4 h-4 text-muted-foreground" /></div>
-                            }
+                <div style={{ display: "grid", gridTemplateRows: showSpinoffs ? "1fr" : "0fr", transition: "grid-template-rows 0.25s ease" }}>
+                  <div style={{ overflow: "hidden" }}>
+                    <div className="flex overflow-x-auto gap-2.5 pb-1 mt-2 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
+                      {spinoffMovies.map(m => (
+                        <Link
+                          key={m.imdbId}
+                          href={`/movie/${encodeURIComponent(m.imdbId)}${navSrclang ? `?srclang=${encodeURIComponent(navSrclang)}` : ""}`}
+                          onClick={() => goToMovie(m.imdbId)}
+                        >
+                          <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
+                            <div className="relative" style={{ aspectRatio: "2/3" }}>
+                              {m.posterUrl
+                                ? <img src={m.posterUrl} alt={m.title} className="w-full h-full object-cover" loading="lazy" />
+                                : <div className="w-full h-full flex items-center justify-center bg-zinc-900"><Film className="w-4 h-4 text-muted-foreground" /></div>
+                              }
+                            </div>
+                            <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
+                              <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{m.title}</p>
+                              {m.year && <p className="text-[8px] text-muted-foreground mt-0.5">{displayYear(m.year, lang)}</p>}
+                            </div>
                           </div>
-                          <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
-                            <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{m.title}</p>
-                            {m.year && <p className="text-[8px] text-muted-foreground mt-0.5">{displayYear(m.year, lang)}</p>}
-                          </div>
-                        </div>
-                      </Link>
-                    ))}
+                        </Link>
+                      ))}
+                    </div>
                   </div>
-                )}
+                </div>
               </div>
             )}
           </div>
@@ -1181,6 +1204,49 @@ export default function MovieDetail() {
                       <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
                         <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{p.name}</p>
                         {p.character && <p className="text-[8px] text-muted-foreground mt-0.5 truncate">{p.character}</p>}
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Related Chains section ── */}
+      {(movieChainsData?.chains ?? []).length > 0 && (
+        <div className="px-5 pt-3">
+          <button
+            className="w-full flex items-center gap-2 text-left py-1"
+            onClick={() => setShowChains(v => !v)}
+          >
+            <ArrowUpDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+            <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">{t.relatedChainsLabel}</p>
+            <span className="text-[10px] text-muted-foreground mr-1">{(movieChainsData?.chains ?? []).length}</span>
+            {showChains
+              ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+              : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />}
+          </button>
+          <div style={{ display: "grid", gridTemplateRows: showChains ? "1fr" : "0fr", transition: "grid-template-rows 0.25s ease" }}>
+            <div style={{ overflow: "hidden" }}>
+              <div className="flex flex-col gap-2 mt-2 pb-1">
+                {(movieChainsData?.chains ?? []).map(chain => (
+                  <Link key={chain.id} href={`/chain/${chain.id}`}>
+                    <div className="flex items-center gap-3 bg-secondary rounded-2xl px-3 py-2.5 border border-border active:opacity-70 transition-opacity">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-foreground truncate">{chain.title}</p>
+                        {chain.user && (
+                          <p className="text-[11px] text-muted-foreground truncate">@{chain.user.username}</p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-[11px] text-muted-foreground">{chain.movieCount} {lang === "th" ? "เรื่อง" : "films"}</span>
+                        {chain.likeCount > 0 && (
+                          <span className="flex items-center gap-0.5 text-[11px] text-muted-foreground">
+                            <Star className="w-3 h-3" />{fmtCount(chain.likeCount)}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </Link>
