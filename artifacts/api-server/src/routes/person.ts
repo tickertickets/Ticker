@@ -18,6 +18,23 @@ function getUILang(req: any): string {
   return "en-US";
 }
 
+// ── GET /person/bookmarked  (MUST be before /:personId) ───────────────────────
+router.get(
+  "/bookmarked",
+  asyncHandler(async (req, res) => {
+    const userId = (req as any).session?.userId as string | undefined;
+    if (!userId) throw new UnauthorizedError();
+
+    const rows = await db
+      .select({ personId: personBookmarksTable.personId })
+      .from(personBookmarksTable)
+      .where(eq(personBookmarksTable.userId, userId))
+      .orderBy(personBookmarksTable.createdAt);
+
+    res.json({ personIds: rows.map(r => r.personId) });
+  }),
+);
+
 // ── GET /person/:personId ─────────────────────────────────────────────────────
 router.get(
   "/:personId",
@@ -36,6 +53,7 @@ router.get(
         biography?: string;
         profile_path?: string | null;
         birthday?: string | null;
+        deathday?: string | null;
         known_for_department?: string;
       }>(`/person/${personId}`, { language: lang }),
       tmdbFetch<{
@@ -128,8 +146,9 @@ router.get(
       biography: personData.biography || null,
       profileUrl: personData.profile_path ? `${PROFILE_BASE}${personData.profile_path}` : null,
       birthday: personData.birthday || null,
+      deathday: personData.deathday || null,
       knownForDepartment: personData.known_for_department || null,
-      movies: allMovies.slice(0, 60),
+      movies: allMovies,
     });
   }),
 );
@@ -230,23 +249,6 @@ router.post(
         .values({ userId, personId });
       res.json({ bookmarked: true });
     }
-  }),
-);
-
-// ── GET /person/bookmarked ────────────────────────────────────────────────────
-router.get(
-  "/bookmarked",
-  asyncHandler(async (req, res) => {
-    const userId = (req as any).session?.userId as string | undefined;
-    if (!userId) throw new UnauthorizedError();
-
-    const rows = await db
-      .select({ personId: personBookmarksTable.personId })
-      .from(personBookmarksTable)
-      .where(eq(personBookmarksTable.userId, userId))
-      .orderBy(personBookmarksTable.createdAt);
-
-    res.json({ personIds: rows.map(r => r.personId) });
   }),
 );
 

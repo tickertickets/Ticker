@@ -2786,6 +2786,64 @@ router.get(
   }),
 );
 
+// ── GET /movies/:movieId/awards ──────────────────────────────────────────────
+router.get(
+  "/:movieId/awards",
+  asyncHandler(async (req, res) => {
+    const movieId = String(req.params["movieId"]);
+
+    let tmdbId: number;
+    let isTv = false;
+
+    if (movieId.startsWith("tmdb_tv:")) {
+      tmdbId = parseInt(movieId.slice(8), 10);
+      isTv = true;
+    } else if (movieId.startsWith("tmdb:")) {
+      tmdbId = parseInt(movieId.slice(5), 10);
+    } else if (/^\d+$/.test(movieId)) {
+      tmdbId = parseInt(movieId, 10);
+    } else {
+      const findData = await tmdbFetch<{
+        movie_results?: Array<{ id: number }>;
+        tv_results?: Array<{ id: number }>;
+      }>(`/find/${encodeURIComponent(movieId)}`, {
+        external_source: "imdb_id",
+      });
+      if (findData.tv_results?.length) {
+        tmdbId = findData.tv_results[0]!.id;
+        isTv = true;
+      } else if (findData.movie_results?.length) {
+        tmdbId = findData.movie_results[0]!.id;
+      } else {
+        res.json({ results: [] });
+        return;
+      }
+    }
+
+    type AwardEntry = {
+      year: string;
+      award_category: string;
+      participants?: Array<{ person_id: number; name: string; character?: string }>;
+    };
+    type AwardResult = {
+      department: string;
+      name: string;
+      winners: AwardEntry[];
+      nominees: AwardEntry[];
+    };
+
+    const data = await tmdbFetch<{ id?: number; results?: AwardResult[] }>(
+      `/${isTv ? "tv" : "movie"}/${tmdbId}/awards`,
+    ).catch(() => ({ results: [] as AwardResult[] }));
+
+    const results = (data.results ?? []).filter(
+      r => (r.winners?.length ?? 0) > 0 || (r.nominees?.length ?? 0) > 0,
+    );
+
+    res.json({ results });
+  }),
+);
+
 // ── GET /movies/:movieId/credits ─────────────────────────────────────────────
 router.get(
   "/:movieId/credits",
