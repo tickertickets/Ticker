@@ -108,6 +108,7 @@ router.get(
     }[] = [];
 
     for (const item of [...(creditsData.cast ?? []), ...(creditsData.crew ?? [])]) {
+      if ((item as any).adult === true) continue;
       const key = `${item.id}_${item.media_type}`;
       if (seen.has(key)) continue;
       seen.add(key);

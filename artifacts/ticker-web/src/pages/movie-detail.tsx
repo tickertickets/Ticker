@@ -144,7 +144,6 @@ export default function MovieDetail() {
   const badgePopupRef = useRef<HTMLDivElement>(null);
   const [expandedSeason, setExpandedSeason] = useState<number | null>(null);
   const episodeRatingsRef = useRef<HTMLDivElement>(null);
-  const [collectionSort, setCollectionSort] = useState<"chronological" | "year">("chronological");
   const [showProviders, setShowProviders] = useState(false);
   const [showAwards, setShowAwards] = useState(false);
   const [showCollection, setShowCollection] = useState(false);
@@ -430,15 +429,18 @@ export default function MovieDetail() {
     staleTime: 0,
   });
 
+  const collectionMovieCount = (collectionData?.movies ?? []).filter(m => !m.isSpinoff).length;
+  const isFranchise = isTvShowEarly || collectionMovieCount > 1;
+
   type CharacterMatch = { name: string; wikidataId: string; label: string; description: string; imageUrl: string | null };
   const characterNames = (creditsData?.cast ?? [])
     .map(c => c.character)
     .filter((c): c is string => !!c && c.trim().length > 1)
     .slice(0, 15);
   const { data: characterData } = useQuery<{ results: CharacterMatch[] }>({
-    queryKey: ["/api/character/batch-search", characterNames.join(",")],
+    queryKey: ["/api/character/batch-search", isFranchise ? characterNames.join(",") : ""],
     queryFn: async () => {
-      if (characterNames.length === 0) return { results: [] };
+      if (characterNames.length === 0 || !isFranchise) return { results: [] };
       const res = await fetch("/api/character/batch-search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -447,7 +449,7 @@ export default function MovieDetail() {
       if (!res.ok) return { results: [] };
       return res.json();
     },
-    enabled: characterNames.length > 0,
+    enabled: isFranchise && characterNames.length > 0,
     staleTime: 60 * 60 * 1000,
   });
 
@@ -803,46 +805,6 @@ export default function MovieDetail() {
 
       </div>
 
-      {/* ── Character cards — Wikidata ── */}
-      {(characterData?.results ?? []).length > 0 && (
-        <div className="px-5 pt-4">
-          <button
-            className="w-full flex items-center gap-2 text-left py-1"
-            onClick={() => setShowCharacters(v => !v)}
-          >
-            <User className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-            <h3 className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">
-              {lang === "th" ? "ตัวละคร" : "Characters"}
-            </h3>
-            <span className="text-[10px] text-muted-foreground mr-1">{(characterData?.results ?? []).length}</span>
-            {showCharacters
-              ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-              : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />}
-          </button>
-          <div style={{ display: "grid", gridTemplateRows: showCharacters ? "1fr" : "0fr", transition: "grid-template-rows 0.25s ease" }}>
-            <div style={{ overflow: "hidden" }}>
-              <div className="flex overflow-x-auto gap-2.5 pb-1 mt-2 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
-                {(characterData?.results ?? []).map(ch => (
-                  <Link key={ch.wikidataId} href={`/character/${ch.wikidataId}`}>
-                    <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
-                      <div className="relative" style={{ aspectRatio: "2/3" }}>
-                        {ch.imageUrl
-                          ? <img src={ch.imageUrl} alt={ch.label} className="w-full h-full object-cover" loading="lazy" />
-                          : <div className="w-full h-full flex items-center justify-center bg-zinc-900"><User className="w-4 h-4 text-muted-foreground" /></div>
-                        }
-                      </div>
-                      <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
-                        <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{ch.label}</p>
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* ── Watch Providers — collapsible ── */}
       {allProviders.length > 0 && (
         <div className="px-5 pt-4">
@@ -925,6 +887,45 @@ export default function MovieDetail() {
         </div>
       )}
 
+      {/* ── Character cards — Wikidata (franchise / series only) ── */}
+      {isFranchise && (characterData?.results ?? []).length > 0 && (
+        <div className="px-5 pt-4">
+          <button
+            className="w-full flex items-center gap-2 text-left py-1"
+            onClick={() => setShowCharacters(v => !v)}
+          >
+            <User className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+            <h3 className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">
+              {lang === "th" ? "ตัวละคร" : "Characters"}
+            </h3>
+            <span className="text-[10px] text-muted-foreground mr-1">{(characterData?.results ?? []).length}</span>
+            {showCharacters
+              ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+              : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />}
+          </button>
+          <div style={{ display: "grid", gridTemplateRows: showCharacters ? "1fr" : "0fr", transition: "grid-template-rows 0.25s ease" }}>
+            <div style={{ overflow: "hidden" }}>
+              <div className="flex overflow-x-auto gap-2.5 pb-1 mt-2 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
+                {(characterData?.results ?? []).map(ch => (
+                  <Link key={ch.wikidataId} href={`/character/${ch.wikidataId}`}>
+                    <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
+                      <div className="relative" style={{ aspectRatio: "2/3" }}>
+                        {ch.imageUrl
+                          ? <img src={ch.imageUrl} alt={ch.label} className="w-full h-full object-cover" loading="lazy" />
+                          : <div className="w-full h-full flex items-center justify-center bg-zinc-900"><User className="w-4 h-4 text-muted-foreground" /></div>
+                        }
+                      </div>
+                      <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
+                        <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{ch.label}</p>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Episode ratings (TV shows) ── */}
       {isTvShow && seasonsData && seasonsData.seasons.length > 0 && (
@@ -996,45 +997,12 @@ export default function MovieDetail() {
         const mainMovies = collectionData.movies.filter(m => !m.isSpinoff);
         const spinoffMovies = collectionData.movies.filter(m => m.isSpinoff);
 
-        // "chronological" = story order: extract episode/part number from title first,
-        //   fall back to release date if no episode number found.
-        // "year" = strict release date order
-        //
-        // TMDB's `order` field in collection parts is often missing or equals the
-        // release-date index — it does NOT reliably encode in-universe story order.
-        // Parsing "Episode I / II / III" etc. from the title is the most reliable
-        // method for franchises like Star Wars where story ≠ release order.
-        function romanToInt(s: string): number | null {
-          const map: Record<string, number> = {
-            I: 1, II: 2, III: 3, IV: 4, V: 5,
-            VI: 6, VII: 7, VIII: 8, IX: 9, X: 10,
-            XI: 11, XII: 12, XIII: 13, XIV: 14, XV: 15,
-          };
-          return map[s.toUpperCase()] ?? null;
-        }
-        function getStoryOrder(title: string, releaseDate: string | null): number {
-          // Match "Episode I", "Part 2", "Vol. III", "Chapter 4", etc.
-          const romanMatch = title.match(/\b(?:Episode|Part|Vol(?:ume)?\.?|Chapter|Pt\.?)\s+(XIV|XIII|XII|XI|IX|VIII|VII|VI|IV|III|II|I|X|V|\d+)\b/i);
-          if (romanMatch?.[1]) {
-            const digit = parseInt(romanMatch[1], 10);
-            if (!isNaN(digit)) return digit;
-            const roman = romanToInt(romanMatch[1]);
-            if (roman !== null) return roman;
-          }
-          // Fall back to release year as a proxy for story order
-          if (releaseDate) return parseInt(releaseDate.slice(0, 4), 10) || 9999;
-          return 9999;
-        }
-        const sorted = collectionSort === "year"
-          ? [...mainMovies].sort((a, b) => {
-              if (!a.releaseDate && !b.releaseDate) return 0;
-              if (!a.releaseDate) return 1;
-              if (!b.releaseDate) return -1;
-              return a.releaseDate.localeCompare(b.releaseDate);
-            })
-          : [...mainMovies].sort((a, b) => {
-              return getStoryOrder(a.title, a.releaseDate ?? null) - getStoryOrder(b.title, b.releaseDate ?? null);
-            });
+        const sorted = [...mainMovies].sort((a, b) => {
+          if (!a.releaseDate && !b.releaseDate) return 0;
+          if (!a.releaseDate) return 1;
+          if (!b.releaseDate) return -1;
+          return a.releaseDate.localeCompare(b.releaseDate);
+        });
 
         // Navigate to a movie, always starting at the top of the target page
         const goToMovie = (targetImdbId: string) => {
@@ -1062,22 +1030,6 @@ export default function MovieDetail() {
                 </button>
                 {showCollection && (
                   <>
-                    {mainMovies.length > 1 && (
-                      <div className="flex items-center gap-1 mt-2 mb-2">
-                        <button
-                          onClick={() => setCollectionSort("chronological")}
-                          className={`px-2 py-1 rounded-lg text-[10px] font-semibold border transition-colors ${collectionSort === "chronological" ? "bg-foreground text-background border-foreground" : "bg-secondary text-muted-foreground border-border"}`}
-                        >
-                          {lang === "th" ? "เนื้อเรื่อง" : "Story"}
-                        </button>
-                        <button
-                          onClick={() => setCollectionSort("year")}
-                          className={`px-2 py-1 rounded-lg text-[10px] font-semibold border transition-colors ${collectionSort === "year" ? "bg-foreground text-background border-foreground" : "bg-secondary text-muted-foreground border-border"}`}
-                        >
-                          {lang === "th" ? "ปีออก" : "Year"}
-                        </button>
-                      </div>
-                    )}
                     <div className="flex overflow-x-auto gap-2.5 pb-1 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
                       {sorted.map(m => (
                         <Link

@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
-import { Film, Loader2, X as XIcon, ChevronRight, Search as SearchIcon, Swords, RefreshCw } from "lucide-react";
-import { useLang, displayYear } from "@/lib/i18n";
-import { computeCardTier, computeEffectTags, TIER_VISUAL } from "@/lib/ranks";
+import { useQuery } from "@tanstack/react-query";
+import { Film, Loader2, X as XIcon, ChevronRight, Search as SearchIcon, Swords, RefreshCw, Sparkles } from "lucide-react";
+import { useLang, displayYear, type Lang } from "@/lib/i18n";
+import { computeCardTier, computeEffectTags } from "@/lib/ranks";
 import { MovieBadges } from "@/components/MovieBadges";
 import { useDebounceValue } from "usehooks-ts";
 
@@ -22,6 +23,68 @@ type VsMovie = {
 
 type SearchResult = VsMovie & { type?: string };
 
+function makeScoreInput(m: VsMovie) {
+  return {
+    tmdbRating: parseFloat(m.tmdbRating ?? "0"),
+    voteCount: m.voteCount ?? 0,
+    genreIds: m.genreIds ?? [],
+    popularity: m.popularity ?? 0,
+    franchiseIds: m.franchiseIds ?? [],
+  };
+}
+
+function MovieRow({
+  m,
+  added,
+  full,
+  onAdd,
+  lang,
+  s,
+}: {
+  m: VsMovie;
+  added: boolean;
+  full: boolean;
+  onAdd: (m: VsMovie) => void;
+  lang: Lang;
+  s: { added: string; addBtn: string };
+}) {
+  const score = makeScoreInput(m);
+  const tier = computeCardTier(score);
+  const effects = computeEffectTags(score, tier);
+  return (
+    <div className="flex items-center gap-3 bg-secondary rounded-2xl px-3 py-2.5 border border-border">
+      <div className="w-10 flex-shrink-0 rounded-xl overflow-hidden bg-zinc-900 border border-border/50" style={{ height: 56 }}>
+        {m.posterUrl
+          ? <img src={m.posterUrl} alt={m.title} className="w-full h-full object-cover" loading="lazy" />
+          : <div className="w-full h-full flex items-center justify-center"><Film className="w-3 h-3 text-muted-foreground" /></div>
+        }
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-foreground leading-tight line-clamp-1">{m.title}</p>
+        <div className="flex items-center gap-2 mt-1 flex-wrap">
+          {m.year && <span className="text-xs text-muted-foreground">{displayYear(m.year, lang)}</span>}
+          {effects.length > 0 && (
+            <MovieBadges tier={tier} effects={effects} size="xs" layout="row" />
+          )}
+        </div>
+      </div>
+      <button
+        onClick={() => !added && !full && onAdd(m)}
+        disabled={added || full}
+        className={`flex-shrink-0 h-7 px-3 rounded-xl text-xs font-bold transition-opacity ${
+          added
+            ? "bg-muted text-muted-foreground"
+            : full
+              ? "bg-muted text-muted-foreground opacity-40"
+              : "bg-foreground text-background active:opacity-70"
+        }`}
+      >
+        {added ? s.added : s.addBtn}
+      </button>
+    </div>
+  );
+}
+
 export function MovieVsPicker({ onClose }: { onClose: () => void }) {
   const { lang } = useLang();
   const [, navigate] = useLocation();
@@ -33,37 +96,52 @@ export function MovieVsPicker({ onClose }: { onClose: () => void }) {
   const [searching, setSearching] = useState(false);
   const [picked, setPicked] = useState<VsMovie[]>([]);
   const [winner, setWinner] = useState<VsMovie | null>(null);
+  const [shownWinnerIds, setShownWinnerIds] = useState<Set<string>>(new Set());
   const inputRef = useRef<HTMLInputElement>(null);
 
   const MAX_MOVIES = 5;
   const MIN_MOVIES = 2;
 
-  // ── Strings ──────────────────────────────────────────────────────────────
   const s = {
-    title:          lang === "th" ? "VS — ให้ระบบเลือก"           : "VS — Let the System Pick",
-    subtitle:       lang === "th" ? "เพิ่มหนัง 2–5 เรื่อง แล้วสุ่มหาผู้ชนะ" : "Add 2–5 movies and pick a random winner",
-    searchPlaceholder: lang === "th" ? "ค้นหาหนัง..."             : "Search movies...",
-    addBtn:         lang === "th" ? "เพิ่ม"                        : "Add",
-    added:          lang === "th" ? "เพิ่มแล้ว"                   : "Added",
-    maxMovies:      lang === "th" ? "เพิ่มได้สูงสุด 5 เรื่อง"     : "Maximum 5 movies",
-    pickBtn:        lang === "th" ? "สุ่มเลือก!"                   : "Pick a Winner!",
-    needMore:       lang === "th" ? "เพิ่มอย่างน้อย 2 เรื่อง"     : "Add at least 2 movies",
-    loadingTitle:   lang === "th" ? "กำลังสุ่ม..."                  : "Picking a winner...",
-    winnerLabel:    lang === "th" ? "ระบบเลือก"                   : "System picked",
-    viewDetail:     lang === "th" ? "ดูรายละเอียด"                 : "View detail",
-    pickAgain:      lang === "th" ? "สุ่มใหม่"                     : "Pick again",
-    noResults:      lang === "th" ? "ไม่พบหนัง"                   : "No movies found",
-    addedMovies:    lang === "th" ? "หนังที่เพิ่ม"                 : "Added movies",
-    removeBtn:      lang === "th" ? "ลบ"                           : "Remove",
-    backBtn:        lang === "th" ? "กลับ"                         : "Back",
+    title:        lang === "th" ? "VS — ให้ระบบเลือก"           : "VS — Let the System Pick",
+    subtitle:     lang === "th" ? "เพิ่มหนัง 2–5 เรื่อง แล้วสุ่มหาผู้ชนะ" : "Add 2–5 movies and pick a winner",
+    searchPlaceholder: lang === "th" ? "ค้นหาหนัง..."           : "Search movies...",
+    addBtn:       lang === "th" ? "เพิ่ม"                        : "Add",
+    added:        lang === "th" ? "เพิ่มแล้ว"                   : "Added",
+    pickBtn:      lang === "th" ? "สุ่มเลือก!"                   : "Pick a Winner!",
+    needMore:     lang === "th" ? "เพิ่มอย่างน้อย 2 เรื่อง"     : "Add at least 2 movies",
+    loadingTitle: lang === "th" ? "กำลังสุ่ม..."                 : "Picking a winner...",
+    winnerLabel:  lang === "th" ? "ระบบเลือก"                   : "System picked",
+    viewDetail:   lang === "th" ? "ดูรายละเอียด"                 : "View detail",
+    pickAgain:    lang === "th" ? "สุ่มใหม่"                     : "Pick again",
+    noResults:    lang === "th" ? "ไม่พบหนัง"                   : "No movies found",
+    addedMovies:  lang === "th" ? "หนังที่เพิ่ม"                 : "Added movies",
+    backBtn:      lang === "th" ? "กลับ"                         : "Back",
+    recommended:  lang === "th" ? "แนะนำ"                        : "Recommended",
+    remaining:    (n: number) => lang === "th"
+      ? `เหลือ ${n} เรื่องที่ยังไม่ถูกสุ่ม`
+      : `${n} movie${n !== 1 ? "s" : ""} not yet picked`,
+    allShown:     lang === "th" ? "สุ่มครบทุกเรื่องแล้ว — เริ่มรอบใหม่" : "All picked — starting new round",
   };
+
+  // ── Trending (recommended) ────────────────────────────────────────────────
+  const apiLang = lang === "th" ? "th-TH" : "en-US";
+  const { data: trendingData } = useQuery<{ movies: VsMovie[] }>({
+    queryKey: ["/api/vs-trending", lang],
+    queryFn: async () => {
+      const res = await fetch(`/api/movies/trending?page=1&lang=${apiLang}`);
+      if (!res.ok) return { movies: [] };
+      const data = await res.json();
+      return { movies: (data.movies ?? []).slice(0, 20) as VsMovie[] };
+    },
+    staleTime: 10 * 60 * 1000,
+  });
 
   // ── Search ────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!debouncedQuery.trim()) { setSearchResults([]); return; }
     const ctrl = new AbortController();
     setSearching(true);
-    const apiLang = lang === "en" ? "en-US" : "th";
     fetch(`/api/movies/search?query=${encodeURIComponent(debouncedQuery)}&lang=${apiLang}`, { signal: ctrl.signal })
       .then(r => r.json())
       .then(data => { setSearchResults(data.movies ?? data.results ?? []); setSearching(false); })
@@ -71,13 +149,17 @@ export function MovieVsPicker({ onClose }: { onClose: () => void }) {
     return () => ctrl.abort();
   }, [debouncedQuery, lang]);
 
-  // ── Pick random winner ────────────────────────────────────────────────────
+  // ── Pick logic ───────────────────────────────────────────────────────────
   const pickWinner = () => {
     if (picked.length < MIN_MOVIES) return;
+    const newShown = new Set<string>();
     setStep("loading");
     setTimeout(() => {
       const idx = Math.floor(Math.random() * picked.length);
-      setWinner(picked[idx]!);
+      const next = picked[idx]!;
+      newShown.add(next.imdbId);
+      setShownWinnerIds(newShown);
+      setWinner(next);
       setStep("result");
     }, 1800);
   };
@@ -86,10 +168,27 @@ export function MovieVsPicker({ onClose }: { onClose: () => void }) {
     if (picked.length < MIN_MOVIES) return;
     setStep("loading");
     setTimeout(() => {
-      let idx: number;
-      do { idx = Math.floor(Math.random() * picked.length); }
-      while (picked.length > 1 && picked[idx]?.imdbId === winner?.imdbId);
-      setWinner(picked[idx]!);
+      const notShown = picked.filter(m => !shownWinnerIds.has(m.imdbId) && m.imdbId !== winner?.imdbId);
+      const sameRoundPool = picked.filter(m => m.imdbId !== winner?.imdbId);
+
+      let pool: VsMovie[];
+      let isNewRound = false;
+
+      if (notShown.length > 0) {
+        pool = notShown;
+      } else {
+        pool = sameRoundPool.length > 0 ? sameRoundPool : picked;
+        isNewRound = true;
+      }
+
+      const idx = Math.floor(Math.random() * pool.length);
+      const next = pool[idx]!;
+
+      setShownWinnerIds(prev => {
+        if (isNewRound) return new Set([next.imdbId]);
+        return new Set([...prev, next.imdbId]);
+      });
+      setWinner(next);
       setStep("result");
     }, 1200);
   };
@@ -102,6 +201,7 @@ export function MovieVsPicker({ onClose }: { onClose: () => void }) {
 
   const removeMovie = (imdbId: string) => {
     setPicked(prev => prev.filter(p => p.imdbId !== imdbId));
+    setShownWinnerIds(prev => { const next = new Set(prev); next.delete(imdbId); return next; });
   };
 
   const goToMovie = () => {
@@ -112,6 +212,9 @@ export function MovieVsPicker({ onClose }: { onClose: () => void }) {
 
   const isAdded = (imdbId: string) => picked.some(p => p.imdbId === imdbId);
 
+  const remainingCount = picked.length - shownWinnerIds.size;
+  const allShown = picked.length > 0 && shownWinnerIds.size >= picked.length;
+
   return (
     <>
       <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={onClose} />
@@ -120,12 +223,11 @@ export function MovieVsPicker({ onClose }: { onClose: () => void }) {
         className="fixed inset-x-0 bottom-0 z-50 rounded-t-3xl bg-background border-t border-border overflow-hidden"
         style={{ maxHeight: "88vh" }}
       >
-        {/* Handle */}
         <div className="flex justify-center pt-3 pb-1">
           <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
         </div>
 
-        {/* ── Loading step ── */}
+        {/* ── Loading ── */}
         {step === "loading" && (
           <div className="flex flex-col items-center justify-center py-20 gap-4">
             <div className="w-20 h-20 rounded-2xl bg-secondary flex items-center justify-center">
@@ -133,7 +235,7 @@ export function MovieVsPicker({ onClose }: { onClose: () => void }) {
             </div>
             <div className="text-center">
               <p className="font-bold text-foreground text-base">{s.loadingTitle}</p>
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-xs text-muted-foreground mt-1 px-8 line-clamp-1">
                 {picked.map(p => p.title).join(" vs ")}
               </p>
             </div>
@@ -141,22 +243,10 @@ export function MovieVsPicker({ onClose }: { onClose: () => void }) {
           </div>
         )}
 
-        {/* ── Result step ── */}
+        {/* ── Result ── */}
         {step === "result" && winner && (() => {
-          const tier = computeCardTier({
-            tmdbRating: parseFloat(winner.tmdbRating ?? "0"),
-            voteCount: winner.voteCount ?? 0,
-            genreIds: winner.genreIds ?? [],
-            popularity: winner.popularity ?? 0,
-            franchiseIds: winner.franchiseIds ?? [],
-          });
-          const effects = computeEffectTags({
-            tmdbRating: parseFloat(winner.tmdbRating ?? "0"),
-            voteCount: winner.voteCount ?? 0,
-            genreIds: winner.genreIds ?? [],
-            popularity: winner.popularity ?? 0,
-            franchiseIds: winner.franchiseIds ?? [],
-          }, tier);
+          const tier = computeCardTier(makeScoreInput(winner));
+          const effects = computeEffectTags(makeScoreInput(winner), tier);
           return (
             <div className="flex flex-col" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 1.5rem)" }}>
               <div className="relative flex items-center justify-center px-4 pt-2 pb-3">
@@ -190,13 +280,9 @@ export function MovieVsPicker({ onClose }: { onClose: () => void }) {
                   }
                   <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent" />
                   <div className="absolute bottom-0 left-0 right-0 p-4">
-                    <div className="flex items-end gap-3">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-display font-bold text-white text-xl leading-tight line-clamp-2">{winner.title}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          {winner.year && <p className="text-white/60 text-sm">{displayYear(winner.year, lang)}</p>}
-                        </div>
-                      </div>
+                    <p className="font-display font-bold text-white text-xl leading-tight line-clamp-2">{winner.title}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      {winner.year && <p className="text-white/60 text-sm">{displayYear(winner.year, lang)}</p>}
                     </div>
                     <div className="mt-2">
                       <MovieBadges tier={tier} effects={effects} size="sm" layout="row" />
@@ -205,7 +291,20 @@ export function MovieVsPicker({ onClose }: { onClose: () => void }) {
                 </div>
               </div>
 
-              <div className="flex gap-3 px-4 mt-4">
+              {/* Round progress */}
+              <div className="flex justify-center mt-2 px-4 gap-1.5">
+                {picked.map(m => (
+                  <div
+                    key={m.imdbId}
+                    className={`h-1 flex-1 rounded-full transition-colors ${shownWinnerIds.has(m.imdbId) ? "bg-foreground" : "bg-border"}`}
+                  />
+                ))}
+              </div>
+              <p className="text-center text-[10px] text-muted-foreground mt-1.5">
+                {allShown ? s.allShown : s.remaining(Math.max(0, remainingCount - 1))}
+              </p>
+
+              <div className="flex gap-3 px-4 mt-3">
                 <button
                   onClick={pickAgain}
                   className="flex-1 flex items-center justify-center gap-2 h-12 rounded-2xl bg-secondary border border-border font-semibold text-sm text-foreground active:opacity-70 transition-opacity"
@@ -260,8 +359,8 @@ export function MovieVsPicker({ onClose }: { onClose: () => void }) {
                             : <div className="w-full h-full flex items-center justify-center bg-zinc-900"><Film className="w-3 h-3 text-muted-foreground" /></div>
                           }
                         </div>
-                        <div className="p-1 h-[36px] overflow-hidden">
-                          <p className="text-[8px] font-bold text-foreground line-clamp-2 leading-tight">{m.title}</p>
+                        <div className="p-1 h-[32px] overflow-hidden">
+                          <p className="text-[7px] font-bold text-foreground line-clamp-2 leading-tight">{m.title}</p>
                         </div>
                       </div>
                       <button
@@ -312,62 +411,74 @@ export function MovieVsPicker({ onClose }: { onClose: () => void }) {
               </div>
             </div>
 
-            {/* Search results */}
+            {/* Content */}
             <div className="flex-1 overflow-y-auto px-4 pb-4">
+              {/* Searching indicator */}
               {searching && (
                 <div className="flex justify-center py-8">
                   <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
                 </div>
               )}
+
+              {/* No results */}
               {!searching && debouncedQuery && searchResults.length === 0 && (
                 <div className="flex justify-center py-8">
                   <p className="text-sm text-muted-foreground">{s.noResults}</p>
                 </div>
               )}
+
+              {/* Search results */}
               {!searching && searchResults.length > 0 && (
                 <div className="flex flex-col gap-2">
-                  {searchResults.slice(0, 12).map(m => {
-                    const added = isAdded(m.imdbId);
-                    const full = !added && picked.length >= MAX_MOVIES;
-                    return (
-                      <div
-                        key={m.imdbId}
-                        className="flex items-center gap-3 bg-secondary rounded-2xl px-3 py-2.5 border border-border"
-                      >
-                        <div className="w-9 h-[54px] rounded-lg overflow-hidden bg-zinc-900 flex-shrink-0">
-                          {m.posterUrl
-                            ? <img src={m.posterUrl} alt={m.title} className="w-full h-full object-cover" />
-                            : <div className="w-full h-full flex items-center justify-center"><Film className="w-3 h-3 text-muted-foreground" /></div>
-                          }
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-foreground leading-tight line-clamp-1">{m.title}</p>
-                          {m.year && <p className="text-xs text-muted-foreground mt-0.5">{m.year}</p>}
-                        </div>
-                        <button
-                          onClick={() => !added && !full && addMovie(m)}
-                          disabled={added || full}
-                          className={`flex-shrink-0 h-7 px-3 rounded-xl text-xs font-bold transition-opacity ${
-                            added
-                              ? "bg-muted text-muted-foreground"
-                              : full
-                                ? "bg-muted text-muted-foreground opacity-50"
-                                : "bg-foreground text-background active:opacity-70"
-                          }`}
-                        >
-                          {added ? s.added : s.addBtn}
-                        </button>
-                      </div>
-                    );
-                  })}
+                  {searchResults.slice(0, 15).map(m => (
+                    <MovieRow
+                      key={m.imdbId}
+                      m={m}
+                      added={isAdded(m.imdbId)}
+                      full={!isAdded(m.imdbId) && picked.length >= MAX_MOVIES}
+                      onAdd={addMovie}
+                      lang={lang}
+                      s={s}
+                    />
+                  ))}
                 </div>
               )}
-              {!debouncedQuery && picked.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-10 gap-3 text-center">
-                  <div className="w-14 h-14 rounded-2xl bg-secondary flex items-center justify-center">
-                    <Swords className="w-7 h-7 text-muted-foreground" />
-                  </div>
-                  <p className="text-sm text-muted-foreground px-6">{s.subtitle}</p>
+
+              {/* Recommended (no query) */}
+              {!debouncedQuery && (
+                <div>
+                  {(trendingData?.movies ?? []).length > 0 ? (
+                    <>
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <Sparkles className="w-3 h-3 text-muted-foreground" />
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                          {s.recommended}
+                        </p>
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        {(trendingData?.movies ?? []).map(m => (
+                          <MovieRow
+                            key={m.imdbId}
+                            m={m}
+                            added={isAdded(m.imdbId)}
+                            full={!isAdded(m.imdbId) && picked.length >= MAX_MOVIES}
+                            onAdd={addMovie}
+                            lang={lang}
+                            s={s}
+                          />
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    picked.length === 0 && (
+                      <div className="flex flex-col items-center justify-center py-10 gap-3 text-center">
+                        <div className="w-14 h-14 rounded-2xl bg-secondary flex items-center justify-center">
+                          <Swords className="w-7 h-7 text-muted-foreground" />
+                        </div>
+                        <p className="text-sm text-muted-foreground px-6">{s.subtitle}</p>
+                      </div>
+                    )
+                  )}
                 </div>
               )}
             </div>

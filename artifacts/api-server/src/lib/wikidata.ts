@@ -20,7 +20,7 @@ async function sparqlQuery(sparql: string): Promise<SparqlResponse | null> {
   return resp.json() as Promise<SparqlResponse>;
 }
 
-// ── Shared award types ────────────────────────────────────────────────────────
+// ── Awards ────────────────────────────────────────────────────────────────────
 export type WikiAwardEntry = { year: string; award_category: string };
 export type WikiAwardResult = {
   department: string;
@@ -84,15 +84,39 @@ export async function queryAwardsByTmdbPersonId(personId: number): Promise<WikiA
 
 // ── Character search ──────────────────────────────────────────────────────────
 const CHARACTER_KEYWORDS = [
-  "fictional", "character in", "character from", "character of",
+  "fictional character", "fictional human", "fictional person",
+  "character in", "character from", "character of",
+  "anime character", "manga character", "comic book character",
   "superhero", "supervillain", "villain", "protagonist", "antagonist",
-  "anime", "manga", "comic", "literary character", "television character",
-  "film character", "video game character", "fictional human",
+  "anime", "manga", "literary character", "television character",
+  "film character", "video game character",
 ];
 
 function isCharacterLike(description: string): boolean {
   const lower = description.toLowerCase();
   return CHARACTER_KEYWORDS.some(kw => lower.includes(kw));
+}
+
+/** Clean a raw TMDB character name into searchable variants */
+function cleanCharacterNames(raw: string): string[] {
+  // Split by "/" to get alternate names (e.g. "Tony Stark / Iron Man")
+  const parts = raw.split(/\s*\/\s*/);
+  const results: string[] = [];
+  for (const part of parts) {
+    const name = part
+      .replace(/\s*\(voice\)/gi, "")
+      .replace(/\s*\[voice\]/gi, "")
+      .replace(/\s*\(uncredited\)/gi, "")
+      .replace(/\s*\(as\s+[^)]+\)/gi, "")
+      .replace(/\s*\([^)]{0,30}\)\s*$/, "") // trailing short parenthetical
+      .trim();
+    if (name.length < 2) continue;
+    results.push(name);
+    // Also try East-Asian name reversal (e.g. "Satoru Gojo" → "Gojo Satoru")
+    const words = name.split(/\s+/);
+    if (words.length === 2) results.push(`${words[1]} ${words[0]}`);
+  }
+  return [...new Set(results)];
 }
 
 async function searchOne(name: string): Promise<{ id: string; label: string; description: string } | null> {
@@ -102,7 +126,7 @@ async function searchOne(name: string): Promise<{ id: string; label: string; des
   url.searchParams.set("language", "en");
   url.searchParams.set("type", "item");
   url.searchParams.set("format", "json");
-  url.searchParams.set("limit", "5");
+  url.searchParams.set("limit", "8");
 
   const resp = await fetch(url.toString(), {
     signal: AbortSignal.timeout(5_000),
@@ -113,18 +137,17 @@ async function searchOne(name: string): Promise<{ id: string; label: string; des
   const data = await resp.json() as {
     search?: Array<{ id: string; label: string; description?: string }>;
   };
-  return (data.search ?? []).find(r => isCharacterLike(r.description ?? ""))
-    ? { id: data.search![0].id, label: data.search![0].label, description: data.search![0].description ?? "" }
-    : null;
+
+  // ← CRITICAL FIX: return the matched item, not always index 0
+  const found = (data.search ?? []).find(r => isCharacterLike(r.description ?? ""));
+  return found ? { id: found.id, label: found.label, description: found.description ?? "" } : null;
 }
 
 async function searchCharacter(name: string): Promise<{ id: string; label: string; description: string } | null> {
-  const found = await searchOne(name);
-  if (found) return found;
-  const parts = name.trim().split(/\s+/);
-  if (parts.length >= 2) {
-    const reversed = [...parts.slice(1), parts[0]].join(" ");
-    return searchOne(reversed);
+  const variants = cleanCharacterNames(name);
+  for (const variant of variants) {
+    const hit = await searchOne(variant);
+    if (hit) return hit;
   }
   return null;
 }
@@ -152,7 +175,7 @@ export type CharacterMatch = {
 };
 
 export async function batchSearchCharacters(names: string[]): Promise<CharacterMatch[]> {
-  const limited = names.slice(0, 15).filter(n => n && n.trim().length > 1);
+  const limited = names.slice(0, 20).filter(n => n && n.trim().length > 1);
   const searches = await Promise.all(limited.map(async name => {
     const found = await searchCharacter(name).catch(() => null);
     return { name, found };
@@ -231,11 +254,18 @@ SELECT DISTINCT ?workLabel ?imdbId ?year WHERE {
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en" }
 } LIMIT 25`;
   const data = await sparqlQuery(sparql).catch(() => null);
+  const seen = new Set<string>();
   return (data?.results?.bindings ?? [])
     .map(b => ({
       title: String(b["workLabel"]?.value ?? ""),
       year: b["year"]?.value ? String(b["year"].value) : null,
       imdbId: b["imdbId"]?.value ? String(b["imdbId"].value) : null,
     }))
-    .filter(f => f.title && !f.title.startsWith("Q"));
+    .filter(f => {
+      if (!f.title || f.title.startsWith("Q")) return false;
+      const key = f.imdbId ?? f.title;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 }

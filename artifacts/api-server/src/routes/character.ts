@@ -72,7 +72,7 @@ router.get(
             external_source: "imdb_id",
           });
 
-          const movie = findData.movie_results?.[0];
+          const movie = findData.movie_results?.find(m => !m.adult);
           const tv = findData.tv_results?.[0];
           if (movie) {
             return {

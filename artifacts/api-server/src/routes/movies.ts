@@ -2841,10 +2841,17 @@ router.get(
       r => (r.winners?.length ?? 0) > 0 || (r.nominees?.length ?? 0) > 0,
     );
 
-    if (results.length === 0 && /^tt\d+$/.test(movieId)) {
-      const wikidataResults = await queryAwardsByImdbId(movieId).catch(() => []);
-      if (wikidataResults.length > 0) {
-        return res.json({ results: wikidataResults });
+    if (results.length === 0) {
+      let imdbId: string | null = /^tt\d+$/.test(movieId) ? movieId : null;
+      if (!imdbId && !isTv) {
+        const extIds = await tmdbFetch<{ imdb_id?: string | null }>(`/movie/${tmdbId}/external_ids`).catch(() => ({}));
+        imdbId = extIds.imdb_id || null;
+      }
+      if (imdbId) {
+        const wikidataResults = await queryAwardsByImdbId(imdbId).catch(() => []);
+        if (wikidataResults.length > 0) {
+          return res.json({ results: wikidataResults });
+        }
       }
     }
 
