@@ -3,9 +3,11 @@ import { asyncHandler } from "../middlewares/error-handler";
 import { tmdbFetch, posterUrl } from "../lib/tmdb-client";
 import {
   batchSearchCharacters,
+  getCharactersByMovieImdb,
   getCharacterFromWikidata,
   getCharacterFilmography,
   type CharacterFilm,
+  type CharacterMatch,
 } from "../lib/wikidata";
 
 const router = Router();
@@ -19,6 +21,17 @@ router.post(
       return res.json({ results: [] });
     }
     const results = await batchSearchCharacters(characters).catch(() => []);
+    res.json({ results });
+  }),
+);
+
+// GET /character/by-movie/:imdbId — direct Wikidata character lookup via P674
+router.get(
+  "/by-movie/:imdbId",
+  asyncHandler(async (req, res) => {
+    const { imdbId } = req.params as { imdbId: string };
+    if (!/^tt\d+$/.test(imdbId)) return res.json({ results: [] });
+    const results = await getCharactersByMovieImdb(imdbId).catch(() => []);
     res.json({ results });
   }),
 );
@@ -41,8 +54,8 @@ router.get(
       return res.status(404).json({ error: "Character not found" });
     }
 
-    // Enrich filmography with TMDB poster/rating data (up to 12 films)
-    const toEnrich = rawFilmography.filter(f => f.imdbId).slice(0, 12);
+    // Enrich filmography with TMDB poster/rating data (up to 30 films)
+    const toEnrich = rawFilmography.filter(f => f.imdbId).slice(0, 30);
 
     const filmography: CharacterFilm[] = await Promise.all(
       toEnrich.map(async f => {

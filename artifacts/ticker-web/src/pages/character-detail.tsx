@@ -203,7 +203,7 @@ export default function CharacterDetail() {
               </>
             )}
 
-            <div style={{ height: "calc(env(safe-area-inset-bottom, 0px) + 4.5rem)" }} aria-hidden />
+            <div style={{ height: "calc(env(safe-area-inset-bottom, 0px) + 0.75rem)" }} aria-hidden />
           </div>
         )}
       </div>

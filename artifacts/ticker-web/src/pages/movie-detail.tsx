@@ -473,6 +473,27 @@ export default function MovieDetail() {
     enabled: characterNames.length > 0,
     staleTime: 60 * 60 * 1000,
   });
+  // Secondary: fetch characters directly from Wikidata via P674 using IMDB ID
+  const imdbMovieId = movieId.startsWith("tt") ? movieId : null;
+  const { data: movieCharData } = useQuery<{ results: CharacterMatch[] }>({
+    queryKey: ["/api/character/by-movie", imdbMovieId],
+    queryFn: async () => {
+      const res = await fetch(`/api/character/by-movie/${encodeURIComponent(imdbMovieId!)}`);
+      if (!res.ok) return { results: [] };
+      return res.json();
+    },
+    enabled: !!imdbMovieId,
+    staleTime: 60 * 60 * 1000,
+  });
+  // Merge both sources, deduplicating by wikidataId; Wikidata-direct results first
+  const allCharacters = useMemo<CharacterMatch[]>(() => {
+    const seen = new Set<string>();
+    const merged: CharacterMatch[] = [];
+    for (const ch of [...(movieCharData?.results ?? []), ...(characterData?.results ?? [])]) {
+      if (!seen.has(ch.wikidataId)) { seen.add(ch.wikidataId); merged.push(ch); }
+    }
+    return merged;
+  }, [movieCharData, characterData]);
 
   const isTvShow = movie?.mediaType === "tv" || movieId.startsWith("tmdb_tv:");
   const { data: seasonsData } = useQuery<{
@@ -831,8 +852,9 @@ export default function MovieDetail() {
         <div className="px-5 pt-4">
           <button
             className="w-full flex items-center gap-2 text-left"
-            onClick={(e) => { const b = e.currentTarget; setShowProviders(v => { if (!v) setTimeout(() => b.scrollIntoView({ behavior: "smooth", block: "start" }), 50); return !v; }); }}
+            onClick={(e) => { const b = e.currentTarget; setShowProviders(v => { if (!v) setTimeout(() => { const c = scrollRef.current; if (c) { const r = b.getBoundingClientRect(), cr = c.getBoundingClientRect(); c.scrollTo({ top: Math.max(0, c.scrollTop + r.top - cr.top - 16), behavior: "smooth" }); } }, 50); return !v; }); }}
           >
+            <Tv className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
             <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wide flex-1">{t.watchOnLabel}</h3>
             <span className="text-[10px] text-muted-foreground mr-1">{allProviders.length}</span>
             {showProviders
@@ -873,7 +895,7 @@ export default function MovieDetail() {
         <div className="px-5 pt-4">
           <button
             className="w-full flex items-center gap-2 text-left"
-            onClick={(e) => { const b = e.currentTarget; setShowAwards(v => { if (!v) setTimeout(() => b.scrollIntoView({ behavior: "smooth", block: "start" }), 50); return !v; }); }}
+            onClick={(e) => { const b = e.currentTarget; setShowAwards(v => { if (!v) setTimeout(() => { const c = scrollRef.current; if (c) { const r = b.getBoundingClientRect(), cr = c.getBoundingClientRect(); c.scrollTo({ top: Math.max(0, c.scrollTop + r.top - cr.top - 16), behavior: "smooth" }); } }, 50); return !v; }); }}
           >
             <Trophy className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
             <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wide flex-1">{t.awardsLabel}</h3>
@@ -909,17 +931,17 @@ export default function MovieDetail() {
       )}
 
       {/* ── Character cards — Wikidata ── */}
-      {(characterData?.results ?? []).length > 0 && (
+      {allCharacters.length > 0 && (
         <div className="px-5 pt-4">
           <button
             className="w-full flex items-center gap-2 text-left py-1"
-            onClick={(e) => { const b = e.currentTarget; setShowCharacters(v => { if (!v) setTimeout(() => b.scrollIntoView({ behavior: "smooth", block: "start" }), 50); return !v; }); }}
+            onClick={(e) => { const b = e.currentTarget; setShowCharacters(v => { if (!v) setTimeout(() => { const c = scrollRef.current; if (c) { const r = b.getBoundingClientRect(), cr = c.getBoundingClientRect(); c.scrollTo({ top: Math.max(0, c.scrollTop + r.top - cr.top - 16), behavior: "smooth" }); } }, 50); return !v; }); }}
           >
             <User className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
             <h3 className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">
               {lang === "th" ? "ตัวละคร" : "Characters"}
             </h3>
-            <span className="text-[10px] text-muted-foreground mr-1">{(characterData?.results ?? []).length}</span>
+            <span className="text-[10px] text-muted-foreground mr-1">{allCharacters.length}</span>
             {showCharacters
               ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
               : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />}
@@ -927,7 +949,7 @@ export default function MovieDetail() {
           <div style={{ display: "grid", gridTemplateRows: showCharacters ? "1fr" : "0fr", transition: "grid-template-rows 0.25s ease" }}>
             <div style={{ overflow: "hidden" }}>
               <div className="flex overflow-x-auto gap-2.5 pb-1 mt-2 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
-                {(characterData?.results ?? []).map(ch => (
+                {allCharacters.map(ch => (
                   <Link key={ch.wikidataId} href={`/character/${ch.wikidataId}`}>
                     <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
                       <div className="relative" style={{ aspectRatio: "2/3" }}>
@@ -1038,7 +1060,7 @@ export default function MovieDetail() {
               <div className="px-5 mb-1">
                 <button
                   className="w-full flex items-center gap-2 text-left py-1"
-                  onClick={(e) => { const b = e.currentTarget; setShowCollection(v => { if (!v) setTimeout(() => b.scrollIntoView({ behavior: "smooth", block: "start" }), 50); return !v; }); }}
+                  onClick={(e) => { const b = e.currentTarget; setShowCollection(v => { if (!v) setTimeout(() => { const c = scrollRef.current; if (c) { const r = b.getBoundingClientRect(), cr = c.getBoundingClientRect(); c.scrollTo({ top: Math.max(0, c.scrollTop + r.top - cr.top - 16), behavior: "smooth" }); } }, 50); return !v; }); }}
                 >
                   <Film className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                   <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">
@@ -1088,7 +1110,7 @@ export default function MovieDetail() {
               <div className="px-5 mt-3">
                 <button
                   className="w-full flex items-center gap-2 text-left py-1"
-                  onClick={(e) => { const b = e.currentTarget; setShowSpinoffs(v => { if (!v) setTimeout(() => b.scrollIntoView({ behavior: "smooth", block: "start" }), 50); return !v; }); }}
+                  onClick={(e) => { const b = e.currentTarget; setShowSpinoffs(v => { if (!v) setTimeout(() => { const c = scrollRef.current; if (c) { const r = b.getBoundingClientRect(), cr = c.getBoundingClientRect(); c.scrollTo({ top: Math.max(0, c.scrollTop + r.top - cr.top - 16), behavior: "smooth" }); } }, 50); return !v; }); }}
                 >
                   <Film className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                   <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">
@@ -1136,7 +1158,7 @@ export default function MovieDetail() {
         <div className="px-5 pt-3">
           <button
             className="w-full flex items-center gap-2 text-left py-1"
-            onClick={(e) => { const b = e.currentTarget; setShowDirectors(v => { if (!v) setTimeout(() => b.scrollIntoView({ behavior: "smooth", block: "start" }), 50); return !v; }); }}
+            onClick={(e) => { const b = e.currentTarget; setShowDirectors(v => { if (!v) setTimeout(() => { const c = scrollRef.current; if (c) { const r = b.getBoundingClientRect(), cr = c.getBoundingClientRect(); c.scrollTo({ top: Math.max(0, c.scrollTop + r.top - cr.top - 16), behavior: "smooth" }); } }, 50); return !v; }); }}
           >
             <User className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
             <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">{t.directorLabel}</p>
@@ -1177,7 +1199,7 @@ export default function MovieDetail() {
         <div className="px-5 pt-3">
           <button
             className="w-full flex items-center gap-2 text-left py-1"
-            onClick={(e) => { const b = e.currentTarget; setShowCast(v => { if (!v) setTimeout(() => b.scrollIntoView({ behavior: "smooth", block: "start" }), 50); return !v; }); }}
+            onClick={(e) => { const b = e.currentTarget; setShowCast(v => { if (!v) setTimeout(() => { const c = scrollRef.current; if (c) { const r = b.getBoundingClientRect(), cr = c.getBoundingClientRect(); c.scrollTo({ top: Math.max(0, c.scrollTop + r.top - cr.top - 16), behavior: "smooth" }); } }, 50); return !v; }); }}
           >
             <Users className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
             <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">{t.castLabel}</p>
@@ -1219,7 +1241,7 @@ export default function MovieDetail() {
         <div className="px-5 pt-3">
           <button
             className="w-full flex items-center gap-2 text-left py-1"
-            onClick={(e) => { const b = e.currentTarget; setShowChains(v => { if (!v) setTimeout(() => b.scrollIntoView({ behavior: "smooth", block: "start" }), 50); return !v; }); }}
+            onClick={(e) => { const b = e.currentTarget; setShowChains(v => { if (!v) setTimeout(() => { const c = scrollRef.current; if (c) { const r = b.getBoundingClientRect(), cr = c.getBoundingClientRect(); c.scrollTo({ top: Math.max(0, c.scrollTop + r.top - cr.top - 16), behavior: "smooth" }); } }, 50); return !v; }); }}
           >
             <ArrowUpDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
             <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">{t.relatedChainsLabel}</p>

@@ -589,7 +589,7 @@ function FilmsGrid({ tickets, isOwn, username }: { tickets: Ticket[]; isOwn: boo
 
   if (!isOwn) {
     return (
-      <div className="flex flex-wrap justify-center gap-2.5 px-3 pt-2 pb-8">
+      <div className="flex flex-wrap justify-center gap-2.5 px-3 pt-2 pb-2.5">
         {orderedTickets.map(ticket => (
           <div key={String(ticket.id)} style={{ width: "calc(33.333% - 7px)" }}>
             <TicketCard ticket={ticket} compact />
@@ -602,7 +602,7 @@ function FilmsGrid({ tickets, isOwn, username }: { tickets: Ticket[]; isOwn: boo
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTicketDragEnd} modifiers={[restrictToParentElement]}>
       <SortableContext items={orderedTickets.map(t => String(t.id))} strategy={rectSortingStrategy}>
-        <div className="flex flex-wrap justify-center gap-2.5 px-3 pt-2 pb-8">
+        <div className="flex flex-wrap justify-center gap-2.5 px-3 pt-2 pb-2.5">
           {orderedTickets.map(ticket => (
             <SortableTicketItem key={String(ticket.id)} ticket={ticket} />
           ))}

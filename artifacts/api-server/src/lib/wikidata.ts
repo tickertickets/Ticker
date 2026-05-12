@@ -245,14 +245,43 @@ export async function getCharacterFromWikidata(wikidataId: string): Promise<{
   return { name, description, imageUrl };
 }
 
+export async function getCharactersByMovieImdb(imdbId: string): Promise<CharacterMatch[]> {
+  const sparql = `
+SELECT DISTINCT ?char ?charLabel ?image WHERE {
+  ?work wdt:P345 "${imdbId}" .
+  ?work wdt:P674 ?char .
+  OPTIONAL { ?char wdt:P18 ?image }
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en" }
+} LIMIT 20`;
+  const data = await sparqlQuery(sparql).catch(() => null);
+  const bindings = data?.results?.bindings ?? [];
+  const results: CharacterMatch[] = [];
+  const seen = new Set<string>();
+  for (const b of bindings) {
+    const rawId = String(b["char"]?.value ?? "");
+    const id = rawId.replace("http://www.wikidata.org/entity/", "");
+    if (!id.startsWith("Q") || seen.has(id)) continue;
+    seen.add(id);
+    const label = String(b["charLabel"]?.value ?? "");
+    if (!label || label.startsWith("Q")) continue;
+    const imageRaw = b["image"]?.value ? String(b["image"].value) : null;
+    const imageUrl = imageRaw ? imageRaw + "?width=185" : null;
+    results.push({ name: label, wikidataId: id, label, description: "", imageUrl });
+  }
+  return results;
+}
+
 export async function getCharacterFilmography(wikidataId: string): Promise<Array<{ title: string; year: string | null; imdbId: string | null }>> {
   const sparql = `
 SELECT DISTINCT ?workLabel ?imdbId ?year WHERE {
   { ?work wdt:P161 wd:${wikidataId} } UNION { ?work wdt:P674 wd:${wikidataId} }
   OPTIONAL { ?work wdt:P345 ?imdbId }
   OPTIONAL { ?work wdt:P577 ?date . BIND(STR(YEAR(?date)) as ?year) }
+  FILTER NOT EXISTS { ?work wdt:P136 wd:Q29168811 }
+  FILTER NOT EXISTS { ?work wdt:P136 wd:Q22092344 }
+  FILTER NOT EXISTS { ?work wdt:P136 wd:Q1361932 }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en" }
-} LIMIT 25`;
+} LIMIT 50`;
   const data = await sparqlQuery(sparql).catch(() => null);
   const seen = new Set<string>();
   return (data?.results?.bindings ?? [])
