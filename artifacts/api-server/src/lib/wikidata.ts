@@ -275,11 +275,14 @@ export async function getCharacterFilmography(wikidataId: string): Promise<Array
   const sparql = `
 SELECT DISTINCT ?workLabel ?imdbId ?year WHERE {
   { ?work wdt:P161 wd:${wikidataId} } UNION { ?work wdt:P674 wd:${wikidataId} }
-  OPTIONAL { ?work wdt:P345 ?imdbId }
+  ?work wdt:P345 ?imdbId .
   OPTIONAL { ?work wdt:P577 ?date . BIND(STR(YEAR(?date)) as ?year) }
   FILTER NOT EXISTS { ?work wdt:P136 wd:Q29168811 }
+  FILTER NOT EXISTS { ?work wdt:P31  wd:Q29168811 }
   FILTER NOT EXISTS { ?work wdt:P136 wd:Q22092344 }
+  FILTER NOT EXISTS { ?work wdt:P31  wd:Q22092344 }
   FILTER NOT EXISTS { ?work wdt:P136 wd:Q1361932 }
+  FILTER NOT EXISTS { ?work wdt:P31  wd:Q1361932 }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en" }
 } LIMIT 50`;
   const data = await sparqlQuery(sparql).catch(() => null);
