@@ -932,29 +932,53 @@ router.get(
     const movieId = String(req.params["movieId"]);
     const currentUserId = req.session?.userId;
 
-    const taggedChains = await db
-      .select()
-      .from(chainsTable)
-      .where(and(eq(chainsTable.taggedMovieImdbId, movieId), isNull(chainsTable.deletedAt), eq(chainsTable.isPrivate, false)))
-      .orderBy(desc(chainsTable.updatedAt))
-      .limit(50);
+    // Auto-discover: chains containing this movie (private chains/owners hidden)
+    const chainRows = await db
+      .select({
+        chain: chainsTable,
+        ownerId: usersTable.id,
+        ownerUsername: usersTable.username,
+        ownerDisplayName: usersTable.displayName,
+        ownerAvatarUrl: usersTable.avatarUrl,
+      })
+      .from(chainMoviesTable)
+      .innerJoin(chainsTable, eq(chainsTable.id, chainMoviesTable.chainId))
+      .innerJoin(usersTable, eq(usersTable.id, chainsTable.userId))
+      .where(
+        and(
+          eq(chainMoviesTable.imdbId, movieId),
+          isNull(chainsTable.deletedAt),
+          eq(chainsTable.isPrivate, false),
+          eq(usersTable.isPrivate, false),
+        )
+      )
+      .orderBy(desc(chainsTable.updatedAt));
 
-    if (taggedChains.length === 0) { res.json({ chains: [] }); return; }
+    const seenChainIds = new Set<string>();
+    const uniqueRows = chainRows.filter(r => {
+      if (seenChainIds.has(r.chain.id)) return false;
+      seenChainIds.add(r.chain.id);
+      return true;
+    }).slice(0, 50);
 
+    if (uniqueRows.length === 0) { res.json({ chains: [] }); return; }
+
+    const taggedChains = uniqueRows.map(r => r.chain);
     const chainIds = taggedChains.map(c => c.id);
-    const [likeCounts, movieCounts, ownerIds] = await Promise.all([
+    const [likeCounts, movieCounts] = await Promise.all([
       db.select({ chainId: chainLikesTable.chainId, cnt: count() })
         .from(chainLikesTable).where(inArray(chainLikesTable.chainId, chainIds))
         .groupBy(chainLikesTable.chainId),
       db.select({ chainId: chainMoviesTable.chainId, cnt: count() })
         .from(chainMoviesTable).where(inArray(chainMoviesTable.chainId, chainIds))
         .groupBy(chainMoviesTable.chainId),
-      db.select().from(usersTable).where(inArray(usersTable.id, [...new Set(taggedChains.map(c => c.userId))])),
     ]);
 
     const likeMap = new Map(likeCounts.map(r => [r.chainId, Number(r.cnt)]));
     const movieMap = new Map(movieCounts.map(r => [r.chainId, Number(r.cnt)]));
-    const ownerMap = new Map(ownerIds.map(u => [u.id, u]));
+    const ownerMap = new Map(uniqueRows.map(r => [r.chain.userId, {
+      id: r.ownerId, username: r.ownerUsername ?? "", displayName: r.ownerDisplayName, avatarUrl: r.ownerAvatarUrl,
+    }]));
 
     let myLikedSet = new Set<string>();
     let myBookmarkSet = new Set<string>();
@@ -984,7 +1008,6 @@ router.get(
           likeCount: likeMap.get(c.id) ?? 0,
           isLiked: myLikedSet.has(c.id),
           isBookmarked: myBookmarkSet.has(c.id),
-          taggedMovie: c.taggedMovieImdbId ? { imdbId: c.taggedMovieImdbId, title: c.taggedMovieTitle, posterUrl: c.taggedMoviePosterUrl } : null,
           createdAt: c.createdAt,
           updatedAt: c.updatedAt,
         };
@@ -2492,11 +2515,17 @@ router.get(
         crew?: Array<{ job: string; name: string }>;
         cast?: Array<{ name: string }>;
       };
+      release_dates?: {
+        results?: Array<{
+          iso_3166_1: string;
+          release_dates: Array<{ certification?: string; type?: number }>;
+        }>;
+      };
       success?: boolean;
     };
     // Probe with en-US to discover original_language and serve as fallback
     const probe = await tmdbFetch<MovieData>(`/movie/${tmdbId}`, {
-      language: "en-US", append_to_response: "credits",
+      language: "en-US", append_to_response: "credits,release_dates",
     });
     if (probe.success === false) throw new NotFoundError("Movie");
     const nativeLang = originalLangToLocale(probe.original_language);
@@ -2544,6 +2573,11 @@ router.get(
       (id) => genreMap.get(id) ?? data.genres?.find((g) => g.id === id)?.name ?? "",
     ).filter(Boolean);
 
+    const usReleaseDates = probe.release_dates?.results?.find(r => r.iso_3166_1 === "US");
+    const certification = usReleaseDates?.release_dates
+      ?.filter(d => d.certification && d.certification.trim().length > 0)
+      .map(d => d.certification!)[0] ?? null;
+
     const movieResult = {
       imdbId: `tmdb:${tmdbId}`,
       mediaType: "movie",
@@ -2572,6 +2606,7 @@ router.get(
       country:
         data.production_countries?.map((c) => c.name).join(", ") || null,
       watchProviders,
+      certification,
     };
     setMovieCore(tmdbId, {
       tmdbRating: movieResult.tmdbRating,

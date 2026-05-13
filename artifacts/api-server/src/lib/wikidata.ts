@@ -154,14 +154,34 @@ async function searchCharacter(name: string): Promise<{ id: string; label: strin
 
 async function batchGetImages(ids: string[]): Promise<Record<string, string | null>> {
   if (ids.length === 0) return {};
-  const sparql = `SELECT ?item ?image WHERE { VALUES ?item { ${ids.map(id => `wd:${id}`).join(" ")} } OPTIONAL { ?item wdt:P18 ?image } }`;
+  const sparql = `SELECT ?item ?image ?enwiki WHERE { VALUES ?item { ${ids.map(id => `wd:${id}`).join(" ")} } OPTIONAL { ?item wdt:P18 ?image } OPTIONAL { ?sitelink schema:about ?item ; schema:isPartOf <https://en.wikipedia.org/> . BIND(STR(?sitelink) AS ?enwiki) } }`;
   const data = await sparqlQuery(sparql).catch(() => null);
   const result: Record<string, string | null> = Object.fromEntries(ids.map(id => [id, null]));
+  const enwikiMap: Record<string, string> = {};
   for (const b of (data?.results?.bindings ?? [])) {
     const raw = String(b["item"]?.value ?? "");
     const id = raw.replace("http://www.wikidata.org/entity/", "");
     const img = b["image"]?.value ? String(b["image"].value) + "?width=185" : null;
-    if (id && img) result[id] = img;
+    if (id && img && !result[id]) result[id] = img;
+    const enwiki = b["enwiki"]?.value ? String(b["enwiki"].value) : null;
+    if (id && enwiki && !enwikiMap[id]) {
+      enwikiMap[id] = enwiki.replace("https://en.wikipedia.org/wiki/", "");
+    }
+  }
+  // Wikipedia thumbnail fallback for characters missing a Wikidata P18 image
+  const missing = Object.entries(result).filter(([, v]) => !v).map(([k]) => k);
+  if (missing.length > 0) {
+    await Promise.all(missing.slice(0, 12).map(async id => {
+      const title = enwikiMap[id];
+      if (!title) return;
+      const resp = await fetch(
+        `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`,
+        { signal: AbortSignal.timeout(4_000), headers: { "User-Agent": WIKI_UA } }
+      ).catch(() => null);
+      if (!resp?.ok) return;
+      const json = await resp.json() as { thumbnail?: { source?: string } };
+      if (json.thumbnail?.source) result[id] = json.thumbnail.source;
+    }));
   }
   return result;
 }
@@ -230,6 +250,7 @@ export async function getCharacterFromWikidata(wikidataId: string): Promise<{
       labels?: Record<string, { value: string }>;
       descriptions?: Record<string, { value: string }>;
       claims?: { P18?: Array<{ mainsnak?: { datavalue?: { value?: string } } }> };
+      sitelinks?: { enwiki?: { title?: string } };
     }>;
   };
   const entity = data.entities?.[wikidataId];
@@ -238,9 +259,24 @@ export async function getCharacterFromWikidata(wikidataId: string): Promise<{
   const name = entity.labels?.["en"]?.value ?? wikidataId;
   const description = entity.descriptions?.["en"]?.value ?? "";
   const p18 = entity.claims?.P18?.[0]?.mainsnak?.datavalue?.value;
-  const imageUrl = p18
+  let imageUrl: string | null = p18
     ? `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(String(p18).replace(/ /g, "_"))}?width=400`
     : null;
+
+  // Wikipedia thumbnail fallback when Wikidata P18 is missing
+  if (!imageUrl) {
+    const enwikiTitle = entity.sitelinks?.enwiki?.title;
+    if (enwikiTitle) {
+      const wResp = await fetch(
+        `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(enwikiTitle)}`,
+        { signal: AbortSignal.timeout(5_000), headers: { "User-Agent": WIKI_UA } }
+      ).catch(() => null);
+      if (wResp?.ok) {
+        const wJson = await wResp.json() as { thumbnail?: { source?: string } };
+        imageUrl = wJson.thumbnail?.source ?? null;
+      }
+    }
+  }
 
   return { name, description, imageUrl };
 }

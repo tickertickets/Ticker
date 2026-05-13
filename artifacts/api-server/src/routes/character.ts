@@ -70,6 +70,7 @@ router.get(
               vote_count?: number;
               genre_ids?: number[];
               popularity?: number;
+              adult?: boolean;
             }>;
             tv_results?: Array<{
               id: number;
@@ -80,13 +81,14 @@ router.get(
               vote_count?: number;
               genre_ids?: number[];
               popularity?: number;
+              adult?: boolean;
             }>;
           }>(`/find/${encodeURIComponent(f.imdbId!)}`, {
             external_source: "imdb_id",
           });
 
-          const movie = findData.movie_results?.find(m => !m.adult);
-          const tv = findData.tv_results?.[0];
+          const movie = findData.movie_results?.find(m => !m.adult && m.poster_path);
+          const tv = findData.tv_results?.find(t => !t.adult && t.poster_path);
           if (movie) {
             return {
               title: movie.title ?? f.title,

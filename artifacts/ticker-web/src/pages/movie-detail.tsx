@@ -145,12 +145,9 @@ export default function MovieDetail() {
   const [expandedSeason, setExpandedSeason] = useState<number | null>(null);
   const episodeRatingsRef = useRef<HTMLDivElement>(null);
   const [showDetails, setShowDetails] = useState(false);
-  const [showAwards, setShowAwards] = useState(false);
   const [showChains, setShowChains] = useState(false);
   const [showCollection, setShowCollection] = useState(false);
   const [showSpinoffs, setShowSpinoffs] = useState(false);
-  const [showDirectors, setShowDirectors] = useState(false);
-  const [showCharacters, setShowCharacters] = useState(false);
 
   // SCROLL GUARD: while the outer container is actively scrolling, lock the
   // inner community scroll (overflow: hidden) so an ongoing outer-scroll gesture
@@ -813,8 +810,13 @@ export default function MovieDetail() {
 
       {/* ── Movie details ── */}
       <div className="px-5 pt-4 space-y-4">
-        {genres.length > 0 && (
+        {(genres.length > 0 || (movie as any)?.certification) && (
           <div className="flex flex-wrap gap-2">
+            {(movie as any)?.certification && (
+              <span className="text-xs font-semibold text-foreground px-2.5 py-1.5 rounded-full border-2 border-border font-mono tracking-wide">
+                {(movie as any).certification}
+              </span>
+            )}
             {genres.map(g => (
               <span key={g} className="text-xs font-medium bg-secondary text-muted-foreground px-3 py-1.5 rounded-full border border-border">
                 {g}
@@ -846,8 +848,8 @@ export default function MovieDetail() {
 
       </div>
 
-      {/* ── Details — single collapsible: providers + cast ── */}
-      {(allProviders.length > 0 || (creditsData?.cast ?? []).length > 0) && (
+      {/* ── Details — single collapsible ── */}
+      {(allProviders.length > 0 || (creditsData?.cast ?? []).length > 0 || (creditsData?.directors ?? []).length > 0 || allCharacters.length > 0 || (awardsData?.results ?? []).length > 0) && (
         <div className="px-5 pt-4">
           <button
             className="w-full flex items-center gap-2 text-left"
@@ -922,86 +924,86 @@ export default function MovieDetail() {
                   </div>
                 </div>
               )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Awards — collapsible ── */}
-      {(awardsData?.results ?? []).length > 0 && (
-        <div className="px-5 pt-4">
-          <button
-            className="w-full flex items-center gap-2 text-left"
-            onClick={(e) => { const b = e.currentTarget; setShowAwards(v => { if (!v) setTimeout(() => { const c = scrollRef.current; if (c) { const r = b.getBoundingClientRect(), cr = c.getBoundingClientRect(); c.scrollTo({ top: Math.max(0, c.scrollTop + r.top - cr.top - 16), behavior: "smooth" }); } }, 50); return !v; }); }}
-          >
-            <Trophy className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wide flex-1">{t.awardsLabel}</h3>
-            <span className="text-[10px] text-muted-foreground mr-1">{awardsData!.results.length}</span>
-            {showAwards
-              ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-              : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />}
-          </button>
-          <div style={{ display: "grid", gridTemplateRows: showAwards ? "1fr" : "0fr", transition: "grid-template-rows 0.25s ease" }}>
-            <div style={{ overflow: "hidden" }}>
-              <div className="mt-3 flex flex-col gap-3">
-                {(awardsData?.results ?? []).map((award, i) => (
-                  <div key={i}>
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide mb-1.5">{award.name}</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {award.winners.map((w, j) => (
-                        <span key={`w-${j}`} className="text-[10px] bg-amber-500/15 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-full font-semibold">
-                          🏆 {w.award_category}{w.year ? ` (${w.year})` : ""}
-                        </span>
-                      ))}
-                      {award.nominees.map((n, j) => (
-                        <span key={`n-${j}`} className="text-[10px] bg-secondary text-muted-foreground px-2 py-0.5 rounded-full">
-                          ✦ {n.award_category}{n.year ? ` (${n.year})` : ""}
-                        </span>
-                      ))}
-                    </div>
+              {(creditsData?.directors ?? []).length > 0 && (
+                <div className="mt-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <User className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">{t.directorLabel}</p>
+                    <span className="text-[10px] text-muted-foreground">{(creditsData?.directors ?? []).length}</span>
                   </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Character cards — Wikidata ── */}
-      {allCharacters.length > 0 && (
-        <div className="px-5 pt-4">
-          <button
-            className="w-full flex items-center gap-2 text-left py-1"
-            onClick={(e) => { const b = e.currentTarget; setShowCharacters(v => { if (!v) setTimeout(() => { const c = scrollRef.current; if (c) { const r = b.getBoundingClientRect(), cr = c.getBoundingClientRect(); c.scrollTo({ top: Math.max(0, c.scrollTop + r.top - cr.top - 16), behavior: "smooth" }); } }, 50); return !v; }); }}
-          >
-            <User className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-            <h3 className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">
-              {lang === "th" ? "ตัวละคร" : "Characters"}
-            </h3>
-            <span className="text-[10px] text-muted-foreground mr-1">{allCharacters.length}</span>
-            {showCharacters
-              ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-              : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />}
-          </button>
-          <div style={{ display: "grid", gridTemplateRows: showCharacters ? "1fr" : "0fr", transition: "grid-template-rows 0.25s ease" }}>
-            <div style={{ overflow: "hidden" }}>
-              <div className="flex overflow-x-auto gap-2.5 pb-1 mt-2 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
-                {allCharacters.map(ch => (
-                  <Link key={ch.wikidataId} href={`/character/${ch.wikidataId}`}>
-                    <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
-                      <div className="relative" style={{ aspectRatio: "2/3" }}>
-                        {ch.imageUrl
-                          ? <img src={ch.imageUrl} alt={ch.label} className="w-full h-full object-cover" loading="lazy" />
-                          : <div className="w-full h-full flex items-center justify-center bg-zinc-900"><User className="w-4 h-4 text-muted-foreground" /></div>
-                        }
+                  <div className="flex overflow-x-auto gap-2.5 pb-1 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
+                    {(creditsData?.directors ?? []).map(p => (
+                      <Link key={p.id} href={`/person/${p.id}${navSrclang ? `?srclang=${encodeURIComponent(navSrclang)}` : ""}`}>
+                        <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
+                          <div className="relative" style={{ aspectRatio: "2/3" }}>
+                            {p.profileUrl
+                              ? <img src={p.profileUrl} alt={p.name} className="w-full h-full object-cover" loading="lazy" />
+                              : <div className="w-full h-full flex items-center justify-center bg-zinc-900"><User className="w-4 h-4 text-muted-foreground" /></div>
+                            }
+                          </div>
+                          <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
+                            <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{p.name}</p>
+                          </div>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {allCharacters.length > 0 && (
+                <div className="mt-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <User className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">{lang === "th" ? "ตัวละคร" : "Characters"}</p>
+                    <span className="text-[10px] text-muted-foreground">{allCharacters.length}</span>
+                  </div>
+                  <div className="flex overflow-x-auto gap-2.5 pb-1 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
+                    {allCharacters.map(ch => (
+                      <Link key={ch.wikidataId} href={`/character/${ch.wikidataId}`}>
+                        <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
+                          <div className="relative" style={{ aspectRatio: "2/3" }}>
+                            {ch.imageUrl
+                              ? <img src={ch.imageUrl} alt={ch.label} className="w-full h-full object-cover" loading="lazy" />
+                              : <div className="w-full h-full flex items-center justify-center bg-zinc-900"><User className="w-4 h-4 text-muted-foreground" /></div>
+                            }
+                          </div>
+                          <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
+                            <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{ch.label}</p>
+                          </div>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {(awardsData?.results ?? []).length > 0 && (
+                <div className="mt-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Trophy className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">{t.awardsLabel}</p>
+                    <span className="text-[10px] text-muted-foreground">{awardsData!.results.length}</span>
+                  </div>
+                  <div className="flex flex-col gap-3">
+                    {(awardsData?.results ?? []).map((award, i) => (
+                      <div key={i}>
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide mb-1.5">{award.name}</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {award.winners.map((w, j) => (
+                            <span key={`w-${j}`} className="text-[10px] bg-amber-500/15 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-full font-semibold">
+                              🏆 {w.award_category}{w.year ? ` (${w.year})` : ""}
+                            </span>
+                          ))}
+                          {award.nominees.map((n, j) => (
+                            <span key={`n-${j}`} className="text-[10px] bg-secondary text-muted-foreground px-2 py-0.5 rounded-full">
+                              ✦ {n.award_category}{n.year ? ` (${n.year})` : ""}
+                            </span>
+                          ))}
+                        </div>
                       </div>
-                      <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
-                        <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{ch.label}</p>
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1190,46 +1192,6 @@ export default function MovieDetail() {
         );
       })()}
 
-      {/* ── Director cards — collapsible, independent of collection ── */}
-      {(creditsData?.directors ?? []).length > 0 && (
-        <div className="px-5 pt-3">
-          <button
-            className="w-full flex items-center gap-2 text-left py-1"
-            onClick={(e) => { const b = e.currentTarget; setShowDirectors(v => { if (!v) setTimeout(() => { const c = scrollRef.current; if (c) { const r = b.getBoundingClientRect(), cr = c.getBoundingClientRect(); c.scrollTo({ top: Math.max(0, c.scrollTop + r.top - cr.top - 16), behavior: "smooth" }); } }, 50); return !v; }); }}
-          >
-            <User className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-            <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">{t.directorLabel}</p>
-            <span className="text-[10px] text-muted-foreground mr-1">{(creditsData?.directors ?? []).length}</span>
-            {showDirectors
-              ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-              : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />}
-          </button>
-          <div style={{ display: "grid", gridTemplateRows: showDirectors ? "1fr" : "0fr", transition: "grid-template-rows 0.25s ease" }}>
-            <div style={{ overflow: "hidden" }}>
-              <div className="flex overflow-x-auto gap-2.5 pb-1 mt-2 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
-                {(creditsData?.directors ?? []).map(p => (
-                  <Link
-                    key={p.id}
-                    href={`/person/${p.id}${navSrclang ? `?srclang=${encodeURIComponent(navSrclang)}` : ""}`}
-                  >
-                    <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
-                      <div className="relative" style={{ aspectRatio: "2/3" }}>
-                        {p.profileUrl
-                          ? <img src={p.profileUrl} alt={p.name} className="w-full h-full object-cover" loading="lazy" />
-                          : <div className="w-full h-full flex items-center justify-center bg-zinc-900"><User className="w-4 h-4 text-muted-foreground" /></div>
-                        }
-                      </div>
-                      <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
-                        <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{p.name}</p>
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
 
       {/* ── Related Chains section ── */}
