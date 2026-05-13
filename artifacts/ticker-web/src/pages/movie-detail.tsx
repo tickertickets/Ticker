@@ -803,7 +803,7 @@ export default function MovieDetail() {
         {(genres.length > 0 || (movie as any)?.certification) && (
           <div className="flex flex-wrap gap-2">
             {(movie as any)?.certification && (
-              <span className="text-xs font-semibold text-foreground px-2.5 py-1.5 rounded-full border-2 border-border font-mono tracking-wide">
+              <span className="text-xs font-bold bg-secondary text-foreground px-3 py-1.5 rounded-full border border-border">
                 {(movie as any).certification}
               </span>
             )}
@@ -843,7 +843,7 @@ export default function MovieDetail() {
         <div className="px-5 pt-4">
           <button
             className="w-full flex items-center gap-2 text-left"
-            onClick={(e) => { const b = e.currentTarget; setShowDetails(v => { if (!v) setTimeout(() => { const c = scrollRef.current; if (c) { const r = b.getBoundingClientRect(), cr = c.getBoundingClientRect(); c.scrollTo({ top: Math.max(0, c.scrollTop + r.top - cr.top - 16), behavior: "smooth" }); } }, 50); return !v; }); }}
+            onClick={(e) => { const b = e.currentTarget; setShowDetails(v => { const next = !v; if (next) { setShowCollection(true); setShowSpinoffs(true); setTimeout(() => { const c = scrollRef.current; if (c) { const r = b.getBoundingClientRect(), cr = c.getBoundingClientRect(); c.scrollTo({ top: Math.max(0, c.scrollTop + r.top - cr.top), behavior: "smooth" }); } }, 50); } return next; }); }}
           >
             <Film className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
             <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wide flex-1">{lang === "th" ? "รายละเอียด" : "Details"}</h3>

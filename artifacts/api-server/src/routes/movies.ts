@@ -249,6 +249,7 @@ function refreshStaleCoresInBackground(
 //   - Cache TTL is unchanged (1 h); fully populated lists pay nothing extra.
 async function ensureMovieCores(
   movies: Array<Record<string, any>>,
+  opts?: { preserveRating?: boolean },
 ): Promise<void> {
   if (movies.length === 0) return;
   const candidates = movies.filter(
@@ -356,13 +357,33 @@ async function ensureMovieCores(
     if (typeof m["tmdbId"] !== "number") continue;
     const core = coreMap.get(m["tmdbId"] as number);
     if (!core) continue;
-    if (core.tmdbRating !== undefined) m["tmdbRating"] = core.tmdbRating;
-    if (core.voteCount !== undefined) m["voteCount"] = core.voteCount;
-    if (core.popularity !== undefined) m["popularity"] = core.popularity;
-    if (core.genreIds !== undefined) m["genreIds"] = core.genreIds;
-    if (core.releaseDate !== undefined) m["releaseDate"] = core.releaseDate;
-    if (core.franchiseIds !== undefined)
-      m["franchiseIds"] = core.franchiseIds;
+
+    if (opts?.preserveRating) {
+      // preserveRating: trust the fresh TMDB data already in the movie object
+      // (from a filtered discover endpoint). Do NOT overwrite with potentially
+      // stale cache values. Instead, update the cache when ratings differ so
+      // that the detail page and future requests also see the fresh value.
+      const freshRating = m["tmdbRating"] != null ? String(m["tmdbRating"]) : null;
+      if (freshRating !== null && freshRating !== core.tmdbRating) {
+        setMovieCore(m["tmdbId"] as number, {
+          ...core,
+          tmdbRating: freshRating,
+          voteCount: typeof m["voteCount"] === "number" ? m["voteCount"] : core.voteCount,
+          popularity: typeof m["popularity"] === "number" ? m["popularity"] : core.popularity,
+        });
+      }
+      // Still enrich fields that list endpoints don't provide
+      if (core.genreIds !== undefined) m["genreIds"] = core.genreIds;
+      if (core.releaseDate !== undefined) m["releaseDate"] = core.releaseDate;
+      if (core.franchiseIds !== undefined) m["franchiseIds"] = core.franchiseIds;
+    } else {
+      if (core.tmdbRating !== undefined) m["tmdbRating"] = core.tmdbRating;
+      if (core.voteCount !== undefined) m["voteCount"] = core.voteCount;
+      if (core.popularity !== undefined) m["popularity"] = core.popularity;
+      if (core.genreIds !== undefined) m["genreIds"] = core.genreIds;
+      if (core.releaseDate !== undefined) m["releaseDate"] = core.releaseDate;
+      if (core.franchiseIds !== undefined) m["franchiseIds"] = core.franchiseIds;
+    }
   }
 }
 
@@ -489,7 +510,7 @@ router.get(
     const cached = await getCached(cacheKey, MOOD_TTL_MS);
     if (cached) {
       const c = cached as { movies: Record<string, any>[] };
-      await ensureMovieCores(c.movies);
+      await ensureMovieCores(c.movies, { preserveRating: true });
       res.json(cached);
       return;
     }
@@ -553,7 +574,7 @@ router.get(
       (a, b) => (b.voteCount ?? 0) - (a.voteCount ?? 0),
     );
 
-    await ensureMovieCores(merged as Record<string, any>[]);
+    await ensureMovieCores(merged as Record<string, any>[], { preserveRating: true });
     const result = {
       movies: merged,
       page,
@@ -703,7 +724,8 @@ router.get(
 
     // Pick one random movie
     const movie = movies[Math.floor(Math.random() * movies.length)];
-    await ensureMovieCores([movie]);
+    const usesFilteredRating = category === "cult_classic" || category === "legendary";
+    await ensureMovieCores([movie], { preserveRating: usesFilteredRating });
     res.json({ movie, category, langQs });
   }),
 );
