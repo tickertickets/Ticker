@@ -8,7 +8,7 @@ import { useKeyboardHeight } from "@/hooks/use-keyboard-height";
 import { useQuery } from "@tanstack/react-query";
 import { useLang } from "@/lib/i18n";
 import { Link, useLocation } from "wouter";
-import { Loader2, Link2, Heart, MessagesSquare, Share2, X, Trash2, Users, Search, Bookmark, Flag, Send, MessageCircle, Check, CornerDownRight } from "lucide-react";
+import { Loader2, Link2, Heart, Share2, X, Trash2, Users, Search, Bookmark, Flag, Send, MessageCircle, Check, CornerDownRight } from "lucide-react";
 import { useModalBackButton } from "@/hooks/use-modal-back-button";
 import { cn, fmtCount } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
@@ -244,7 +244,7 @@ export function ChainCommentSheet({ chainId, onClose, commentCount: initialComme
                 onChange={e => setComment(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && !e.shiftKey && handleSubmit()}
                 placeholder={replyingTo ? (lang === "th" ? `ตอบ @${replyingTo.username}…` : `Reply to @${replyingTo.username}…`) : t.addCommentPlaceholder}
-                className="flex-1 bg-secondary rounded-2xl px-3.5 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none"
+                className="flex-1 h-8 bg-secondary rounded-2xl px-3.5 text-sm text-foreground placeholder:text-muted-foreground outline-none"
               />
               <button
                 onClick={handleSubmit}
@@ -299,7 +299,7 @@ function ChainCommentBubble({ chainId, commentCount }: { chainId: string; commen
 
   return (
     <div className="mx-4 mb-3 px-3 py-2 bg-secondary/60 rounded-2xl flex items-start gap-2">
-      <MessagesSquare className="w-3 h-3 text-foreground/85 shrink-0 mt-[3px]" strokeWidth={2.5} />
+      <MessageCircle className="w-3 h-3 text-foreground/85 shrink-0 mt-[3px]" strokeWidth={2.5} />
       <p
         className="text-xs text-foreground/70 leading-snug line-clamp-1 flex-1 transition-opacity duration-300"
         style={{ opacity: show ? 1 : 0 }}
@@ -1147,7 +1147,7 @@ export function ChainCard({ chain }: { chain: ChainItem }) {
             onClick={e => { e.preventDefault(); e.stopPropagation(); if (!user) { toast({ title: t.signInToLike, duration: 1500 }); return; } setCommentOpen(true); }}
             className="flex items-center gap-1.5 transition-all duration-100 active:scale-75 active:opacity-50 group"
           >
-            <MessagesSquare className="w-[20px] h-[20px] text-muted-foreground/60 group-hover:text-foreground transition-colors" />
+            <MessageCircle className="w-[20px] h-[20px] text-muted-foreground/60 group-hover:text-foreground transition-colors" />
             {commentCount > 0 && (
               <span className="text-xs font-semibold tabular-nums leading-5 text-muted-foreground">{fmtCount(commentCount)}</span>
             )}

@@ -23,6 +23,8 @@ import {
   chainLikesTable,
   chainMoviesTable,
   chainBookmarksTable,
+  chainRunsTable,
+  chainCommentsTable,
 } from "@workspace/db/schema";
 import { eq, desc, count, max, and, inArray, isNull } from "drizzle-orm";
 import { asyncHandler } from "../middlewares/error-handler";
@@ -965,17 +967,31 @@ router.get(
 
     const taggedChains = uniqueRows.map(r => r.chain);
     const chainIds = taggedChains.map(c => c.id);
-    const [likeCounts, movieCounts] = await Promise.all([
+    const [likeCounts, movieRows, runCounts, commentCounts] = await Promise.all([
       db.select({ chainId: chainLikesTable.chainId, cnt: count() })
         .from(chainLikesTable).where(inArray(chainLikesTable.chainId, chainIds))
         .groupBy(chainLikesTable.chainId),
-      db.select({ chainId: chainMoviesTable.chainId, cnt: count() })
+      db.select({ chainId: chainMoviesTable.chainId, posterUrl: chainMoviesTable.posterUrl, genre: chainMoviesTable.genre, position: chainMoviesTable.position })
         .from(chainMoviesTable).where(inArray(chainMoviesTable.chainId, chainIds))
-        .groupBy(chainMoviesTable.chainId),
+        .orderBy(chainMoviesTable.position),
+      db.select({ chainId: chainRunsTable.chainId, cnt: count() })
+        .from(chainRunsTable).where(inArray(chainRunsTable.chainId, chainIds))
+        .groupBy(chainRunsTable.chainId),
+      db.select({ chainId: chainCommentsTable.chainId, cnt: count() })
+        .from(chainCommentsTable).where(inArray(chainCommentsTable.chainId, chainIds))
+        .groupBy(chainCommentsTable.chainId),
     ]);
 
     const likeMap = new Map(likeCounts.map(r => [r.chainId, Number(r.cnt)]));
-    const movieMap = new Map(movieCounts.map(r => [r.chainId, Number(r.cnt)]));
+    const runMap = new Map(runCounts.map(r => [r.chainId, Number(r.cnt)]));
+    const commentMap = new Map(commentCounts.map(r => [r.chainId, Number(r.cnt)]));
+    const moviesMap = new Map<string, { posterUrl: string | null; genre: string | null }[]>();
+    for (const row of movieRows) {
+      const arr = moviesMap.get(row.chainId) ?? [];
+      arr.push({ posterUrl: row.posterUrl ?? null, genre: row.genre ?? null });
+      moviesMap.set(row.chainId, arr);
+    }
+    const movieCountMap = new Map(Array.from(moviesMap.entries()).map(([id, arr]) => [id, arr.length]));
     const ownerMap = new Map(uniqueRows.map(r => [r.chain.userId, {
       id: r.ownerId, username: r.ownerUsername ?? "", displayName: r.ownerDisplayName, avatarUrl: r.ownerAvatarUrl,
     }]));
@@ -1004,10 +1020,18 @@ router.get(
           description: c.description,
           descriptionAlign: (c.descriptionAlign ?? "left") as "left" | "center" | "right",
           mode: c.mode ?? "standard",
-          movieCount: movieMap.get(c.id) ?? 0,
+          challengeDurationMs: c.challengeDurationMs ?? null,
+          movieCount: movieCountMap.get(c.id) ?? 0,
+          chainCount: runMap.get(c.id) ?? c.chainCount ?? 0,
+          commentCount: commentMap.get(c.id) ?? 0,
           likeCount: likeMap.get(c.id) ?? 0,
           isLiked: myLikedSet.has(c.id),
           isBookmarked: myBookmarkSet.has(c.id),
+          hideComments: c.hideComments ?? false,
+          hideLikes: c.hideLikes ?? false,
+          hideChainCount: c.hideChainCount ?? false,
+          movies: (moviesMap.get(c.id) ?? []).slice(0, 4),
+          descriptionLinks: c.descriptionLinks ?? [],
           createdAt: c.createdAt,
           updatedAt: c.updatedAt,
         };

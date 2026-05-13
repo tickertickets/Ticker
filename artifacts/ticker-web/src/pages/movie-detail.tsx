@@ -5,7 +5,8 @@ import { BadgeIcon } from "@/components/BadgeIcon";
 import { MovieBadges, BADGE_DESC_TH, BADGE_DESC_EN } from "@/components/MovieBadges";
 import { computeCardTier, computeEffectTags, TIER_VISUAL } from "@/lib/ranks";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { ChevronLeft, Film, Star, Users, Bookmark, ChevronDown, ChevronUp, Tv, Flag, Loader2, EyeOff, Lock, ArrowUpDown, User, Trophy } from "lucide-react";
+import { ChevronLeft, Film, Star, Users, Bookmark, ChevronDown, ChevronUp, Tv, Flag, Loader2, EyeOff, Lock, User, Trophy, Link2 } from "lucide-react";
+import { ChainCard, type ChainItem } from "@/components/ChainsSection";
 import { useState, useRef, useEffect, useMemo } from "react";
 import { cn, fmtCount } from "@/lib/utils";
 import { scrollStore } from "@/lib/scroll-store";
@@ -145,7 +146,6 @@ export default function MovieDetail() {
   const [expandedSeason, setExpandedSeason] = useState<number | null>(null);
   const episodeRatingsRef = useRef<HTMLDivElement>(null);
   const [showDetails, setShowDetails] = useState(false);
-  const [showChains, setShowChains] = useState(false);
   const [showCollection, setShowCollection] = useState(false);
   const [showSpinoffs, setShowSpinoffs] = useState(false);
 
@@ -390,16 +390,7 @@ export default function MovieDetail() {
     staleTime: 30 * 60 * 1000,
   });
 
-  type MovieChain = {
-    id: string;
-    title: string;
-    description?: string | null;
-    user: { id: string; username: string; displayName: string | null; avatarUrl: string | null } | null;
-    movieCount: number;
-    likeCount: number;
-    isLiked: boolean;
-  };
-  const { data: movieChainsData } = useQuery<{ chains: MovieChain[] }>({
+  const { data: movieChainsData } = useQuery<{ chains: ChainItem[] }>({
     queryKey: ["/api/movies", movieId, "chains"],
     queryFn: async () => {
       const res = await fetch(`/api/movies/${encodeURIComponent(movieId)}/chains`);
@@ -848,8 +839,8 @@ export default function MovieDetail() {
 
       </div>
 
-      {/* ── Details — single collapsible ── */}
-      {(allProviders.length > 0 || (creditsData?.cast ?? []).length > 0 || (creditsData?.directors ?? []).length > 0 || allCharacters.length > 0 || (awardsData?.results ?? []).length > 0) && (
+      {/* ── Details — single collapsible (providers, cast, directors, characters, awards, episodes, collection, spinoffs, chains) ── */}
+      {(allProviders.length > 0 || (creditsData?.cast ?? []).length > 0 || (creditsData?.directors ?? []).length > 0 || allCharacters.length > 0 || (awardsData?.results ?? []).length > 0 || (isTvShow && (seasonsData?.seasons ?? []).length > 0) || ((collectionData?.movies ?? []).length > 0) || (movieChainsData?.chains ?? []).length > 0) && (
         <div className="px-5 pt-4">
           <button
             className="w-full flex items-center gap-2 text-left"
@@ -863,6 +854,8 @@ export default function MovieDetail() {
           </button>
           <div style={{ display: "grid", gridTemplateRows: showDetails ? "1fr" : "0fr", transition: "grid-template-rows 0.25s ease" }}>
             <div style={{ overflow: "hidden" }}>
+
+              {/* Available on */}
               {allProviders.length > 0 && (
                 <div className="mt-3">
                   <div className="flex items-center gap-2 mb-2">
@@ -894,6 +887,8 @@ export default function MovieDetail() {
                   </div>
                 </div>
               )}
+
+              {/* Cast */}
               {(creditsData?.cast ?? []).length > 0 && (
                 <div className="mt-3">
                   <div className="flex items-center gap-2 mb-2">
@@ -924,6 +919,8 @@ export default function MovieDetail() {
                   </div>
                 </div>
               )}
+
+              {/* Directors */}
               {(creditsData?.directors ?? []).length > 0 && (
                 <div className="mt-3">
                   <div className="flex items-center gap-2 mb-2">
@@ -950,6 +947,8 @@ export default function MovieDetail() {
                   </div>
                 </div>
               )}
+
+              {/* Characters */}
               {allCharacters.length > 0 && (
                 <div className="mt-3">
                   <div className="flex items-center gap-2 mb-2">
@@ -976,6 +975,8 @@ export default function MovieDetail() {
                   </div>
                 </div>
               )}
+
+              {/* Awards */}
               {(awardsData?.results ?? []).length > 0 && (
                 <div className="mt-3">
                   <div className="flex items-center gap-2 mb-2">
@@ -1004,234 +1005,199 @@ export default function MovieDetail() {
                   </div>
                 </div>
               )}
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* ── Episode ratings (TV shows) ── */}
-      {isTvShow && seasonsData && seasonsData.seasons.length > 0 && (
-        <div ref={episodeRatingsRef} className="px-5 pt-4">
-          <div className="rounded-2xl border border-border overflow-hidden">
-            <button
-              onClick={() => setExpandedSeason(v => v === null ? seasonsData.seasons[0]?.seasonNumber ?? null : null)}
-              className="w-full flex items-center justify-between px-4 py-3 bg-secondary hover:bg-muted/60 transition-colors text-sm font-semibold text-foreground"
-            >
-              <div className="flex items-center gap-2">
-                <Tv className="w-4 h-4 text-muted-foreground -translate-y-0.5" />
-                <span className="leading-none font-normal">{t.episodeRatings}</span>
-              </div>
-              {expandedSeason !== null
-                ? <ChevronUp className="w-4 h-4 text-muted-foreground" />
-                : <ChevronDown className="w-4 h-4 text-muted-foreground" />
-              }
-            </button>
-            {expandedSeason !== null && seasonsData && seasonsData.seasons.length > 0 && (
-              <div className="space-y-0 divide-y divide-border">
-                {seasonsData.seasons.map((season) => (
-                  <div key={season.seasonNumber}>
+              {/* Episode ratings (TV shows) */}
+              {isTvShow && seasonsData && seasonsData.seasons.length > 0 && (
+                <div ref={episodeRatingsRef} className="mt-3">
+                  <div className="rounded-2xl border border-border overflow-hidden">
                     <button
-                      onClick={() => setExpandedSeason(v => v === season.seasonNumber ? null : season.seasonNumber)}
-                      className="w-full flex items-center justify-between px-4 py-3 bg-background hover:bg-muted/40 transition-colors text-sm font-semibold text-foreground"
+                      onClick={() => setExpandedSeason(v => v === null ? seasonsData.seasons[0]?.seasonNumber ?? null : null)}
+                      className="w-full flex items-center justify-between px-4 py-3 bg-secondary hover:bg-muted/60 transition-colors text-sm font-semibold text-foreground"
                     >
-                      <span>{season.name}</span>
-                      {expandedSeason === season.seasonNumber
+                      <div className="flex items-center gap-2">
+                        <Tv className="w-4 h-4 text-muted-foreground -translate-y-0.5" />
+                        <span className="leading-none font-normal">{t.episodeRatings}</span>
+                      </div>
+                      {expandedSeason !== null
                         ? <ChevronUp className="w-4 h-4 text-muted-foreground" />
                         : <ChevronDown className="w-4 h-4 text-muted-foreground" />
                       }
                     </button>
-                    {expandedSeason === season.seasonNumber && (
+                    {expandedSeason !== null && seasonsData.seasons.length > 0 && (
                       <div className="space-y-0 divide-y divide-border">
-                        {season.episodes.map((ep) => (
-                          <div key={ep.episodeNumber} className="py-2.5 px-3 bg-background space-y-0.5">
-                            <div className="flex items-start justify-between">
-                              <div className="flex items-start gap-2 min-w-0 flex-1">
-                                <span className="font-mono text-xs text-muted-foreground shrink-0 pt-0.5">
-                                  E{String(ep.episodeNumber).padStart(2, "0")}
-                                </span>
-                                <span className="text-xs font-semibold text-foreground leading-tight">{ep.name}</span>
+                        {seasonsData.seasons.map((season) => (
+                          <div key={season.seasonNumber}>
+                            <button
+                              onClick={() => setExpandedSeason(v => v === season.seasonNumber ? null : season.seasonNumber)}
+                              className="w-full flex items-center justify-between px-4 py-3 bg-background hover:bg-muted/40 transition-colors text-sm font-semibold text-foreground"
+                            >
+                              <span>{season.name}</span>
+                              {expandedSeason === season.seasonNumber
+                                ? <ChevronUp className="w-4 h-4 text-muted-foreground" />
+                                : <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                              }
+                            </button>
+                            {expandedSeason === season.seasonNumber && (
+                              <div className="space-y-0 divide-y divide-border">
+                                {season.episodes.map((ep) => (
+                                  <div key={ep.episodeNumber} className="py-2.5 px-3 bg-background space-y-0.5">
+                                    <div className="flex items-start justify-between">
+                                      <div className="flex items-start gap-2 min-w-0 flex-1">
+                                        <span className="font-mono text-xs text-muted-foreground shrink-0 pt-0.5">
+                                          E{String(ep.episodeNumber).padStart(2, "0")}
+                                        </span>
+                                        <span className="text-xs font-semibold text-foreground leading-tight">{ep.name}</span>
+                                      </div>
+                                      <div className="flex items-center gap-1 shrink-0 ml-3">
+                                        {ep.rating !== null && ep.rating > 0 ? (
+                                          <>
+                                            <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                                            <span className="text-xs font-semibold text-foreground">{ep.rating.toFixed(1)}</span>
+                                          </>
+                                        ) : (
+                                          <span className="text-xs text-muted-foreground">—</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
                               </div>
-                              <div className="flex items-center gap-1 shrink-0 ml-3">
-                                {ep.rating !== null && ep.rating > 0 ? (
-                                  <>
-                                    <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                                    <span className="text-xs font-semibold text-foreground">{ep.rating.toFixed(1)}</span>
-                                  </>
-                                ) : (
-                                  <span className="text-xs text-muted-foreground">—</span>
-                                )}
-                              </div>
-                            </div>
+                            )}
                           </div>
                         ))}
                       </div>
                     )}
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+                </div>
+              )}
 
-      {/* ── Collection / Related films ── */}
-      {collectionData && collectionData.movies.length > 0 && (() => {
-        const mainMovies = collectionData.movies.filter(m => !m.isSpinoff);
-        const spinoffMovies = collectionData.movies.filter(m => m.isSpinoff);
-
-        const sorted = [...mainMovies].sort((a, b) => {
-          if (!a.releaseDate && !b.releaseDate) return 0;
-          if (!a.releaseDate) return 1;
-          if (!b.releaseDate) return -1;
-          return a.releaseDate.localeCompare(b.releaseDate);
-        });
-
-        // Navigate to a movie, always starting at the top of the target page
-        const goToMovie = (targetImdbId: string) => {
-          scrollStore.delete(`movie-${targetImdbId}`);
-          if (scrollRef.current) scrollRef.current.scrollTop = 0;
-        };
-
-        return (
-          <div className="pt-4 pb-2">
-            {/* ── Main Collection — collapsible ── */}
-            {mainMovies.length > 0 && (
-              <div className="px-5 mb-1">
-                <button
-                  className="w-full flex items-center gap-2 text-left py-1"
-                  onClick={(e) => { const b = e.currentTarget; setShowCollection(v => { if (!v) setTimeout(() => { const c = scrollRef.current; if (c) { const r = b.getBoundingClientRect(), cr = c.getBoundingClientRect(); c.scrollTo({ top: Math.max(0, c.scrollTop + r.top - cr.top - 16), behavior: "smooth" }); } }, 50); return !v; }); }}
-                >
-                  <Film className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                  <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">
-                    {collectionData.collectionName ?? (lang === "th" ? "ภาคทั้งหมด" : "All Parts")}
-                  </p>
-                  <span className="text-[10px] text-muted-foreground mr-1">{mainMovies.length}</span>
-                  {showCollection
-                    ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                    : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />}
-                </button>
-                <div style={{ display: "grid", gridTemplateRows: showCollection ? "1fr" : "0fr", transition: "grid-template-rows 0.25s ease" }}>
-                  <div style={{ overflow: "hidden" }}>
-                    <div className="flex overflow-x-auto gap-2.5 pb-1 mt-2 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
-                      {sorted.map(m => (
-                        <Link
-                          key={m.imdbId}
-                          href={`/movie/${encodeURIComponent(m.imdbId)}${navSrclang ? `?srclang=${encodeURIComponent(navSrclang)}` : ""}`}
-                          onClick={() => goToMovie(m.imdbId)}
+              {/* Collection & Spinoffs */}
+              {collectionData && collectionData.movies.length > 0 && (() => {
+                const mainMovies = collectionData.movies.filter(m => !m.isSpinoff);
+                const spinoffMovies = collectionData.movies.filter(m => m.isSpinoff);
+                const sorted = [...mainMovies].sort((a, b) => {
+                  if (!a.releaseDate && !b.releaseDate) return 0;
+                  if (!a.releaseDate) return 1;
+                  if (!b.releaseDate) return -1;
+                  return a.releaseDate.localeCompare(b.releaseDate);
+                });
+                const goToMovie = (targetImdbId: string) => {
+                  scrollStore.delete(`movie-${targetImdbId}`);
+                  if (scrollRef.current) scrollRef.current.scrollTop = 0;
+                };
+                return (
+                  <>
+                    {mainMovies.length > 0 && (
+                      <div className="mt-3">
+                        <button
+                          className="w-full flex items-center gap-2 text-left py-1"
+                          onClick={(e) => { const b = e.currentTarget; setShowCollection(v => { if (!v) setTimeout(() => { const c = scrollRef.current; if (c) { const r = b.getBoundingClientRect(), cr = c.getBoundingClientRect(); c.scrollTo({ top: Math.max(0, c.scrollTop + r.top - cr.top - 16), behavior: "smooth" }); } }, 50); return !v; }); }}
                         >
-                          <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
-                            <div className="relative" style={{ aspectRatio: "2/3" }}>
-                              {m.posterUrl
-                                ? <img src={m.posterUrl} alt={m.title} className="w-full h-full object-cover" loading="lazy" />
-                                : <div className="w-full h-full flex items-center justify-center bg-zinc-900"><Film className="w-4 h-4 text-muted-foreground" /></div>
-                              }
-                              {m.isCurrent && (
-                                <div className="absolute inset-x-0 bottom-0 bg-foreground/90 py-0.5 text-center">
-                                  <span className="text-[9px] text-background font-bold">{lang === "th" ? "กำลังดู" : "NOW"}</span>
-                                </div>
-                              )}
-                            </div>
-                            <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
-                              <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{m.title}</p>
-                              {m.year && <p className="text-[8px] text-muted-foreground mt-0.5">{displayYear(m.year, lang)}</p>}
+                          <Film className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                          <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">
+                            {collectionData.collectionName ?? (lang === "th" ? "ภาคทั้งหมด" : "All Parts")}
+                          </p>
+                          <span className="text-[10px] text-muted-foreground mr-1">{mainMovies.length}</span>
+                          {showCollection
+                            ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                            : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />}
+                        </button>
+                        <div style={{ display: "grid", gridTemplateRows: showCollection ? "1fr" : "0fr", transition: "grid-template-rows 0.25s ease" }}>
+                          <div style={{ overflow: "hidden" }}>
+                            <div className="flex overflow-x-auto gap-2.5 pb-1 mt-2 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
+                              {sorted.map(m => (
+                                <Link
+                                  key={m.imdbId}
+                                  href={`/movie/${encodeURIComponent(m.imdbId)}${navSrclang ? `?srclang=${encodeURIComponent(navSrclang)}` : ""}`}
+                                  onClick={() => goToMovie(m.imdbId)}
+                                >
+                                  <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
+                                    <div className="relative" style={{ aspectRatio: "2/3" }}>
+                                      {m.posterUrl
+                                        ? <img src={m.posterUrl} alt={m.title} className="w-full h-full object-cover" loading="lazy" />
+                                        : <div className="w-full h-full flex items-center justify-center bg-zinc-900"><Film className="w-4 h-4 text-muted-foreground" /></div>
+                                      }
+                                      {m.isCurrent && (
+                                        <div className="absolute inset-x-0 bottom-0 bg-foreground/90 py-0.5 text-center">
+                                          <span className="text-[9px] text-background font-bold">{lang === "th" ? "กำลังดู" : "NOW"}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
+                                      <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{m.title}</p>
+                                      {m.year && <p className="text-[8px] text-muted-foreground mt-0.5">{displayYear(m.year, lang)}</p>}
+                                    </div>
+                                  </div>
+                                </Link>
+                              ))}
                             </div>
                           </div>
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* ── Spinoffs — collapsible ── */}
-            {spinoffMovies.length > 0 && (
-              <div className="px-5 mt-3">
-                <button
-                  className="w-full flex items-center gap-2 text-left py-1"
-                  onClick={(e) => { const b = e.currentTarget; setShowSpinoffs(v => { if (!v) setTimeout(() => { const c = scrollRef.current; if (c) { const r = b.getBoundingClientRect(), cr = c.getBoundingClientRect(); c.scrollTo({ top: Math.max(0, c.scrollTop + r.top - cr.top - 16), behavior: "smooth" }); } }, 50); return !v; }); }}
-                >
-                  <Film className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                  <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">
-                    {lang === "th" ? "ภาคเสริม / ที่เกี่ยวข้อง" : "Spin-offs / Related"}
-                  </p>
-                  <span className="text-[10px] text-muted-foreground mr-1">{spinoffMovies.length}</span>
-                  {showSpinoffs
-                    ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                    : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />}
-                </button>
-                <div style={{ display: "grid", gridTemplateRows: showSpinoffs ? "1fr" : "0fr", transition: "grid-template-rows 0.25s ease" }}>
-                  <div style={{ overflow: "hidden" }}>
-                    <div className="flex overflow-x-auto gap-2.5 pb-1 mt-2 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
-                      {spinoffMovies.map(m => (
-                        <Link
-                          key={m.imdbId}
-                          href={`/movie/${encodeURIComponent(m.imdbId)}${navSrclang ? `?srclang=${encodeURIComponent(navSrclang)}` : ""}`}
-                          onClick={() => goToMovie(m.imdbId)}
+                        </div>
+                      </div>
+                    )}
+                    {spinoffMovies.length > 0 && (
+                      <div className="mt-3">
+                        <button
+                          className="w-full flex items-center gap-2 text-left py-1"
+                          onClick={(e) => { const b = e.currentTarget; setShowSpinoffs(v => { if (!v) setTimeout(() => { const c = scrollRef.current; if (c) { const r = b.getBoundingClientRect(), cr = c.getBoundingClientRect(); c.scrollTo({ top: Math.max(0, c.scrollTop + r.top - cr.top - 16), behavior: "smooth" }); } }, 50); return !v; }); }}
                         >
-                          <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
-                            <div className="relative" style={{ aspectRatio: "2/3" }}>
-                              {m.posterUrl
-                                ? <img src={m.posterUrl} alt={m.title} className="w-full h-full object-cover" loading="lazy" />
-                                : <div className="w-full h-full flex items-center justify-center bg-zinc-900"><Film className="w-4 h-4 text-muted-foreground" /></div>
-                              }
-                            </div>
-                            <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
-                              <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{m.title}</p>
-                              {m.year && <p className="text-[8px] text-muted-foreground mt-0.5">{displayYear(m.year, lang)}</p>}
+                          <Film className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                          <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">
+                            {lang === "th" ? "ภาคเสริม / ที่เกี่ยวข้อง" : "Spin-offs / Related"}
+                          </p>
+                          <span className="text-[10px] text-muted-foreground mr-1">{spinoffMovies.length}</span>
+                          {showSpinoffs
+                            ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                            : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />}
+                        </button>
+                        <div style={{ display: "grid", gridTemplateRows: showSpinoffs ? "1fr" : "0fr", transition: "grid-template-rows 0.25s ease" }}>
+                          <div style={{ overflow: "hidden" }}>
+                            <div className="flex overflow-x-auto gap-2.5 pb-1 mt-2 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
+                              {spinoffMovies.map(m => (
+                                <Link
+                                  key={m.imdbId}
+                                  href={`/movie/${encodeURIComponent(m.imdbId)}${navSrclang ? `?srclang=${encodeURIComponent(navSrclang)}` : ""}`}
+                                  onClick={() => goToMovie(m.imdbId)}
+                                >
+                                  <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
+                                    <div className="relative" style={{ aspectRatio: "2/3" }}>
+                                      {m.posterUrl
+                                        ? <img src={m.posterUrl} alt={m.title} className="w-full h-full object-cover" loading="lazy" />
+                                        : <div className="w-full h-full flex items-center justify-center bg-zinc-900"><Film className="w-4 h-4 text-muted-foreground" /></div>
+                                      }
+                                    </div>
+                                    <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
+                                      <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{m.title}</p>
+                                      {m.year && <p className="text-[8px] text-muted-foreground mt-0.5">{displayYear(m.year, lang)}</p>}
+                                    </div>
+                                  </div>
+                                </Link>
+                              ))}
                             </div>
                           </div>
-                        </Link>
-                      ))}
-                    </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+
+              {/* Related Chains — full ChainCard style */}
+              {(movieChainsData?.chains ?? []).length > 0 && (
+                <div className="mt-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Link2 className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">{t.relatedChainsLabel}</p>
+                    <span className="text-[10px] text-muted-foreground">{(movieChainsData?.chains ?? []).length}</span>
+                  </div>
+                  <div className="flex flex-col -mx-5">
+                    {(movieChainsData?.chains ?? []).map(chain => (
+                      <ChainCard key={chain.id} chain={chain} />
+                    ))}
                   </div>
                 </div>
-              </div>
-            )}
-          </div>
-        );
-      })()}
+              )}
 
-
-
-      {/* ── Related Chains section ── */}
-      {(movieChainsData?.chains ?? []).length > 0 && (
-        <div className="px-5 pt-3">
-          <button
-            className="w-full flex items-center gap-2 text-left py-1"
-            onClick={(e) => { const b = e.currentTarget; setShowChains(v => { if (!v) setTimeout(() => { const c = scrollRef.current; if (c) { const r = b.getBoundingClientRect(), cr = c.getBoundingClientRect(); c.scrollTo({ top: Math.max(0, c.scrollTop + r.top - cr.top - 16), behavior: "smooth" }); } }, 50); return !v; }); }}
-          >
-            <ArrowUpDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-            <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">{t.relatedChainsLabel}</p>
-            <span className="text-[10px] text-muted-foreground mr-1">{(movieChainsData?.chains ?? []).length}</span>
-            {showChains
-              ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-              : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />}
-          </button>
-          <div style={{ display: "grid", gridTemplateRows: showChains ? "1fr" : "0fr", transition: "grid-template-rows 0.25s ease" }}>
-            <div style={{ overflow: "hidden" }}>
-              <div className="flex flex-col gap-2 mt-2 pb-1">
-                {(movieChainsData?.chains ?? []).map(chain => (
-                  <Link key={chain.id} href={`/chain/${chain.id}`}>
-                    <div className="flex items-center gap-3 bg-secondary rounded-2xl px-3 py-2.5 border border-border active:opacity-70 transition-opacity">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-foreground truncate">{chain.title}</p>
-                        {chain.user && (
-                          <p className="text-[11px] text-muted-foreground truncate">@{chain.user.username}</p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-[11px] text-muted-foreground">{chain.movieCount} {lang === "th" ? "เรื่อง" : "films"}</span>
-                        {chain.likeCount > 0 && (
-                          <span className="flex items-center gap-0.5 text-[11px] text-muted-foreground">
-                            <Star className="w-3 h-3" />{fmtCount(chain.likeCount)}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
             </div>
           </div>
         </div>

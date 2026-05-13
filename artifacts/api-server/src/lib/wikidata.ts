@@ -283,16 +283,19 @@ export async function getCharacterFromWikidata(wikidataId: string): Promise<{
 
 export async function getCharactersByMovieImdb(imdbId: string): Promise<CharacterMatch[]> {
   const sparql = `
-SELECT DISTINCT ?char ?charLabel ?image WHERE {
+SELECT DISTINCT ?char ?charLabel ?image ?enwiki WHERE {
   ?work wdt:P345 "${imdbId}" .
   ?work wdt:P674 ?char .
   OPTIONAL { ?char wdt:P18 ?image }
+  OPTIONAL { ?sitelink schema:about ?char ; schema:isPartOf <https://en.wikipedia.org/> . BIND(STR(?sitelink) AS ?enwiki) }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en" }
-} LIMIT 20`;
+} LIMIT 30`;
   const data = await sparqlQuery(sparql).catch(() => null);
   const bindings = data?.results?.bindings ?? [];
   const results: CharacterMatch[] = [];
   const seen = new Set<string>();
+  // enwiki titles per Wikidata ID for fallback
+  const enwikiMap: Record<string, string> = {};
   for (const b of bindings) {
     const rawId = String(b["char"]?.value ?? "");
     const id = rawId.replace("http://www.wikidata.org/entity/", "");
@@ -302,7 +305,32 @@ SELECT DISTINCT ?char ?charLabel ?image WHERE {
     if (!label || label.startsWith("Q")) continue;
     const imageRaw = b["image"]?.value ? String(b["image"].value) : null;
     const imageUrl = imageRaw ? imageRaw + "?width=185" : null;
+    const enwiki = b["enwiki"]?.value ? String(b["enwiki"].value).replace("https://en.wikipedia.org/wiki/", "") : null;
+    if (enwiki) enwikiMap[id] = enwiki;
     results.push({ name: label, wikidataId: id, label, description: "", imageUrl });
+  }
+  // Wikipedia thumbnail fallback for characters missing a Wikidata P18 image
+  const noImg = results.filter(r => !r.imageUrl && enwikiMap[r.wikidataId]);
+  if (noImg.length > 0) {
+    await Promise.all(noImg.slice(0, 15).map(async r => {
+      const title = enwikiMap[r.wikidataId];
+      if (!title) return;
+      const resp = await fetch(
+        `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`,
+        { signal: AbortSignal.timeout(4_000), headers: { "User-Agent": WIKI_UA } }
+      ).catch(() => null);
+      if (!resp?.ok) return;
+      const json = await resp.json() as { thumbnail?: { source?: string } };
+      if (json.thumbnail?.source) r.imageUrl = json.thumbnail.source;
+    }));
+  }
+  // For any still-missing images, try batchGetImages as a last resort
+  const stillNoImg = results.filter(r => !r.imageUrl).map(r => r.wikidataId);
+  if (stillNoImg.length > 0) {
+    const fallback = await batchGetImages(stillNoImg).catch((): Record<string, string | null> => ({}));
+    for (const r of results) {
+      if (!r.imageUrl && fallback[r.wikidataId]) r.imageUrl = fallback[r.wikidataId];
+    }
   }
   return results;
 }
