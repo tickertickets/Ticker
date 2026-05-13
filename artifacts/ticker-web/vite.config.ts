@@ -208,9 +208,9 @@ export default defineConfig({
       "/api": {
         target:
           process.env.API_PROXY_TARGET ||
-          "https://ticker-api-server.onrender.com",
+          "http://localhost:8080",
         changeOrigin: true,
-        secure: true,
+        secure: false,
         ws: true,
       },
     },
@@ -223,9 +223,9 @@ export default defineConfig({
       "/api": {
         target:
           process.env.API_PROXY_TARGET ||
-          "https://ticker-api-server.onrender.com",
+          "http://localhost:8080",
         changeOrigin: true,
-        secure: true,
+        secure: false,
         ws: true,
       },
     },
