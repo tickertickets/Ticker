@@ -99,6 +99,45 @@ export async function getWikipediaSummary(pageTitle: string): Promise<{
   };
 }
 
+// ── Fetch bio in a given language via Wikipedia langlinks ─────────────────────
+// Returns the extract in the target language, or null if not available.
+export async function getWikipediaBioForLang(
+  pageTitle: string,
+  lang: "en" | "th",
+): Promise<string | null> {
+  if (lang === "en") {
+    const s = await getWikipediaSummary(pageTitle);
+    return s?.extract?.slice(0, 500) ?? null;
+  }
+  try {
+    // Get langlinks from the English page to find the target language article
+    const langlinksResp = await fetch(
+      `${WIKI_REST}/page/langlinks/${encodeURIComponent(pageTitle.replace(/ /g, "_"))}`,
+      { signal: AbortSignal.timeout(6_000), headers: { "User-Agent": WIKI_UA } }
+    ).catch(() => null);
+    if (!langlinksResp?.ok) return null;
+    const langlinksData = await langlinksResp.json() as Array<{
+      lang: string;
+      titles?: { canonical?: string; normalized?: string; display?: string };
+    }>;
+    const target = langlinksData.find(l => l.lang === lang);
+    if (!target) return null;
+    const targetTitle = target.titles?.canonical ?? target.titles?.normalized;
+    if (!targetTitle) return null;
+    const targetRest = `https://${lang}.wikipedia.org/api/rest_v1`;
+    const targetResp = await fetch(
+      `${targetRest}/page/summary/${encodeURIComponent(targetTitle)}`,
+      { signal: AbortSignal.timeout(6_000), headers: { "User-Agent": WIKI_UA } }
+    ).catch(() => null);
+    if (!targetResp?.ok) return null;
+    const targetData = await targetResp.json() as { extract?: string; type?: string };
+    if (!targetData.extract || targetData.type === "disambiguation") return null;
+    return targetData.extract.slice(0, 500);
+  } catch {
+    return null;
+  }
+}
+
 // ── Single character search ────────────────────────────────────────────────────
 
 async function searchWikipediaVariant(name: string): Promise<{

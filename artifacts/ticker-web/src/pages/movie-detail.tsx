@@ -6,7 +6,7 @@ import { MovieBadges, BADGE_DESC_TH, BADGE_DESC_EN } from "@/components/MovieBad
 import { computeCardTier, computeEffectTags, TIER_VISUAL } from "@/lib/ranks";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { ChevronLeft, Film, Star, Users, Bookmark, ChevronDown, ChevronUp, Tv, Flag, Loader2, EyeOff, Lock, User, Trophy, Link2 } from "lucide-react";
-import { ChainCard, type ChainItem } from "@/components/ChainsSection";
+import { ChainCard, PosterCollage, type ChainItem } from "@/components/ChainsSection";
 import { useState, useRef, useEffect, useMemo } from "react";
 import { cn, fmtCount } from "@/lib/utils";
 import { scrollStore } from "@/lib/scroll-store";
@@ -122,6 +122,33 @@ function Avatar({ user, size = "sm" }: {
 // route no longer matches — so we fall back to the last known id to avoid
 // firing empty API requests or showing an error state.
 let _lastMovieId = "";
+
+function MovieDetailChainCard({ chain }: { chain: ChainItem }) {
+  const posters = chain.movies.slice(0, 4).map(m => m.posterUrl).filter(Boolean) as string[];
+  return (
+    <Link href={`/chain/${chain.id}`}>
+      <div className="bg-background rounded-2xl border border-border overflow-hidden active:opacity-75 transition-opacity">
+        <div className="relative" style={{ aspectRatio: "2/3" }}>
+          <PosterCollage posters={posters} />
+          {(chain.movieCount ?? 0) > 0 && (
+            <span className="absolute bottom-1.5 right-1.5 text-[10px] font-black text-white" style={{ textShadow: "0 1px 3px rgba(0,0,0,0.8)" }}>
+              {chain.movieCount}
+            </span>
+          )}
+        </div>
+        <div className="px-2 pt-1.5 pb-2 text-center">
+          <p className="text-[11px] font-bold text-foreground line-clamp-1 leading-tight">{chain.title}</p>
+          {(chain as any).chainCount > 0 && (
+            <div className="flex items-center justify-center gap-0.5 mt-0.5">
+              <Link2 className="w-2.5 h-2.5 text-muted-foreground" strokeWidth={2.5} />
+              <span className="text-[10px] text-muted-foreground tabular-nums">{fmtCount((chain as any).chainCount)}</span>
+            </div>
+          )}
+        </div>
+      </div>
+    </Link>
+  );
+}
 
 export default function MovieDetail() {
   const { t, lang } = useLang();
@@ -838,8 +865,85 @@ export default function MovieDetail() {
 
       </div>
 
-      {/* ── Details — single collapsible (providers, cast, directors, characters, awards, episodes, collection, spinoffs, chains) ── */}
-      {(allProviders.length > 0 || (creditsData?.cast ?? []).length > 0 || (creditsData?.directors ?? []).length > 0 || allCharacters.length > 0 || (awardsData?.results ?? []).length > 0 || (isTvShow && (seasonsData?.seasons ?? []).length > 0) || ((collectionData?.movies ?? []).length > 0) || (movieChainsData?.chains ?? []).length > 0) && (
+      {/* ── Available on — standalone ── */}
+      {allProviders.length > 0 && (
+        <div className="px-5 pt-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Tv className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+            <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">{t.watchOnLabel}</p>
+            <span className="text-[10px] text-muted-foreground">{allProviders.length}</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {allProviders.map(p => (
+              <img
+                key={p.providerId}
+                src={p.logoUrl}
+                alt={p.name}
+                title={p.name}
+                className="w-9 h-9 rounded-xl object-cover border border-border"
+                loading="eager"
+                onError={(e) => {
+                  const img = e.currentTarget;
+                  if (!img.dataset.retried) {
+                    img.dataset.retried = "1";
+                    const orig = img.src;
+                    setTimeout(() => { img.src = ""; img.src = orig; }, 1200);
+                  } else {
+                    img.style.display = "none";
+                  }
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Characters — standalone ── */}
+      {allCharacters.length > 0 && (
+        <div className="px-5 pt-4">
+          <div className="flex items-center gap-2 mb-2">
+            <User className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+            <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">{lang === "th" ? "ตัวละคร" : "Characters"}</p>
+            <span className="text-[10px] text-muted-foreground">{allCharacters.length}</span>
+          </div>
+          <div className="flex overflow-x-auto gap-2.5 pb-1 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
+            {allCharacters.map(ch => (
+              <Link key={ch.wikidataId} href={`/character/${ch.wikidataId}`}>
+                <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
+                  <div className="relative" style={{ aspectRatio: "2/3" }}>
+                    {ch.imageUrl
+                      ? <img src={ch.imageUrl} alt={ch.label} className="w-full h-full object-cover" style={{ objectPosition: "center top" }} loading="lazy" />
+                      : <div className="w-full h-full flex items-center justify-center bg-zinc-900"><User className="w-4 h-4 text-muted-foreground" /></div>
+                    }
+                  </div>
+                  <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
+                    <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{ch.label}</p>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Related Chains — standalone ── */}
+      {(movieChainsData?.chains ?? []).length > 0 && (
+        <div className="px-5 pt-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Link2 className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+            <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">{t.relatedChainsLabel}</p>
+            <span className="text-[10px] text-muted-foreground">{(movieChainsData?.chains ?? []).length}</span>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {(movieChainsData?.chains ?? []).map(chain => (
+              <MovieDetailChainCard key={chain.id} chain={chain} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Details — single collapsible (cast, directors, awards, episodes, collection, spinoffs) ── */}
+      {((creditsData?.cast ?? []).length > 0 || (creditsData?.directors ?? []).length > 0 || (awardsData?.results ?? []).length > 0 || (isTvShow && (seasonsData?.seasons ?? []).length > 0) || ((collectionData?.movies ?? []).length > 0)) && (
         <div className="px-5 pt-4">
           <button
             className="w-full flex items-center gap-2 text-left"
@@ -853,222 +957,6 @@ export default function MovieDetail() {
           </button>
           <div style={{ display: "grid", gridTemplateRows: showDetails ? "1fr" : "0fr", transition: "grid-template-rows 0.25s ease" }}>
             <div style={{ overflow: "hidden" }}>
-
-              {/* Available on */}
-              {allProviders.length > 0 && (
-                <div className="mt-3">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Tv className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">{t.watchOnLabel}</p>
-                    <span className="text-[10px] text-muted-foreground">{allProviders.length}</span>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {allProviders.map(p => (
-                      <img
-                        key={p.providerId}
-                        src={p.logoUrl}
-                        alt={p.name}
-                        title={p.name}
-                        className="w-9 h-9 rounded-xl object-cover border border-border"
-                        loading="eager"
-                        onError={(e) => {
-                          const img = e.currentTarget;
-                          if (!img.dataset.retried) {
-                            img.dataset.retried = "1";
-                            const orig = img.src;
-                            setTimeout(() => { img.src = ""; img.src = orig; }, 1200);
-                          } else {
-                            img.style.display = "none";
-                          }
-                        }}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Cast */}
-              {(creditsData?.cast ?? []).length > 0 && (
-                <div className="mt-3">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Users className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">{t.castLabel}</p>
-                    <span className="text-[10px] text-muted-foreground">{(creditsData?.cast ?? []).length}</span>
-                  </div>
-                  <div className="flex overflow-x-auto gap-2.5 pb-1 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
-                    {(creditsData?.cast ?? []).map(p => (
-                      <Link
-                        key={p.id}
-                        href={`/person/${p.id}${navSrclang ? `?srclang=${encodeURIComponent(navSrclang)}` : ""}`}
-                      >
-                        <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
-                          <div className="relative" style={{ aspectRatio: "2/3" }}>
-                            {p.profileUrl
-                              ? <img src={p.profileUrl} alt={p.name} className="w-full h-full object-cover" loading="lazy" />
-                              : <div className="w-full h-full flex items-center justify-center bg-zinc-900"><User className="w-4 h-4 text-muted-foreground" /></div>
-                            }
-                          </div>
-                          <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
-                            <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{p.name}</p>
-                            {p.character && <p className="text-[8px] text-muted-foreground mt-0.5 truncate">{p.character}</p>}
-                          </div>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Directors */}
-              {(creditsData?.directors ?? []).length > 0 && (
-                <div className="mt-3">
-                  <div className="flex items-center gap-2 mb-2">
-                    <User className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">{t.directorLabel}</p>
-                    <span className="text-[10px] text-muted-foreground">{(creditsData?.directors ?? []).length}</span>
-                  </div>
-                  <div className="flex overflow-x-auto gap-2.5 pb-1 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
-                    {(creditsData?.directors ?? []).map(p => (
-                      <Link key={p.id} href={`/person/${p.id}${navSrclang ? `?srclang=${encodeURIComponent(navSrclang)}` : ""}`}>
-                        <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
-                          <div className="relative" style={{ aspectRatio: "2/3" }}>
-                            {p.profileUrl
-                              ? <img src={p.profileUrl} alt={p.name} className="w-full h-full object-cover" loading="lazy" />
-                              : <div className="w-full h-full flex items-center justify-center bg-zinc-900"><User className="w-4 h-4 text-muted-foreground" /></div>
-                            }
-                          </div>
-                          <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
-                            <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{p.name}</p>
-                          </div>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Characters */}
-              {allCharacters.length > 0 && (
-                <div className="mt-3">
-                  <div className="flex items-center gap-2 mb-2">
-                    <User className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">{lang === "th" ? "ตัวละคร" : "Characters"}</p>
-                    <span className="text-[10px] text-muted-foreground">{allCharacters.length}</span>
-                  </div>
-                  <div className="flex overflow-x-auto gap-2.5 pb-1 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
-                    {allCharacters.map(ch => (
-                      <Link key={ch.wikidataId} href={`/character/${ch.wikidataId}`}>
-                        <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
-                          <div className="relative" style={{ aspectRatio: "2/3" }}>
-                            {ch.imageUrl
-                              ? <img src={ch.imageUrl} alt={ch.label} className="w-full h-full object-cover" loading="lazy" />
-                              : <div className="w-full h-full flex items-center justify-center bg-zinc-900"><User className="w-4 h-4 text-muted-foreground" /></div>
-                            }
-                          </div>
-                          <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
-                            <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{ch.label}</p>
-                          </div>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Awards */}
-              {(awardsData?.results ?? []).length > 0 && (
-                <div className="mt-3">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Trophy className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">{t.awardsLabel}</p>
-                    <span className="text-[10px] text-muted-foreground">{awardsData!.results.length}</span>
-                  </div>
-                  <div className="flex flex-col gap-3">
-                    {(awardsData?.results ?? []).map((award, i) => (
-                      <div key={i}>
-                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide mb-1.5">{award.name}</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {award.winners.map((w, j) => (
-                            <span key={`w-${j}`} className="text-[10px] bg-amber-500/15 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-full font-semibold">
-                              🏆 {w.award_category}{w.year ? ` (${w.year})` : ""}
-                            </span>
-                          ))}
-                          {award.nominees.map((n, j) => (
-                            <span key={`n-${j}`} className="text-[10px] bg-secondary text-muted-foreground px-2 py-0.5 rounded-full">
-                              ✦ {n.award_category}{n.year ? ` (${n.year})` : ""}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Episode ratings (TV shows) */}
-              {isTvShow && seasonsData && seasonsData.seasons.length > 0 && (
-                <div ref={episodeRatingsRef} className="mt-3">
-                  <div className="rounded-2xl border border-border overflow-hidden">
-                    <button
-                      onClick={() => setExpandedSeason(v => v === null ? seasonsData.seasons[0]?.seasonNumber ?? null : null)}
-                      className="w-full flex items-center justify-between px-4 py-3 bg-secondary hover:bg-muted/60 transition-colors text-sm font-semibold text-foreground"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Tv className="w-4 h-4 text-muted-foreground -translate-y-0.5" />
-                        <span className="leading-none font-normal">{t.episodeRatings}</span>
-                      </div>
-                      {expandedSeason !== null
-                        ? <ChevronUp className="w-4 h-4 text-muted-foreground" />
-                        : <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                      }
-                    </button>
-                    {expandedSeason !== null && seasonsData.seasons.length > 0 && (
-                      <div className="space-y-0 divide-y divide-border">
-                        {seasonsData.seasons.map((season) => (
-                          <div key={season.seasonNumber}>
-                            <button
-                              onClick={() => setExpandedSeason(v => v === season.seasonNumber ? null : season.seasonNumber)}
-                              className="w-full flex items-center justify-between px-4 py-3 bg-background hover:bg-muted/40 transition-colors text-sm font-semibold text-foreground"
-                            >
-                              <span>{season.name}</span>
-                              {expandedSeason === season.seasonNumber
-                                ? <ChevronUp className="w-4 h-4 text-muted-foreground" />
-                                : <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                              }
-                            </button>
-                            {expandedSeason === season.seasonNumber && (
-                              <div className="space-y-0 divide-y divide-border">
-                                {season.episodes.map((ep) => (
-                                  <div key={ep.episodeNumber} className="py-2.5 px-3 bg-background space-y-0.5">
-                                    <div className="flex items-start justify-between">
-                                      <div className="flex items-start gap-2 min-w-0 flex-1">
-                                        <span className="font-mono text-xs text-muted-foreground shrink-0 pt-0.5">
-                                          E{String(ep.episodeNumber).padStart(2, "0")}
-                                        </span>
-                                        <span className="text-xs font-semibold text-foreground leading-tight">{ep.name}</span>
-                                      </div>
-                                      <div className="flex items-center gap-1 shrink-0 ml-3">
-                                        {ep.rating !== null && ep.rating > 0 ? (
-                                          <>
-                                            <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                                            <span className="text-xs font-semibold text-foreground">{ep.rating.toFixed(1)}</span>
-                                          </>
-                                        ) : (
-                                          <span className="text-xs text-muted-foreground">—</span>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
 
               {/* Collection & Spinoffs */}
               {collectionData && collectionData.movies.length > 0 && (() => {
@@ -1181,17 +1069,156 @@ export default function MovieDetail() {
                 );
               })()}
 
-              {/* Related Chains — full ChainCard style */}
-              {(movieChainsData?.chains ?? []).length > 0 && (
-                <div className="mt-3">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Link2 className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">{t.relatedChainsLabel}</p>
-                    <span className="text-[10px] text-muted-foreground">{(movieChainsData?.chains ?? []).length}</span>
+              {/* Episode ratings (TV shows) */}
+              {isTvShow && seasonsData && seasonsData.seasons.length > 0 && (
+                <div ref={episodeRatingsRef} className="mt-3">
+                  <div className="rounded-2xl border border-border overflow-hidden">
+                    <button
+                      onClick={() => setExpandedSeason(v => v === null ? seasonsData.seasons[0]?.seasonNumber ?? null : null)}
+                      className="w-full flex items-center justify-between px-4 py-3 bg-secondary hover:bg-muted/60 transition-colors text-sm font-semibold text-foreground"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Tv className="w-4 h-4 text-muted-foreground -translate-y-0.5" />
+                        <span className="leading-none font-normal">{t.episodeRatings}</span>
+                      </div>
+                      {expandedSeason !== null
+                        ? <ChevronUp className="w-4 h-4 text-muted-foreground" />
+                        : <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                      }
+                    </button>
+                    {expandedSeason !== null && seasonsData.seasons.length > 0 && (
+                      <div className="space-y-0 divide-y divide-border">
+                        {seasonsData.seasons.map((season) => (
+                          <div key={season.seasonNumber}>
+                            <button
+                              onClick={() => setExpandedSeason(v => v === season.seasonNumber ? null : season.seasonNumber)}
+                              className="w-full flex items-center justify-between px-4 py-3 bg-background hover:bg-muted/40 transition-colors text-sm font-semibold text-foreground"
+                            >
+                              <span>{season.name}</span>
+                              {expandedSeason === season.seasonNumber
+                                ? <ChevronUp className="w-4 h-4 text-muted-foreground" />
+                                : <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                              }
+                            </button>
+                            {expandedSeason === season.seasonNumber && (
+                              <div className="space-y-0 divide-y divide-border">
+                                {season.episodes.map((ep) => (
+                                  <div key={ep.episodeNumber} className="py-2.5 px-3 bg-background space-y-0.5">
+                                    <div className="flex items-start justify-between">
+                                      <div className="flex items-start gap-2 min-w-0 flex-1">
+                                        <span className="font-mono text-xs text-muted-foreground shrink-0 pt-0.5">
+                                          E{String(ep.episodeNumber).padStart(2, "0")}
+                                        </span>
+                                        <span className="text-xs font-semibold text-foreground leading-tight">{ep.name}</span>
+                                      </div>
+                                      <div className="flex items-center gap-1 shrink-0 ml-3">
+                                        {ep.rating !== null && ep.rating > 0 ? (
+                                          <>
+                                            <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                                            <span className="text-xs font-semibold text-foreground">{ep.rating.toFixed(1)}</span>
+                                          </>
+                                        ) : (
+                                          <span className="text-xs text-muted-foreground">—</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <div className="flex flex-col -mx-5">
-                    {(movieChainsData?.chains ?? []).map(chain => (
-                      <ChainCard key={chain.id} chain={chain} />
+                </div>
+              )}
+
+              {/* Awards */}
+              {(awardsData?.results ?? []).length > 0 && (
+                <div className="mt-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Trophy className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">{t.awardsLabel}</p>
+                    <span className="text-[10px] text-muted-foreground">{awardsData!.results.length}</span>
+                  </div>
+                  <div className="flex flex-col gap-3">
+                    {(awardsData?.results ?? []).map((award, i) => (
+                      <div key={i}>
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide mb-1.5">{award.name}</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {award.winners.map((w, j) => (
+                            <span key={`w-${j}`} className="text-[10px] bg-amber-500/15 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-full font-semibold">
+                              🏆 {w.award_category}{w.year ? ` (${w.year})` : ""}
+                            </span>
+                          ))}
+                          {award.nominees.map((n, j) => (
+                            <span key={`n-${j}`} className="text-[10px] bg-secondary text-muted-foreground px-2 py-0.5 rounded-full">
+                              ✦ {n.award_category}{n.year ? ` (${n.year})` : ""}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Directors */}
+              {(creditsData?.directors ?? []).length > 0 && (
+                <div className="mt-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <User className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">{t.directorLabel}</p>
+                    <span className="text-[10px] text-muted-foreground">{(creditsData?.directors ?? []).length}</span>
+                  </div>
+                  <div className="flex overflow-x-auto gap-2.5 pb-1 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
+                    {(creditsData?.directors ?? []).map(p => (
+                      <Link key={p.id} href={`/person/${p.id}${navSrclang ? `?srclang=${encodeURIComponent(navSrclang)}` : ""}`}>
+                        <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
+                          <div className="relative" style={{ aspectRatio: "2/3" }}>
+                            {p.profileUrl
+                              ? <img src={p.profileUrl} alt={p.name} className="w-full h-full object-cover" style={{ objectPosition: "center top" }} loading="lazy" />
+                              : <div className="w-full h-full flex items-center justify-center bg-zinc-900"><User className="w-4 h-4 text-muted-foreground" /></div>
+                            }
+                          </div>
+                          <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
+                            <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{p.name}</p>
+                          </div>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Cast */}
+              {(creditsData?.cast ?? []).length > 0 && (
+                <div className="mt-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Users className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">{t.castLabel}</p>
+                    <span className="text-[10px] text-muted-foreground">{(creditsData?.cast ?? []).length}</span>
+                  </div>
+                  <div className="flex overflow-x-auto gap-2.5 pb-1 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
+                    {(creditsData?.cast ?? []).map(p => (
+                      <Link
+                        key={p.id}
+                        href={`/person/${p.id}${navSrclang ? `?srclang=${encodeURIComponent(navSrclang)}` : ""}`}
+                      >
+                        <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
+                          <div className="relative" style={{ aspectRatio: "2/3" }}>
+                            {p.profileUrl
+                              ? <img src={p.profileUrl} alt={p.name} className="w-full h-full object-cover" style={{ objectPosition: "center top" }} loading="lazy" />
+                              : <div className="w-full h-full flex items-center justify-center bg-zinc-900"><User className="w-4 h-4 text-muted-foreground" /></div>
+                            }
+                          </div>
+                          <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
+                            <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{p.name}</p>
+                            {p.character && <p className="text-[8px] text-muted-foreground mt-0.5 truncate">{p.character}</p>}
+                          </div>
+                        </div>
+                      </Link>
                     ))}
                   </div>
                 </div>

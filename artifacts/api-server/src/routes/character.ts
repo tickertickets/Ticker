@@ -4,6 +4,7 @@ import { tmdbFetch, posterUrl } from "../lib/tmdb-client";
 import {
   batchSearchWikipediaCharacters,
   getWikipediaSummary,
+  getWikipediaBioForLang,
   getCharacterMediaLinks,
 } from "../lib/wikipedia";
 
@@ -63,14 +64,10 @@ async function getFilmographyByKeyword(characterName: string): Promise<Filmograp
     }>("/search/keyword", { query: characterName, page: "1" });
 
     const kwResults = kwData.results ?? [];
-    // Find exact or close match keyword
+    // Find exact match only (strict) to avoid false positives
     const nameLower = characterName.toLowerCase();
     const exact = kwResults.find(k => k.name.toLowerCase() === nameLower);
-    const close = kwResults.find(k =>
-      k.name.toLowerCase().includes(nameLower) ||
-      nameLower.includes(k.name.toLowerCase())
-    );
-    const keyword = exact ?? close;
+    const keyword = exact;
     if (!keyword) return [];
 
     const kwId = String(keyword.id);
@@ -390,6 +387,7 @@ router.get(
 
     const pageTitle = decodeURIComponent(charId).replace(/_/g, " ");
     const characterName = pageTitle.split(" (")[0];
+    const lang = (req.query.lang as string) === "th" ? "th" : "en";
 
     // Wikipedia image + bio (fast — REST summary, follows redirects)
     const summary = await getWikipediaSummary(pageTitle).catch(() => null);
@@ -400,14 +398,23 @@ router.get(
     // Use canonical title (post-redirect) for parse API — prevents empty link sets
     const canonicalTitle = summary.canonicalTitle;
 
-    // Filmography: TMDB keyword (fast) + Wikipedia links (deeper), run in parallel
-    const filmography = await buildFilmography(characterName, canonicalTitle).catch(() => []);
+    // Fetch bio in requested language; filmography is always EN-based
+    const [filmography, langBio] = await Promise.all([
+      buildFilmography(characterName, canonicalTitle).catch(() => []),
+      lang === "th"
+        ? getWikipediaBioForLang(canonicalTitle, "th").catch(() => null)
+        : Promise.resolve(null),
+    ]);
+
+    const description = (lang === "th" && langBio)
+      ? langBio
+      : summary.extract.slice(0, 500);
 
     res.json({
       wikidataId: charId,
       charId,
       name: characterName,
-      description: summary.extract.slice(0, 500),
+      description,
       imageUrl: summary.imageUrl,
       filmography,
     });

@@ -1,6 +1,7 @@
 import { useRoute, Link, useLocation } from "wouter";
 import { navBack } from "@/lib/nav-back";
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { ChevronLeft, Film, User, Loader2 } from "lucide-react";
 import { useLang, displayYear } from "@/lib/i18n";
 import { computeCardTier, computeEffectTags, type ScoreInput } from "@/lib/ranks";
@@ -99,8 +100,29 @@ export default function CharacterDetail() {
     retryDelay: 1000,
   });
 
+  const [bioLang, setBioLang] = useState<"en" | "th">("en");
+
+  const { data: thBioData, isLoading: thBioLoading } = useQuery<CharacterData>({
+    queryKey: ["/api/character", wikidataId, "lang", "th"],
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/character/${encodeURIComponent(wikidataId)}?lang=th`,
+        { signal: AbortSignal.timeout(15_000) }
+      );
+      if (!res.ok) throw new Error("Not found");
+      return res.json() as Promise<CharacterData>;
+    },
+    enabled: bioLang === "th" && !!wikidataId,
+    staleTime: 30 * 60 * 1000,
+    retry: 1,
+    retryDelay: 1000,
+  });
+
   const notFound = isError && !isLoading;
   const bio = data?.description ?? "";
+  const displayBio = bioLang === "th"
+    ? (thBioLoading ? bio : (thBioData?.description ?? bio))
+    : bio;
 
   return (
     <div className="absolute inset-0 bg-background flex flex-col overflow-hidden">
@@ -191,7 +213,26 @@ export default function CharacterDetail() {
           <div>
             {bio && (
               <div className="px-5 pt-4 pb-2">
-                <p className="text-sm text-foreground/80 leading-relaxed">{bio}</p>
+                <div className="flex items-start gap-3">
+                  <p className="text-sm text-foreground/80 leading-relaxed flex-1">{displayBio}</p>
+                  <button
+                    type="button"
+                    onClick={() => setBioLang(v => v === "en" ? "th" : "en")}
+                    aria-label="Toggle bio language"
+                    className="relative inline-flex items-center select-none shrink-0 mt-0.5"
+                    style={{ background: "#e5e5ea", border: "1px solid #d1d1d6", borderRadius: 999, padding: 2, height: 26, width: 60 }}
+                  >
+                    <span aria-hidden className="absolute top-0.5 bottom-0.5 rounded-full transition-transform duration-200 ease-out" style={{ background: "#111", width: 28, left: 2, transform: bioLang === "en" ? "translateX(0)" : "translateX(28px)" }} />
+                    <span className="relative z-10 flex-1 text-center text-[10px] font-bold tracking-wide" style={{ color: bioLang === "en" ? "#fff" : "#888" }}>EN</span>
+                    <span className="relative z-10 flex-1 text-center text-[10px] font-bold tracking-wide" style={{ color: bioLang === "th" ? "#fff" : "#888" }}>TH</span>
+                  </button>
+                </div>
+                {bioLang === "th" && thBioLoading && (
+                  <p className="text-xs text-muted-foreground mt-2">{lang === "th" ? "กำลังโหลด…" : "Loading…"}</p>
+                )}
+                {bioLang === "th" && !thBioLoading && !thBioData?.description && (
+                  <p className="text-xs text-muted-foreground mt-2">{lang === "th" ? "ยังไม่มีข้อมูลภาษาไทย" : "Thai bio not available"}</p>
+                )}
               </div>
             )}
 
