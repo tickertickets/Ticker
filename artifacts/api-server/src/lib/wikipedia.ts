@@ -76,6 +76,7 @@ function shouldSkipLink(title: string): boolean {
 export async function getWikipediaSummary(pageTitle: string): Promise<{
   extract: string;
   imageUrl: string | null;
+  canonicalTitle: string;
 } | null> {
   const resp = await fetch(
     `${WIKI_REST}/page/summary/${encodeURIComponent(pageTitle.replace(/ /g, "_"))}`,
@@ -83,6 +84,7 @@ export async function getWikipediaSummary(pageTitle: string): Promise<{
   ).catch(() => null);
   if (!resp?.ok) return null;
   const json = await resp.json() as {
+    title?: string;
     extract?: string;
     thumbnail?: { source?: string };
     originalimage?: { source?: string };
@@ -92,6 +94,8 @@ export async function getWikipediaSummary(pageTitle: string): Promise<{
   return {
     extract: json.extract,
     imageUrl: json.originalimage?.source ?? json.thumbnail?.source ?? null,
+    // REST API resolves redirects; canonical title is the resolved page title
+    canonicalTitle: json.title ?? pageTitle,
   };
 }
 
@@ -210,6 +214,7 @@ export async function getCharacterMediaLinks(pageTitle: string): Promise<string[
   url.searchParams.set("action", "parse");
   url.searchParams.set("page", pageTitle.replace(/_/g, " "));
   url.searchParams.set("prop", "links");
+  url.searchParams.set("redirects", "1"); // follow redirects (e.g. Gojo_Satoru → Satoru_Gojo)
   url.searchParams.set("format", "json");
 
   const resp = await fetch(url.toString(), {
