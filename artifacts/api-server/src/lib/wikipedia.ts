@@ -32,49 +32,18 @@ export function getNameVariants(name: string): string[] {
   return [...new Set(results)].filter(r => r.length >= 2);
 }
 
-// ── Strict name-to-title matching ─────────────────────────────────────────────
-// Prevents wrong results like "Barry" → "Barry Keoghan" (actor),
-// or "Anakin Skywalker" → "Skywalker family".
+// ── Stop words & category words ───────────────────────────────────────────────
 
 const STOP_WORDS = new Set([
   "the", "a", "an", "of", "in", "on", "at", "to", "for", "and", "or", "de",
 ]);
 
-// Words that signal the article is about a group/collection, not an individual character
+// Words in article titles that indicate it is about a group/collection, not one character
 const CATEGORY_WORDS = new Set([
   "family", "families", "franchise", "universe", "trilogy", "saga",
   "series", "characters", "mythology", "collection", "dynasty", "clan",
   "team", "squad", "group", "gang", "crew",
 ]);
-
-function nameMatchesTitle(searchName: string, articleTitle: string): boolean {
-  // Strip disambiguation parentheses: "Batman (DC Comics)" → "batman"
-  const baseTitleRaw = articleTitle.split(" (")[0].toLowerCase().trim();
-  const nameL = searchName.toLowerCase().trim();
-
-  // Exact match (most reliable)
-  if (baseTitleRaw === nameL) return true;
-
-  const nameWords = nameL.split(/\s+/).filter(w => w.length > 1 && !STOP_WORDS.has(w));
-  const titleWords = baseTitleRaw.split(/\s+/).filter(w => w.length > 1 && !STOP_WORDS.has(w));
-
-  if (nameWords.length === 0) return baseTitleRaw === nameL;
-
-  // Single content-word names: title base must also be exactly one word matching it.
-  // This prevents "Barry" → "Barry Keoghan" (titleWords has 2 words).
-  if (nameWords.length === 1) {
-    return titleWords.length === 1 && titleWords[0] === nameWords[0];
-  }
-
-  // Multi-word names: reject articles whose title contains category words
-  // that are not in the searched name (e.g., "Skywalker family" for "Anakin Skywalker")
-  const extraTitleWords = titleWords.filter(w => !nameWords.includes(w));
-  if (extraTitleWords.some(w => CATEGORY_WORDS.has(w))) return false;
-
-  // All content words in the searched name must appear in the title
-  // (handles reversed East-Asian names: search "Satoru Gojo" → title "Gojo Satoru")
-  return nameWords.every(w => titleWords.includes(w));
-}
 
 // ── Fictional character detection ─────────────────────────────────────────────
 
@@ -86,44 +55,116 @@ const FICTIONAL_KEYWORDS = [
   "protagonist", "antagonist", "television character", "film character",
   "cartoon character", "video game character", "literary character",
   "appeared in ", "first appeared in", "created by", "introduced in",
+  "portrayed by", "voiced by", "played by",
 ];
 
-// Keywords that strongly suggest the article is NOT a fictional character
+// Signals the article is about a real person, not a fictional character
 const NON_FICTIONAL_SIGNALS = [
   "is an american actor", "is a british actor", "is an english actor",
   "is a thai actor", "is a japanese actor", "is a korean actor",
-  "is an actor", "is an actress", "born in ", "american film",
-  "is a director", "is a filmmaker", "is a musician", "is a singer",
-  "is a politician", "is a comedian", "is a professional",
+  "is an actor", "is an actress", "is an australian actor",
+  "born in ", "american film", "is a director", "is a filmmaker",
+  "is a musician", "is a singer", "is a politician", "is a comedian",
+  "is a professional", "is an american rapper", "is an american comedian",
 ];
 
 function isFictionalExtract(text: string): boolean {
   const lower = text.toLowerCase();
-  // If it strongly signals a real person, reject immediately
   if (NON_FICTIONAL_SIGNALS.some(kw => lower.includes(kw))) return false;
   return FICTIONAL_KEYWORDS.some(kw => lower.includes(kw));
 }
 
-// ── Media link detection ───────────────────────────────────────────────────────
+// ── Media disambiguation helpers ──────────────────────────────────────────────
 
 const MEDIA_DISAMBIG_LOWER = [
   "(film)", "(movie)", "(tv series)", "(anime)", "(series)", "(miniseries)",
   "(animated series)", "(animation)", "(tv film)", "(tv movie)", "(web series)",
   "(short film)", "(television film)", "(television series)",
 ];
-
 function isLikelyMediaLink(title: string): boolean {
   const lower = title.toLowerCase();
   return MEDIA_DISAMBIG_LOWER.some(d => lower.includes(d));
 }
 
-// Skip Wikipedia articles that are clearly not media titles
 const SKIP_PREFIXES = [
   "List of", "Wikipedia:", "Template:", "Category:", "File:", "Help:", "Portal:",
   "Talk:", "User:", "WP:",
 ];
 function shouldSkipLink(title: string): boolean {
   return SKIP_PREFIXES.some(p => title.startsWith(p));
+}
+
+// ── Wikipedia search helper ───────────────────────────────────────────────────
+
+async function wikiSearch(
+  query: string,
+  limit = 8,
+): Promise<Array<{ title: string; snippet: string }>> {
+  const searchUrl = new URL(WIKI_API);
+  searchUrl.searchParams.set("action", "query");
+  searchUrl.searchParams.set("list", "search");
+  searchUrl.searchParams.set("srsearch", query);
+  searchUrl.searchParams.set("srnamespace", "0");
+  searchUrl.searchParams.set("srlimit", String(limit));
+  searchUrl.searchParams.set("srinfo", "");
+  searchUrl.searchParams.set("srprop", "snippet");
+  searchUrl.searchParams.set("format", "json");
+
+  const resp = await fetch(searchUrl.toString(), {
+    signal: AbortSignal.timeout(7_000),
+    headers: { "User-Agent": WIKI_UA },
+  }).catch(() => null);
+  if (!resp?.ok) return [];
+  const data = await resp.json() as {
+    query?: { search?: Array<{ title: string; snippet: string }> };
+  };
+  return data.query?.search ?? [];
+}
+
+// ── Name-to-title matching ────────────────────────────────────────────────────
+
+/**
+ * STRICT matching — used for name-only searches.
+ * Single-word names require the title to also be single-word (prevents "Barry" → "Barry Keoghan").
+ * Multi-word names: all content words must appear in the title, and the title must not have
+ * extra "category" words (family, franchise, universe, etc.).
+ */
+function nameMatchesTitle(searchName: string, articleTitle: string): boolean {
+  const baseTitleRaw = articleTitle.split(" (")[0].toLowerCase().trim();
+  const nameL = searchName.toLowerCase().trim();
+
+  if (baseTitleRaw === nameL) return true;
+
+  const nameWords = nameL.split(/\s+/).filter(w => w.length > 1 && !STOP_WORDS.has(w));
+  const titleWords = baseTitleRaw.split(/\s+/).filter(w => w.length > 1 && !STOP_WORDS.has(w));
+
+  if (nameWords.length === 0) return baseTitleRaw === nameL;
+  if (nameWords.length === 1) return titleWords.length === 1 && titleWords[0] === nameWords[0];
+
+  const extraTitleWords = titleWords.filter(w => !nameWords.includes(w));
+  if (extraTitleWords.some(w => CATEGORY_WORDS.has(w))) return false;
+
+  return nameWords.every(w => titleWords.includes(w));
+}
+
+/**
+ * LENIENT matching — used for context-assisted searches (name + movie title).
+ * The article title just needs to START with the character name or contain all name words.
+ * e.g., charName="Ash", articleTitle="Ash Williams" → true
+ *       charName="Satoru Gojo", articleTitle="Gojo Satoru" → true
+ */
+function nameStartsTitle(charName: string, articleTitle: string): boolean {
+  const baseTitleRaw = articleTitle.split(" (")[0].toLowerCase().trim();
+  const nameL = charName.toLowerCase().trim();
+
+  if (baseTitleRaw === nameL) return true;
+  if (baseTitleRaw.startsWith(nameL + " ")) return true;
+
+  const nameWords = nameL.split(/\s+/).filter(w => w.length > 1 && !STOP_WORDS.has(w));
+  const titleWords = baseTitleRaw.split(/\s+/).filter(w => w.length > 1 && !STOP_WORDS.has(w));
+
+  if (nameWords.length === 0) return false;
+  return nameWords.every(w => titleWords.includes(w));
 }
 
 // ── Wikipedia summary API ──────────────────────────────────────────────────────
@@ -153,20 +194,19 @@ export async function getWikipediaSummary(pageTitle: string): Promise<{
   };
 }
 
-// ── Fetch bio in a given language via Wikipedia langlinks ─────────────────────
-// Supports any ISO language code ("en", "th", "ja", "ko", "fr", etc.)
+// ── Bio in a given language ────────────────────────────────────────────────────
+
 export async function getWikipediaBioForLang(
   pageTitle: string,
   lang: string,
 ): Promise<string | null> {
-  const normalizedLang = lang.split("-")[0].toLowerCase(); // "th-TH" → "th"
+  const normalizedLang = lang.split("-")[0].toLowerCase();
 
   if (normalizedLang === "en") {
     const s = await getWikipediaSummary(pageTitle);
     return s?.extract?.slice(0, 500) ?? null;
   }
   try {
-    // Get langlinks from the English page to find the target language article
     const langlinksResp = await fetch(
       `${WIKI_REST}/page/langlinks/${encodeURIComponent(pageTitle.replace(/ /g, "_"))}`,
       { signal: AbortSignal.timeout(6_000), headers: { "User-Agent": WIKI_UA } }
@@ -194,7 +234,41 @@ export async function getWikipediaBioForLang(
   }
 }
 
-// ── Single character search ────────────────────────────────────────────────────
+// ── Context-aware Wikipedia search ────────────────────────────────────────────
+// Searches with "charName movieTitle" context, validates result against charName (lenient)
+
+async function searchWikipediaWithContext(
+  charName: string,
+  contextQuery: string,
+): Promise<{
+  pageTitle: string;
+  label: string;
+  imageUrl: string | null;
+  extract: string;
+} | null> {
+  const results = await wikiSearch(contextQuery, 6).catch(() => []);
+
+  for (const result of results) {
+    if (shouldSkipLink(result.title)) continue;
+    // Validate: article title must loosely contain the character name
+    if (!nameStartsTitle(charName, result.title)) continue;
+
+    const summary = await getWikipediaSummary(result.title).catch(() => null);
+    if (!summary?.extract) continue;
+    // Reject if signals a real person
+    if (NON_FICTIONAL_SIGNALS.some(kw => summary.extract.toLowerCase().includes(kw))) continue;
+
+    return {
+      pageTitle: result.title,
+      label: result.title.replace(/_/g, " ").split(" (")[0],
+      imageUrl: summary.imageUrl,
+      extract: summary.extract,
+    };
+  }
+  return null;
+}
+
+// ── Standard single-character search ──────────────────────────────────────────
 
 async function searchWikipediaVariant(name: string): Promise<{
   pageTitle: string;
@@ -202,36 +276,16 @@ async function searchWikipediaVariant(name: string): Promise<{
   imageUrl: string | null;
   extract: string;
 } | null> {
-  const searchUrl = new URL(WIKI_API);
-  searchUrl.searchParams.set("action", "query");
-  searchUrl.searchParams.set("list", "search");
-  searchUrl.searchParams.set("srsearch", name);
-  searchUrl.searchParams.set("srnamespace", "0");
-  searchUrl.searchParams.set("srlimit", "8");
-  searchUrl.searchParams.set("srinfo", "");
-  searchUrl.searchParams.set("srprop", "snippet");
-  searchUrl.searchParams.set("format", "json");
-
-  const resp = await fetch(searchUrl.toString(), {
-    signal: AbortSignal.timeout(7_000),
-    headers: { "User-Agent": WIKI_UA },
-  }).catch(() => null);
-  if (!resp?.ok) return null;
-
-  const data = await resp.json() as {
-    query?: { search?: Array<{ title: string; snippet: string }> };
-  };
-  const results = data.query?.search ?? [];
+  const results = await wikiSearch(name, 8).catch(() => []);
   if (results.length === 0) return null;
 
   // Pass 1: Strict name match + fictional keywords
   for (const result of results) {
     if (shouldSkipLink(result.title)) continue;
-    // Must closely match the searched name
     if (!nameMatchesTitle(name, result.title)) continue;
 
     const snippetFictional = isFictionalExtract(result.snippet);
-    const summary = await getWikipediaSummary(result.title);
+    const summary = await getWikipediaSummary(result.title).catch(() => null);
     if (!summary?.extract) continue;
     const extractFictional = isFictionalExtract(summary.extract);
     if (snippetFictional || extractFictional) {
@@ -244,18 +298,15 @@ async function searchWikipediaVariant(name: string): Promise<{
     }
   }
 
-  // Pass 2: Strict name match only (some real fictional characters lack keyword markers)
-  // Only apply if the match is very tight (exact base-title match).
+  // Pass 2: Exact base-title match (no keyword required, but no real-person signals)
   for (const result of results.slice(0, 3)) {
     if (shouldSkipLink(result.title)) continue;
     const base = result.title.split(" (")[0].toLowerCase();
     const nameLower = name.toLowerCase();
-    // Exact base title match required in this fallback pass
     if (base !== nameLower) continue;
 
-    const summary = await getWikipediaSummary(result.title);
+    const summary = await getWikipediaSummary(result.title).catch(() => null);
     if (!summary?.extract) continue;
-    // Reject if extract signals a real person
     if (NON_FICTIONAL_SIGNALS.some(kw => summary.extract.toLowerCase().includes(kw))) continue;
     return {
       pageTitle: result.title,
@@ -279,7 +330,40 @@ export type WikiCharacterMatch = {
 
 // ── Exported search functions ──────────────────────────────────────────────────
 
-export async function searchWikipediaCharacter(name: string): Promise<WikiCharacterMatch | null> {
+/**
+ * Search for a single fictional character on Wikipedia.
+ * When `movieTitle` is provided, tries context-assisted search first
+ * (e.g., "Ash Evil Dead") so generic names like "Ash" resolve to
+ * "Ash Williams" instead of "Ash (residue)".
+ */
+export async function searchWikipediaCharacter(
+  name: string,
+  movieTitle?: string,
+): Promise<WikiCharacterMatch | null> {
+  // Strategy 1: Context-assisted search (when movie title is available)
+  if (movieTitle) {
+    const cleanMovie = movieTitle.replace(/\s*\(\d{4}.*\)/, "").trim();
+    const movieShort = cleanMovie.split(/\s+/).slice(0, 4).join(" ");
+
+    const contextQueries = [
+      `${name} ${movieShort}`,
+      `${name} character ${movieShort}`,
+    ];
+
+    for (const query of contextQueries) {
+      const hit = await searchWikipediaWithContext(name, query).catch(() => null);
+      if (hit) {
+        return {
+          charId: hit.pageTitle.replace(/ /g, "_"),
+          label: hit.label,
+          description: hit.extract.slice(0, 350),
+          imageUrl: hit.imageUrl,
+        };
+      }
+    }
+  }
+
+  // Strategy 2: Name variants with strict matching
   const variants = getNameVariants(name);
   for (const variant of variants) {
     const hit = await searchWikipediaVariant(variant).catch(() => null);
@@ -292,13 +376,17 @@ export async function searchWikipediaCharacter(name: string): Promise<WikiCharac
       };
     }
   }
+
   return null;
 }
 
-export async function batchSearchWikipediaCharacters(names: string[]): Promise<WikiCharacterMatch[]> {
+export async function batchSearchWikipediaCharacters(
+  names: string[],
+  movieTitle?: string,
+): Promise<WikiCharacterMatch[]> {
   const limited = names.slice(0, 15).filter(n => n?.trim().length > 1);
   const results = await Promise.all(
-    limited.map(name => searchWikipediaCharacter(name).catch(() => null))
+    limited.map(name => searchWikipediaCharacter(name, movieTitle).catch(() => null))
   );
   const seen = new Set<string>();
   return results
@@ -340,7 +428,7 @@ export async function getCharacterMediaLinks(pageTitle: string): Promise<string[
   return [...mediaLinks, ...otherLinks].slice(0, 70);
 }
 
-// ── Awards via Wikipedia API ──────────────────────────────────────────────────
+// ── Awards (stub) ─────────────────────────────────────────────────────────────
 
 export type WikiAwardEntry = { year: string; award_category: string };
 export type WikiAwardResult = {

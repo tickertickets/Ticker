@@ -472,19 +472,19 @@ export default function MovieDetail() {
   const collectionMovieCount = (collectionData?.movies ?? []).filter(m => !m.isSpinoff).length;
   const isFranchise = isTvShowEarly || collectionMovieCount > 1;
 
-  type CharacterMatch = { name: string; wikidataId: string; label: string; description: string; imageUrl: string | null };
+  type CharacterMatch = { name: string; wikidataId: string; label: string; description: string; imageUrl: string | null; alias?: string | null };
   const characterNames = (creditsData?.cast ?? [])
     .map(c => c.character)
     .filter((c): c is string => !!c && c.trim().length > 1)
     .slice(0, 15);
   const { data: characterData } = useQuery<{ results: CharacterMatch[] }>({
-    queryKey: ["/api/character/batch-search", characterNames.join(",")],
+    queryKey: ["/api/character/batch-search", characterNames.join(","), movie?.title ?? ""],
     queryFn: async () => {
       if (characterNames.length === 0) return { results: [] };
       const res = await fetch("/api/character/batch-search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ characters: characterNames }),
+        body: JSON.stringify({ characters: characterNames, movieTitle: movie?.title ?? "" }),
       });
       if (!res.ok) return { results: [] };
       return res.json();
@@ -921,8 +921,11 @@ export default function MovieDetail() {
                       : <div className="w-full h-full flex items-center justify-center bg-zinc-900"><User className="w-4 h-4 text-muted-foreground" /></div>
                     }
                   </div>
-                  <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
+                  <div className="p-1.5 pb-2 h-[52px] overflow-hidden">
                     <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{ch.label}</p>
+                    {ch.alias && ch.alias !== ch.label && (
+                      <p className="text-[8px] text-muted-foreground mt-0.5 truncate">{ch.alias}</p>
+                    )}
                   </div>
                 </div>
               </Link>
@@ -947,12 +950,77 @@ export default function MovieDetail() {
         </div>
       )}
 
-      {/* ── Details — single collapsible (cast, directors, awards, episodes, collection, spinoffs) ── */}
-      {((creditsData?.cast ?? []).length > 0 || (creditsData?.directors ?? []).length > 0 || (awardsData?.results ?? []).length > 0 || (isTvShow && (seasonsData?.seasons ?? []).length > 0) || ((collectionData?.movies ?? []).length > 0)) && (
+      {/* ── Episode ratings — standalone (TV shows only, before Details) ── */}
+      {isTvShow && seasonsData && seasonsData.seasons.length > 0 && (
+        <div ref={episodeRatingsRef} className="px-5 pt-4">
+          <div className="rounded-2xl border border-border overflow-hidden">
+            <button
+              onClick={() => setExpandedSeason(v => v === null ? seasonsData.seasons[0]?.seasonNumber ?? null : null)}
+              className="w-full flex items-center justify-between px-4 py-3 bg-secondary hover:bg-muted/60 transition-colors text-sm font-semibold text-foreground"
+            >
+              <div className="flex items-center gap-2">
+                <Tv className="w-4 h-4 text-muted-foreground -translate-y-0.5" />
+                <span className="leading-none font-normal">{t.episodeRatings}</span>
+              </div>
+              {expandedSeason !== null
+                ? <ChevronUp className="w-4 h-4 text-muted-foreground" />
+                : <ChevronDown className="w-4 h-4 text-muted-foreground" />
+              }
+            </button>
+            {expandedSeason !== null && seasonsData.seasons.length > 0 && (
+              <div className="space-y-0 divide-y divide-border">
+                {seasonsData.seasons.map((season) => (
+                  <div key={season.seasonNumber}>
+                    <button
+                      onClick={() => setExpandedSeason(v => v === season.seasonNumber ? null : season.seasonNumber)}
+                      className="w-full flex items-center justify-between px-4 py-3 bg-background hover:bg-muted/40 transition-colors text-sm font-semibold text-foreground"
+                    >
+                      <span>{season.name}</span>
+                      {expandedSeason === season.seasonNumber
+                        ? <ChevronUp className="w-4 h-4 text-muted-foreground" />
+                        : <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                      }
+                    </button>
+                    {expandedSeason === season.seasonNumber && (
+                      <div className="space-y-0 divide-y divide-border">
+                        {season.episodes.map((ep) => (
+                          <div key={ep.episodeNumber} className="py-2.5 px-3 bg-background space-y-0.5">
+                            <div className="flex items-start justify-between">
+                              <div className="flex items-start gap-2 min-w-0 flex-1">
+                                <span className="font-mono text-xs text-muted-foreground shrink-0 pt-0.5">
+                                  E{String(ep.episodeNumber).padStart(2, "0")}
+                                </span>
+                                <span className="text-xs font-semibold text-foreground leading-tight">{ep.name}</span>
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0 ml-3">
+                                {ep.rating !== null && ep.rating > 0 ? (
+                                  <>
+                                    <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                                    <span className="text-xs font-semibold text-foreground">{ep.rating.toFixed(1)}</span>
+                                  </>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">—</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Details — single collapsible (cast, directors, awards, collection, spinoffs) ── */}
+      {((creditsData?.cast ?? []).length > 0 || (creditsData?.directors ?? []).length > 0 || (awardsData?.results ?? []).length > 0 || ((collectionData?.movies ?? []).length > 0)) && (
         <div className="px-5 pt-4">
           <button
             className="w-full flex items-center gap-2 text-left"
-            onClick={(e) => { const b = e.currentTarget; setShowDetails(v => { const next = !v; if (next) { setShowCollection(true); setShowSpinoffs(true); setTimeout(() => { const c = scrollRef.current; if (c) { const r = b.getBoundingClientRect(), cr = c.getBoundingClientRect(); c.scrollTo({ top: Math.max(0, c.scrollTop + r.top - cr.top), behavior: "smooth" }); } }, 160); } return next; }); }}
+            onClick={(e) => { const b = e.currentTarget; setShowDetails(v => { const next = !v; if (next) { setShowCollection(true); setShowSpinoffs(true); setTimeout(() => { const c = scrollRef.current; if (c) { const r = b.getBoundingClientRect(), cr = c.getBoundingClientRect(); c.scrollTo({ top: Math.max(0, c.scrollTop + r.top - cr.top - 8), behavior: "smooth" }); } }, 280); } return next; }); }}
           >
             <Film className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
             <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wide flex-1">{lang === "th" ? "รายละเอียด" : "Details"}</h3>
@@ -1053,71 +1121,6 @@ export default function MovieDetail() {
                   </>
                 );
               })()}
-
-              {/* Episode ratings (TV shows) */}
-              {isTvShow && seasonsData && seasonsData.seasons.length > 0 && (
-                <div ref={episodeRatingsRef} className="mt-3">
-                  <div className="rounded-2xl border border-border overflow-hidden">
-                    <button
-                      onClick={() => setExpandedSeason(v => v === null ? seasonsData.seasons[0]?.seasonNumber ?? null : null)}
-                      className="w-full flex items-center justify-between px-4 py-3 bg-secondary hover:bg-muted/60 transition-colors text-sm font-semibold text-foreground"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Tv className="w-4 h-4 text-muted-foreground -translate-y-0.5" />
-                        <span className="leading-none font-normal">{t.episodeRatings}</span>
-                      </div>
-                      {expandedSeason !== null
-                        ? <ChevronUp className="w-4 h-4 text-muted-foreground" />
-                        : <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                      }
-                    </button>
-                    {expandedSeason !== null && seasonsData.seasons.length > 0 && (
-                      <div className="space-y-0 divide-y divide-border">
-                        {seasonsData.seasons.map((season) => (
-                          <div key={season.seasonNumber}>
-                            <button
-                              onClick={() => setExpandedSeason(v => v === season.seasonNumber ? null : season.seasonNumber)}
-                              className="w-full flex items-center justify-between px-4 py-3 bg-background hover:bg-muted/40 transition-colors text-sm font-semibold text-foreground"
-                            >
-                              <span>{season.name}</span>
-                              {expandedSeason === season.seasonNumber
-                                ? <ChevronUp className="w-4 h-4 text-muted-foreground" />
-                                : <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                              }
-                            </button>
-                            {expandedSeason === season.seasonNumber && (
-                              <div className="space-y-0 divide-y divide-border">
-                                {season.episodes.map((ep) => (
-                                  <div key={ep.episodeNumber} className="py-2.5 px-3 bg-background space-y-0.5">
-                                    <div className="flex items-start justify-between">
-                                      <div className="flex items-start gap-2 min-w-0 flex-1">
-                                        <span className="font-mono text-xs text-muted-foreground shrink-0 pt-0.5">
-                                          E{String(ep.episodeNumber).padStart(2, "0")}
-                                        </span>
-                                        <span className="text-xs font-semibold text-foreground leading-tight">{ep.name}</span>
-                                      </div>
-                                      <div className="flex items-center gap-1 shrink-0 ml-3">
-                                        {ep.rating !== null && ep.rating > 0 ? (
-                                          <>
-                                            <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                                            <span className="text-xs font-semibold text-foreground">{ep.rating.toFixed(1)}</span>
-                                          </>
-                                        ) : (
-                                          <span className="text-xs text-muted-foreground">—</span>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
 
               {/* Awards */}
               {(awardsData?.results ?? []).length > 0 && (

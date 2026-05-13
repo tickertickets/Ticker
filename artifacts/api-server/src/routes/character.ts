@@ -10,7 +10,23 @@ import {
 
 const router = Router();
 
-// ── helpers ───────────────────────────────────────────────────────────────────
+// ── In-memory caches ──────────────────────────────────────────────────────────
+// Prevents redundant Wikipedia searches on repeat page loads.
+
+type CharResult = {
+  name: string;
+  wikidataId: string;
+  label: string;
+  description: string;
+  imageUrl: string | null;
+  alias: string | null;
+};
+
+const BY_MOVIE_CACHE = new Map<string, { results: CharResult[]; ts: number }>();
+const FILMOGRAPHY_CACHE = new Map<string, { filmography: FilmographyEntry[]; summary: { extract: string; imageUrl: string | null; canonicalTitle: string } | null; ts: number }>();
+const CACHE_TTL = 12 * 60 * 60 * 1000; // 12 hours
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function cleanTitleForSearch(title: string): string {
   return title
@@ -41,6 +57,31 @@ function isPornParody(title: string): boolean {
   return PORN_KEYWORDS.some(kw => lower.includes(kw));
 }
 
+/**
+ * Given a TMDB character string (e.g. "Bruce Wayne / Batman") and the Wikipedia
+ * article label (e.g. "Batman"), returns the "other" part(s) of the TMDB string
+ * that are NOT already represented by the label. Returns null when no useful alias exists.
+ */
+function extractAlias(tmdbCharacter: string, wikiLabel: string): string | null {
+  // Strip trailing role hints like "(voice)", "(cameo)", "(uncredited)"
+  const cleaned = tmdbCharacter.replace(/\s*\([^)]{0,30}\)\s*$/gi, "").trim();
+  const parts = cleaned.split(/\s*\/\s*/).map(p => p.trim()).filter(p => p.length > 1);
+  if (parts.length <= 1) {
+    // Single name — if it's already contained in the wiki label or vice versa, no alias needed
+    const p = (parts[0] ?? "").toLowerCase();
+    const l = wikiLabel.toLowerCase();
+    if (p === l || l.includes(p) || p.includes(l)) return null;
+    return parts[0] ?? null;
+  }
+  // Multiple parts — return any that aren't already captured by the label
+  const labelLower = wikiLabel.toLowerCase();
+  const aliases = parts.filter(p => {
+    const pL = p.toLowerCase();
+    return pL !== labelLower && !labelLower.includes(pL) && !pL.includes(labelLower);
+  });
+  return aliases[0] ?? null;
+}
+
 type FilmographyEntry = {
   title: string;
   year: string | null;
@@ -55,7 +96,6 @@ type FilmographyEntry = {
 };
 
 // ── Strategy 1: TMDB keyword search ──────────────────────────────────────────
-// Best for franchise characters (Iron Man, Batman, Gojo Satoru…)
 
 async function getFilmographyByKeyword(characterName: string): Promise<FilmographyEntry[]> {
   try {
@@ -64,13 +104,11 @@ async function getFilmographyByKeyword(characterName: string): Promise<Filmograp
     }>("/search/keyword", { query: characterName, page: "1" });
 
     const kwResults = kwData.results ?? [];
-    // Find exact match only (strict) to avoid false positives
     const nameLower = characterName.toLowerCase();
     const exact = kwResults.find(k => k.name.toLowerCase() === nameLower);
-    const keyword = exact;
-    if (!keyword) return [];
+    if (!exact) return [];
 
-    const kwId = String(keyword.id);
+    const kwId = String(exact.id);
     const [moviesResp, tvResp] = await Promise.allSettled([
       tmdbFetch<{
         results?: Array<{
@@ -110,7 +148,7 @@ async function getFilmographyByKeyword(characterName: string): Promise<Filmograp
         out.push({
           title: r.title,
           year: r.release_date?.slice(0, 4) ?? null,
-          imdbId: `tmdb:${r.id}`, // movies route accepts tmdb:<id> format
+          imdbId: `tmdb:${r.id}`,
           posterUrl: posterUrl(r.poster_path),
           tmdbRating: r.vote_average != null ? String(r.vote_average.toFixed(1)) : null,
           voteCount: r.vote_count ?? 0,
@@ -148,8 +186,7 @@ async function getFilmographyByKeyword(characterName: string): Promise<Filmograp
   }
 }
 
-// ── Strategy 2: Wikipedia article links → TMDB multi-search ──────────────────
-// Fallback for characters whose Wikipedia article links specific media titles
+// ── Strategy 2: Wikipedia article links → TMDB ───────────────────────────────
 
 async function enrichTitle(title: string): Promise<FilmographyEntry | null> {
   try {
@@ -161,33 +198,19 @@ async function enrichTitle(title: string): Promise<FilmographyEntry | null> {
 
     const searchData = await tmdbFetch<{
       results?: Array<{
-        id: number;
-        media_type?: string;
-        title?: string;
-        name?: string;
-        release_date?: string;
-        first_air_date?: string;
-        poster_path?: string | null;
-        vote_average?: number;
-        vote_count?: number;
-        genre_ids?: number[];
-        popularity?: number;
-        adult?: boolean;
+        id: number; media_type?: string; title?: string; name?: string;
+        release_date?: string; first_air_date?: string;
+        poster_path?: string | null; vote_average?: number;
+        vote_count?: number; genre_ids?: number[]; popularity?: number; adult?: boolean;
       }>;
-    }>("/search/multi", {
-      query: cleanTitle,
-      include_adult: "false",
-      page: "1",
-    });
+    }>("/search/multi", { query: cleanTitle, include_adult: "false", page: "1" });
 
     const nameLower = cleanTitle.toLowerCase();
     const candidates = (searchData.results ?? []).filter(r => {
       if (r.adult) return false;
       if (!r.poster_path) return false;
-      // Skip people results
       if (r.media_type === "person") return false;
       const rTitle = (r.title ?? r.name ?? "").toLowerCase();
-      // Exact or strong prefix/contains match
       return (
         rTitle === nameLower ||
         rTitle.startsWith(nameLower) ||
@@ -203,7 +226,6 @@ async function enrichTitle(title: string): Promise<FilmographyEntry | null> {
 
     const isMovie = r.media_type === "movie" || (r.media_type !== "tv" && !!r.title && !isTV);
 
-    // Get IMDB / tmdb_tv ID
     let linkId: string | null = null;
     try {
       const ext = await tmdbFetch<{ imdb_id?: string | null }>(
@@ -236,7 +258,6 @@ async function getFilmographyByWikiLinks(pageTitle: string): Promise<Filmography
     const rawLinks = await getCharacterMediaLinks(pageTitle);
     if (rawLinks.length === 0) return [];
 
-    // Prefer media-disambiguated links first (already sorted by getCharacterMediaLinks)
     const toSearch = rawLinks.slice(0, 30);
     const CONCURRENCY = 4;
     const results: FilmographyEntry[] = [];
@@ -255,8 +276,6 @@ async function getFilmographyByWikiLinks(pageTitle: string): Promise<Filmography
   }
 }
 
-// ── Combined filmography builder ──────────────────────────────────────────────
-
 async function buildFilmography(
   characterName: string,
   pageTitle: string,
@@ -266,7 +285,6 @@ async function buildFilmography(
     getFilmographyByWikiLinks(pageTitle),
   ]);
 
-  // Merge: keyword results first (more accurate), then wiki links
   const seen = new Set<string>();
   const merged: FilmographyEntry[] = [];
 
@@ -284,15 +302,49 @@ async function buildFilmography(
     .slice(0, 30);
 }
 
+// ── Fetch movie title from TMDB for disambiguation ────────────────────────────
+
+async function fetchMovieTitle(tmdbId: string): Promise<string> {
+  try {
+    if (tmdbId.startsWith("tmdb_tv:")) {
+      const id = tmdbId.replace("tmdb_tv:", "");
+      const d = await tmdbFetch<{ name?: string }>(`/tv/${id}`);
+      return d.name ?? "";
+    }
+    if (/^\d+$/.test(tmdbId)) {
+      const d = await tmdbFetch<{ title?: string }>(`/movie/${tmdbId}`);
+      return d.title ?? "";
+    }
+    if (/^tt\d+$/.test(tmdbId)) {
+      const find = await tmdbFetch<{
+        movie_results?: Array<{ id: number; title?: string }>;
+        tv_results?: Array<{ id: number; name?: string }>;
+      }>(`/find/${encodeURIComponent(tmdbId)}`, { external_source: "imdb_id" });
+      return (
+        find.movie_results?.[0]?.title ??
+        find.tv_results?.[0]?.name ??
+        ""
+      );
+    }
+  } catch {}
+  return "";
+}
+
 // ── POST /character/batch-search ──────────────────────────────────────────────
 router.post(
   "/batch-search",
   asyncHandler(async (req, res) => {
-    const { characters } = req.body as { characters?: string[] };
+    const { characters, movieTitle } = req.body as {
+      characters?: string[];
+      movieTitle?: string;
+    };
     if (!Array.isArray(characters) || characters.length === 0) {
       return res.json({ results: [] });
     }
-    const results = await batchSearchWikipediaCharacters(characters).catch(() => []);
+    const results = await batchSearchWikipediaCharacters(
+      characters,
+      movieTitle ?? undefined,
+    ).catch(() => []);
     res.json({
       results: results.map(r => ({
         name: r.label,
@@ -300,36 +352,59 @@ router.post(
         label: r.label,
         description: r.description,
         imageUrl: r.imageUrl,
+        alias: null,
       })),
     });
   }),
 );
 
 // ── GET /character/by-movie/:tmdbId ───────────────────────────────────────────
-// :tmdbId can be a numeric TMDB movie ID, "tmdb_tv:123", or "tt…" IMDB ID
 router.get(
   "/by-movie/:tmdbId",
   asyncHandler(async (req, res) => {
     const { tmdbId } = req.params as { tmdbId: string };
 
-    let characterNames: string[] = [];
+    // Serve from cache if fresh
+    const cached = BY_MOVIE_CACHE.get(tmdbId);
+    if (cached && Date.now() - cached.ts < CACHE_TTL) {
+      return res.json({ results: cached.results });
+    }
+
+    // Fetch character names AND movie title concurrently
+    let characterEntries: Array<{ name: string; tmdbChar: string }> = [];
+    let movieTitle = "";
+
     try {
       if (tmdbId.startsWith("tmdb_tv:")) {
         const tvId = tmdbId.replace("tmdb_tv:", "");
-        const credits = await tmdbFetch<{
-          cast?: Array<{ character?: string; roles?: Array<{ character?: string }> }>;
-        }>(`/tv/${tvId}/aggregate_credits`).catch(() => ({ cast: [] }));
-        characterNames = (credits.cast ?? [])
-          .map(c => c.roles?.[0]?.character ?? c.character ?? "")
-          .filter(n => n.trim().length > 1)
+        const [credits, tvInfo] = await Promise.all([
+          tmdbFetch<{
+            cast?: Array<{ character?: string; roles?: Array<{ character?: string }> }>;
+          }>(`/tv/${tvId}/aggregate_credits`).catch(() => ({ cast: [] })),
+          tmdbFetch<{ name?: string }>(`/tv/${tvId}`).catch(() => ({})),
+        ]);
+        movieTitle = tvInfo.name ?? "";
+        characterEntries = (credits.cast ?? [])
+          .map(c => {
+            const raw = c.roles?.[0]?.character ?? c.character ?? "";
+            return { name: raw.split("/")[0].trim(), tmdbChar: raw };
+          })
+          .filter(e => e.name.length > 1)
           .slice(0, 15);
       } else if (/^\d+$/.test(tmdbId)) {
-        const credits = await tmdbFetch<{
-          cast?: Array<{ character?: string }>;
-        }>(`/movie/${tmdbId}/credits`).catch(() => ({ cast: [] }));
-        characterNames = (credits.cast ?? [])
-          .map(c => c.character ?? "")
-          .filter(n => n.trim().length > 1)
+        const [credits, movieInfo] = await Promise.all([
+          tmdbFetch<{ cast?: Array<{ character?: string }> }>(
+            `/movie/${tmdbId}/credits`
+          ).catch(() => ({ cast: [] })),
+          tmdbFetch<{ title?: string }>(`/movie/${tmdbId}`).catch(() => ({})),
+        ]);
+        movieTitle = movieInfo.title ?? "";
+        characterEntries = (credits.cast ?? [])
+          .map(c => {
+            const raw = c.character ?? "";
+            return { name: raw.split("/")[0].trim(), tmdbChar: raw };
+          })
+          .filter(e => e.name.length > 1)
           .slice(0, 15);
       } else if (/^tt\d+$/.test(tmdbId)) {
         const findData = await tmdbFetch<{
@@ -338,45 +413,82 @@ router.get(
         }>(`/find/${encodeURIComponent(tmdbId)}`, { external_source: "imdb_id" }).catch(() => ({}));
         const movieHit = findData.movie_results?.[0];
         const tvHit = findData.tv_results?.[0];
+
         if (movieHit) {
-          const credits = await tmdbFetch<{ cast?: Array<{ character?: string }> }>(
-            `/movie/${movieHit.id}/credits`
-          ).catch(() => ({ cast: [] }));
-          characterNames = (credits.cast ?? [])
-            .map(c => c.character ?? "")
-            .filter(n => n.trim().length > 1)
+          const [credits, movieInfo] = await Promise.all([
+            tmdbFetch<{ cast?: Array<{ character?: string }> }>(
+              `/movie/${movieHit.id}/credits`
+            ).catch(() => ({ cast: [] })),
+            tmdbFetch<{ title?: string }>(`/movie/${movieHit.id}`).catch(() => ({})),
+          ]);
+          movieTitle = movieInfo.title ?? "";
+          characterEntries = (credits.cast ?? [])
+            .map(c => {
+              const raw = c.character ?? "";
+              return { name: raw.split("/")[0].trim(), tmdbChar: raw };
+            })
+            .filter(e => e.name.length > 1)
             .slice(0, 15);
         } else if (tvHit) {
-          const credits = await tmdbFetch<{
-            cast?: Array<{ character?: string; roles?: Array<{ character?: string }> }>;
-          }>(`/tv/${tvHit.id}/aggregate_credits`).catch(() => ({ cast: [] }));
-          characterNames = (credits.cast ?? [])
-            .map(c => c.roles?.[0]?.character ?? c.character ?? "")
-            .filter(n => n.trim().length > 1)
+          const [credits, tvInfo] = await Promise.all([
+            tmdbFetch<{
+              cast?: Array<{ character?: string; roles?: Array<{ character?: string }> }>;
+            }>(`/tv/${tvHit.id}/aggregate_credits`).catch(() => ({ cast: [] })),
+            tmdbFetch<{ name?: string }>(`/tv/${tvHit.id}`).catch(() => ({})),
+          ]);
+          movieTitle = tvInfo.name ?? "";
+          characterEntries = (credits.cast ?? [])
+            .map(c => {
+              const raw = c.roles?.[0]?.character ?? c.character ?? "";
+              return { name: raw.split("/")[0].trim(), tmdbChar: raw };
+            })
+            .filter(e => e.name.length > 1)
             .slice(0, 15);
         }
       }
     } catch {
-      // ignore, return empty
+      // ignore
     }
 
-    if (characterNames.length === 0) return res.json({ results: [] });
+    if (characterEntries.length === 0) {
+      const empty: CharResult[] = [];
+      BY_MOVIE_CACHE.set(tmdbId, { results: empty, ts: Date.now() });
+      return res.json({ results: empty });
+    }
 
-    const wikiResults = await batchSearchWikipediaCharacters(characterNames).catch(() => []);
-    res.json({
-      results: wikiResults.map(r => ({
+    // Map from cleaned name → original TMDB character string (for alias)
+    const tmdbCharMap = new Map(characterEntries.map(e => [e.name, e.tmdbChar]));
+    const charNames = characterEntries.map(e => e.name);
+
+    const wikiResults = await batchSearchWikipediaCharacters(charNames, movieTitle).catch(() => []);
+
+    const results: CharResult[] = wikiResults.map(r => {
+      // Find which TMDB character string produced this result
+      // (match by searching for the character name or its variants)
+      const matchedTmdbChar = charNames.find(cn => {
+        const cnL = cn.toLowerCase();
+        const labelL = r.label.toLowerCase();
+        return labelL.includes(cnL) || cnL.includes(labelL) || labelL === cnL;
+      });
+      const tmdbChar = matchedTmdbChar ? (tmdbCharMap.get(matchedTmdbChar) ?? "") : "";
+      const alias = tmdbChar ? extractAlias(tmdbChar, r.label) : null;
+
+      return {
         name: r.label,
         wikidataId: r.charId,
         label: r.label,
         description: r.description,
         imageUrl: r.imageUrl,
-      })),
+        alias,
+      };
     });
+
+    BY_MOVIE_CACHE.set(tmdbId, { results, ts: Date.now() });
+    res.json({ results });
   }),
 );
 
 // ── GET /character/:charId ────────────────────────────────────────────────────
-// charId = Wikipedia page title (underscored), e.g. "Iron_Man", "Gojo_Satoru"
 router.get(
   "/:charId",
   asyncHandler(async (req, res) => {
@@ -387,28 +499,37 @@ router.get(
 
     const pageTitle = decodeURIComponent(charId).replace(/_/g, " ");
     const characterName = pageTitle.split(" (")[0];
-    // Accept any ISO language code; normalize to base code (e.g. "th-TH" → "th")
     const rawLang = (req.query.lang as string) ?? "en";
     const lang = rawLang.split("-")[0].toLowerCase() || "en";
 
-    // Wikipedia image + bio (fast — REST summary, follows redirects)
-    const summary = await getWikipediaSummary(pageTitle).catch(() => null);
+    // Serve filmography + summary from cache if available, then layer bio on top
+    const filmCached = FILMOGRAPHY_CACHE.get(charId);
+    const now = Date.now();
+    let summary: { extract: string; imageUrl: string | null; canonicalTitle: string } | null = null;
+    let filmography: FilmographyEntry[] = [];
+
+    if (filmCached && now - filmCached.ts < CACHE_TTL) {
+      summary = filmCached.summary;
+      filmography = filmCached.filmography;
+    } else {
+      summary = await getWikipediaSummary(pageTitle).catch(() => null);
+      if (!summary) {
+        return res.status(404).json({ error: "Character not found" });
+      }
+      filmography = await buildFilmography(characterName, summary.canonicalTitle).catch(() => []);
+      FILMOGRAPHY_CACHE.set(charId, { filmography, summary, ts: now });
+    }
+
     if (!summary) {
       return res.status(404).json({ error: "Character not found" });
     }
 
-    // Use canonical title (post-redirect) for parse API — prevents empty link sets
-    const canonicalTitle = summary.canonicalTitle;
+    // Fetch bio in requested language (fast, parallel-safe)
+    const langBio = lang !== "en"
+      ? await getWikipediaBioForLang(summary.canonicalTitle, lang).catch(() => null)
+      : null;
 
-    // Fetch bio in requested language; filmography is always EN-based
-    const [filmography, langBio] = await Promise.all([
-      buildFilmography(characterName, canonicalTitle).catch(() => []),
-      lang === "th"
-        ? getWikipediaBioForLang(canonicalTitle, "th").catch(() => null)
-        : Promise.resolve(null),
-    ]);
-
-    const description = (lang === "th" && langBio)
+    const description = (lang !== "en" && langBio)
       ? langBio
       : summary.extract.slice(0, 500);
 
