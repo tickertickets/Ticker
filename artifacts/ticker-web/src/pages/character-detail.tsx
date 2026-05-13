@@ -81,12 +81,22 @@ export default function CharacterDetail() {
   const { data, isLoading, isError } = useQuery<CharacterData>({
     queryKey: ["/api/character", wikidataId],
     queryFn: async () => {
-      const res = await fetch(`/api/character/${encodeURIComponent(wikidataId)}`);
-      if (!res.ok) throw new Error("Character not found");
-      return res.json();
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 20_000);
+      try {
+        const res = await fetch(`/api/character/${encodeURIComponent(wikidataId)}`, {
+          signal: controller.signal,
+        });
+        if (!res.ok) throw new Error("Character not found");
+        return res.json() as Promise<CharacterData>;
+      } finally {
+        clearTimeout(timeout);
+      }
     },
     enabled: !!wikidataId,
     staleTime: 30 * 60 * 1000,
+    retry: 1,
+    retryDelay: 1000,
   });
 
   const notFound = isError && !isLoading;

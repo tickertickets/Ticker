@@ -460,27 +460,26 @@ export default function MovieDetail() {
     enabled: characterNames.length > 0,
     staleTime: 60 * 60 * 1000,
   });
-  // Secondary: fetch characters directly from Wikidata via P674 using IMDB ID
-  const imdbMovieId = movie?.imdbId ?? (movieId.startsWith("tt") ? movieId : null);
+  // Secondary: fetch characters via TMDB ID → Wikipedia (supports movies & TV series)
   const { data: movieCharData } = useQuery<{ results: CharacterMatch[] }>({
-    queryKey: ["/api/character/by-movie", imdbMovieId],
+    queryKey: ["/api/character/by-movie", movieId],
     queryFn: async () => {
-      const res = await fetch(`/api/character/by-movie/${encodeURIComponent(imdbMovieId!)}`);
+      const res = await fetch(`/api/character/by-movie/${encodeURIComponent(movieId)}`);
       if (!res.ok) return { results: [] };
       return res.json();
     },
-    enabled: !!imdbMovieId,
+    enabled: !!movieId && characterNames.length === 0,
     staleTime: 60 * 60 * 1000,
   });
-  // Merge both sources, deduplicating by wikidataId; Wikidata-direct results first
+  // Merge both sources, deduplicating by wikidataId
   const allCharacters = useMemo<CharacterMatch[]>(() => {
     const seen = new Set<string>();
     const merged: CharacterMatch[] = [];
-    for (const ch of [...(movieCharData?.results ?? []), ...(characterData?.results ?? [])]) {
+    for (const ch of [...(characterData?.results ?? []), ...(movieCharData?.results ?? [])]) {
       if (!seen.has(ch.wikidataId)) { seen.add(ch.wikidataId); merged.push(ch); }
     }
     return merged;
-  }, [movieCharData, characterData]);
+  }, [characterData, movieCharData]);
 
   const isTvShow = movie?.mediaType === "tv" || movieId.startsWith("tmdb_tv:");
   const { data: seasonsData } = useQuery<{

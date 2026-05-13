@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { asyncHandler } from "../middlewares/error-handler";
 import { tmdbFetch, posterUrl } from "../lib/tmdb-client";
-import { queryAwardsByTmdbPersonId } from "../lib/wikidata";
+import { queryAwardsByTmdbPersonId } from "../lib/wikipedia";
 import { db } from "@workspace/db";
 import { personBookmarksTable } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
