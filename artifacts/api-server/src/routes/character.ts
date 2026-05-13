@@ -387,7 +387,9 @@ router.get(
 
     const pageTitle = decodeURIComponent(charId).replace(/_/g, " ");
     const characterName = pageTitle.split(" (")[0];
-    const lang = (req.query.lang as string) === "th" ? "th" : "en";
+    // Accept any ISO language code; normalize to base code (e.g. "th-TH" → "th")
+    const rawLang = (req.query.lang as string) ?? "en";
+    const lang = rawLang.split("-")[0].toLowerCase() || "en";
 
     // Wikipedia image + bio (fast — REST summary, follows redirects)
     const summary = await getWikipediaSummary(pageTitle).catch(() => null);

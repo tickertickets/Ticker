@@ -1,7 +1,7 @@
 import { useRoute, Link, useLocation } from "wouter";
 import { navBack } from "@/lib/nav-back";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { ChevronLeft, Film, User, Loader2 } from "lucide-react";
 import { useLang, displayYear } from "@/lib/i18n";
 import { computeCardTier, computeEffectTags, type ScoreInput } from "@/lib/ranks";
@@ -75,9 +75,17 @@ export default function CharacterDetail() {
   const [, navigate] = useLocation();
   const wikidataId = params?.wikidataId ?? "";
 
-  const srclang = new URLSearchParams(
-    typeof window !== "undefined" ? window.location.search : ""
-  ).get("srclang") ?? "";
+  const srclang = useMemo(() =>
+    new URLSearchParams(
+      typeof window !== "undefined" ? window.location.search : ""
+    ).get("srclang") ?? "",
+  []);
+
+  // Normalize srclang to a base language code (e.g. "th-TH" → "th")
+  const srcLangCode = useMemo(() => {
+    const base = srclang.split("-")[0].toLowerCase();
+    return base || "en";
+  }, [srclang]);
 
   const { data, isLoading, isError } = useQuery<CharacterData>({
     queryKey: ["/api/character", wikidataId],
@@ -100,19 +108,23 @@ export default function CharacterDetail() {
     retryDelay: 1000,
   });
 
-  const [bioLang, setBioLang] = useState<"en" | "th">("en");
+  // Bio language: defaults to the search language (srclang).
+  // EN/TH toggle is an additional option on top of the default.
+  const [bioLang, setBioLang] = useState<string>(() => srcLangCode);
 
-  const { data: thBioData, isLoading: thBioLoading } = useQuery<CharacterData>({
-    queryKey: ["/api/character", wikidataId, "lang", "th"],
+  // Fetch bio in the selected language when it's not English.
+  const { data: altBioData, isLoading: altBioLoading } = useQuery<CharacterData>({
+    queryKey: ["/api/character", wikidataId, "lang", bioLang],
     queryFn: async () => {
       const res = await fetch(
-        `/api/character/${encodeURIComponent(wikidataId)}?lang=th`,
+        `/api/character/${encodeURIComponent(wikidataId)}?lang=${encodeURIComponent(bioLang)}`,
         { signal: AbortSignal.timeout(15_000) }
       );
       if (!res.ok) throw new Error("Not found");
       return res.json() as Promise<CharacterData>;
     },
-    enabled: bioLang === "th" && !!wikidataId,
+    // Only fetch if we need a non-English bio
+    enabled: bioLang !== "en" && !!wikidataId,
     staleTime: 30 * 60 * 1000,
     retry: 1,
     retryDelay: 1000,
@@ -120,9 +132,13 @@ export default function CharacterDetail() {
 
   const notFound = isError && !isLoading;
   const bio = data?.description ?? "";
-  const displayBio = bioLang === "th"
-    ? (thBioLoading ? bio : (thBioData?.description ?? bio))
-    : bio;
+  const displayBio = bioLang === "en"
+    ? bio
+    : (altBioLoading ? bio : (altBioData?.description ?? bio));
+
+  // Toggle labels: always show EN and TH; if srcLangCode differs, also show it first
+  const hasOrigLang = srcLangCode !== "en" && srcLangCode !== "th";
+  const origLangLabel = srcLangCode.toUpperCase().slice(0, 3);
 
   return (
     <div className="absolute inset-0 bg-background flex flex-col overflow-hidden">
@@ -215,23 +231,62 @@ export default function CharacterDetail() {
               <div className="px-5 pt-4 pb-2">
                 <div className="flex items-start gap-3">
                   <p className="text-sm text-foreground/80 leading-relaxed flex-1">{displayBio}</p>
-                  <button
-                    type="button"
-                    onClick={() => setBioLang(v => v === "en" ? "th" : "en")}
-                    aria-label="Toggle bio language"
-                    className="relative inline-flex items-center select-none shrink-0 mt-0.5"
-                    style={{ background: "#e5e5ea", border: "1px solid #d1d1d6", borderRadius: 999, padding: 2, height: 26, width: 60 }}
+                  {/* Language toggle — shows EN + TH always; if srclang is a third
+                      language (e.g. JA, KO) it appears as the first pill */}
+                  <div
+                    className="relative inline-flex items-center select-none shrink-0 mt-0.5 gap-0"
+                    style={{ background: "#e5e5ea", border: "1px solid #d1d1d6", borderRadius: 999, padding: 2 }}
                   >
-                    <span aria-hidden className="absolute top-0.5 bottom-0.5 rounded-full transition-transform duration-200 ease-out" style={{ background: "#111", width: 28, left: 2, transform: bioLang === "en" ? "translateX(0)" : "translateX(28px)" }} />
-                    <span className="relative z-10 flex-1 text-center text-[10px] font-bold tracking-wide" style={{ color: bioLang === "en" ? "#fff" : "#888" }}>EN</span>
-                    <span className="relative z-10 flex-1 text-center text-[10px] font-bold tracking-wide" style={{ color: bioLang === "th" ? "#fff" : "#888" }}>TH</span>
-                  </button>
+                    {hasOrigLang && (
+                      <button
+                        type="button"
+                        onClick={() => setBioLang(srcLangCode)}
+                        aria-label={`Show bio in ${origLangLabel}`}
+                        className="relative z-10 text-[10px] font-bold tracking-wide px-2 py-0.5 rounded-full transition-colors"
+                        style={{
+                          background: bioLang === srcLangCode ? "#111" : "transparent",
+                          color: bioLang === srcLangCode ? "#fff" : "#888",
+                          minWidth: 28,
+                        }}
+                      >
+                        {origLangLabel}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setBioLang("en")}
+                      aria-label="Show bio in English"
+                      className="relative z-10 text-[10px] font-bold tracking-wide px-2 py-0.5 rounded-full transition-colors"
+                      style={{
+                        background: bioLang === "en" ? "#111" : "transparent",
+                        color: bioLang === "en" ? "#fff" : "#888",
+                        minWidth: 28,
+                      }}
+                    >
+                      EN
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBioLang("th")}
+                      aria-label="Show bio in Thai"
+                      className="relative z-10 text-[10px] font-bold tracking-wide px-2 py-0.5 rounded-full transition-colors"
+                      style={{
+                        background: bioLang === "th" ? "#111" : "transparent",
+                        color: bioLang === "th" ? "#fff" : "#888",
+                        minWidth: 28,
+                      }}
+                    >
+                      TH
+                    </button>
+                  </div>
                 </div>
-                {bioLang === "th" && thBioLoading && (
+                {bioLang !== "en" && altBioLoading && (
                   <p className="text-xs text-muted-foreground mt-2">{lang === "th" ? "กำลังโหลด…" : "Loading…"}</p>
                 )}
-                {bioLang === "th" && !thBioLoading && !thBioData?.description && (
-                  <p className="text-xs text-muted-foreground mt-2">{lang === "th" ? "ยังไม่มีข้อมูลภาษาไทย" : "Thai bio not available"}</p>
+                {bioLang !== "en" && !altBioLoading && !altBioData?.description && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    {lang === "th" ? "ยังไม่มีข้อมูลภาษานี้" : "Bio not available in this language"}
+                  </p>
                 )}
               </div>
             )}

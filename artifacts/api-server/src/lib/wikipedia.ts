@@ -32,6 +32,50 @@ export function getNameVariants(name: string): string[] {
   return [...new Set(results)].filter(r => r.length >= 2);
 }
 
+// ── Strict name-to-title matching ─────────────────────────────────────────────
+// Prevents wrong results like "Barry" → "Barry Keoghan" (actor),
+// or "Anakin Skywalker" → "Skywalker family".
+
+const STOP_WORDS = new Set([
+  "the", "a", "an", "of", "in", "on", "at", "to", "for", "and", "or", "de",
+]);
+
+// Words that signal the article is about a group/collection, not an individual character
+const CATEGORY_WORDS = new Set([
+  "family", "families", "franchise", "universe", "trilogy", "saga",
+  "series", "characters", "mythology", "collection", "dynasty", "clan",
+  "team", "squad", "group", "gang", "crew",
+]);
+
+function nameMatchesTitle(searchName: string, articleTitle: string): boolean {
+  // Strip disambiguation parentheses: "Batman (DC Comics)" → "batman"
+  const baseTitleRaw = articleTitle.split(" (")[0].toLowerCase().trim();
+  const nameL = searchName.toLowerCase().trim();
+
+  // Exact match (most reliable)
+  if (baseTitleRaw === nameL) return true;
+
+  const nameWords = nameL.split(/\s+/).filter(w => w.length > 1 && !STOP_WORDS.has(w));
+  const titleWords = baseTitleRaw.split(/\s+/).filter(w => w.length > 1 && !STOP_WORDS.has(w));
+
+  if (nameWords.length === 0) return baseTitleRaw === nameL;
+
+  // Single content-word names: title base must also be exactly one word matching it.
+  // This prevents "Barry" → "Barry Keoghan" (titleWords has 2 words).
+  if (nameWords.length === 1) {
+    return titleWords.length === 1 && titleWords[0] === nameWords[0];
+  }
+
+  // Multi-word names: reject articles whose title contains category words
+  // that are not in the searched name (e.g., "Skywalker family" for "Anakin Skywalker")
+  const extraTitleWords = titleWords.filter(w => !nameWords.includes(w));
+  if (extraTitleWords.some(w => CATEGORY_WORDS.has(w))) return false;
+
+  // All content words in the searched name must appear in the title
+  // (handles reversed East-Asian names: search "Satoru Gojo" → title "Gojo Satoru")
+  return nameWords.every(w => titleWords.includes(w));
+}
+
 // ── Fictional character detection ─────────────────────────────────────────────
 
 const FICTIONAL_KEYWORDS = [
@@ -44,8 +88,19 @@ const FICTIONAL_KEYWORDS = [
   "appeared in ", "first appeared in", "created by", "introduced in",
 ];
 
+// Keywords that strongly suggest the article is NOT a fictional character
+const NON_FICTIONAL_SIGNALS = [
+  "is an american actor", "is a british actor", "is an english actor",
+  "is a thai actor", "is a japanese actor", "is a korean actor",
+  "is an actor", "is an actress", "born in ", "american film",
+  "is a director", "is a filmmaker", "is a musician", "is a singer",
+  "is a politician", "is a comedian", "is a professional",
+];
+
 function isFictionalExtract(text: string): boolean {
   const lower = text.toLowerCase();
+  // If it strongly signals a real person, reject immediately
+  if (NON_FICTIONAL_SIGNALS.some(kw => lower.includes(kw))) return false;
   return FICTIONAL_KEYWORDS.some(kw => lower.includes(kw));
 }
 
@@ -94,18 +149,19 @@ export async function getWikipediaSummary(pageTitle: string): Promise<{
   return {
     extract: json.extract,
     imageUrl: json.originalimage?.source ?? json.thumbnail?.source ?? null,
-    // REST API resolves redirects; canonical title is the resolved page title
     canonicalTitle: json.title ?? pageTitle,
   };
 }
 
 // ── Fetch bio in a given language via Wikipedia langlinks ─────────────────────
-// Returns the extract in the target language, or null if not available.
+// Supports any ISO language code ("en", "th", "ja", "ko", "fr", etc.)
 export async function getWikipediaBioForLang(
   pageTitle: string,
-  lang: "en" | "th",
+  lang: string,
 ): Promise<string | null> {
-  if (lang === "en") {
+  const normalizedLang = lang.split("-")[0].toLowerCase(); // "th-TH" → "th"
+
+  if (normalizedLang === "en") {
     const s = await getWikipediaSummary(pageTitle);
     return s?.extract?.slice(0, 500) ?? null;
   }
@@ -120,11 +176,11 @@ export async function getWikipediaBioForLang(
       lang: string;
       titles?: { canonical?: string; normalized?: string; display?: string };
     }>;
-    const target = langlinksData.find(l => l.lang === lang);
+    const target = langlinksData.find(l => l.lang === normalizedLang);
     if (!target) return null;
     const targetTitle = target.titles?.canonical ?? target.titles?.normalized;
     if (!targetTitle) return null;
-    const targetRest = `https://${lang}.wikipedia.org/api/rest_v1`;
+    const targetRest = `https://${normalizedLang}.wikipedia.org/api/rest_v1`;
     const targetResp = await fetch(
       `${targetRest}/page/summary/${encodeURIComponent(targetTitle)}`,
       { signal: AbortSignal.timeout(6_000), headers: { "User-Agent": WIKI_UA } }
@@ -151,7 +207,7 @@ async function searchWikipediaVariant(name: string): Promise<{
   searchUrl.searchParams.set("list", "search");
   searchUrl.searchParams.set("srsearch", name);
   searchUrl.searchParams.set("srnamespace", "0");
-  searchUrl.searchParams.set("srlimit", "6");
+  searchUrl.searchParams.set("srlimit", "8");
   searchUrl.searchParams.set("srinfo", "");
   searchUrl.searchParams.set("srprop", "snippet");
   searchUrl.searchParams.set("format", "json");
@@ -168,8 +224,12 @@ async function searchWikipediaVariant(name: string): Promise<{
   const results = data.query?.search ?? [];
   if (results.length === 0) return null;
 
+  // Pass 1: Strict name match + fictional keywords
   for (const result of results) {
     if (shouldSkipLink(result.title)) continue;
+    // Must closely match the searched name
+    if (!nameMatchesTitle(name, result.title)) continue;
+
     const snippetFictional = isFictionalExtract(result.snippet);
     const summary = await getWikipediaSummary(result.title);
     if (!summary?.extract) continue;
@@ -184,23 +244,27 @@ async function searchWikipediaVariant(name: string): Promise<{
     }
   }
 
-  // Fallback: top result whose base title closely matches the search name
-  for (const result of results.slice(0, 2)) {
+  // Pass 2: Strict name match only (some real fictional characters lack keyword markers)
+  // Only apply if the match is very tight (exact base-title match).
+  for (const result of results.slice(0, 3)) {
     if (shouldSkipLink(result.title)) continue;
     const base = result.title.split(" (")[0].toLowerCase();
     const nameLower = name.toLowerCase();
-    if (base === nameLower || base.replace(",", "").trim() === nameLower) {
-      const summary = await getWikipediaSummary(result.title);
-      if (summary?.extract) {
-        return {
-          pageTitle: result.title,
-          label: result.title.replace(/_/g, " ").split(" (")[0],
-          imageUrl: summary.imageUrl,
-          extract: summary.extract,
-        };
-      }
-    }
+    // Exact base title match required in this fallback pass
+    if (base !== nameLower) continue;
+
+    const summary = await getWikipediaSummary(result.title);
+    if (!summary?.extract) continue;
+    // Reject if extract signals a real person
+    if (NON_FICTIONAL_SIGNALS.some(kw => summary.extract.toLowerCase().includes(kw))) continue;
+    return {
+      pageTitle: result.title,
+      label: result.title.replace(/_/g, " ").split(" (")[0],
+      imageUrl: summary.imageUrl,
+      extract: summary.extract,
+    };
   }
+
   return null;
 }
 
@@ -253,7 +317,7 @@ export async function getCharacterMediaLinks(pageTitle: string): Promise<string[
   url.searchParams.set("action", "parse");
   url.searchParams.set("page", pageTitle.replace(/_/g, " "));
   url.searchParams.set("prop", "links");
-  url.searchParams.set("redirects", "1"); // follow redirects (e.g. Gojo_Satoru → Satoru_Gojo)
+  url.searchParams.set("redirects", "1");
   url.searchParams.set("format", "json");
 
   const resp = await fetch(url.toString(), {
@@ -270,14 +334,13 @@ export async function getCharacterMediaLinks(pageTitle: string): Promise<string[
     .filter(l => l.ns === 0 && l.exists !== undefined && !shouldSkipLink(l["*"]))
     .map(l => l["*"]);
 
-  // Media-disambiguated links first (more reliable), then other article links
   const mediaLinks = all.filter(t => isLikelyMediaLink(t));
   const otherLinks = all.filter(t => !isLikelyMediaLink(t) && t.length >= 3);
 
   return [...mediaLinks, ...otherLinks].slice(0, 70);
 }
 
-// ── Awards via Wikipedia API (replaces Wikidata SPARQL awards) ────────────────
+// ── Awards via Wikipedia API ──────────────────────────────────────────────────
 
 export type WikiAwardEntry = { year: string; award_category: string };
 export type WikiAwardResult = {

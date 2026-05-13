@@ -200,13 +200,18 @@ export default function MovieDetail() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [movieId]);
 
-  // FORCE-TOP: whenever the movie changes, immediately reset scroll to 0.
-  // This runs before the restore effect so spinoff navigation always starts at top.
+  // FORCE-TOP: only reset scroll when navigating to a DIFFERENT movie within
+  // the same component lifetime. On first mount we leave the stored position
+  // intact so the RESTORE effect can scroll back to where the user was.
+  const prevMovieIdRef = useRef("");
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = 0;
+    const prev = prevMovieIdRef.current;
+    prevMovieIdRef.current = movieId;
+    // First mount: prev is "" — do NOT delete the stored position.
+    if (prev && prev !== movieId) {
+      if (scrollRef.current) scrollRef.current.scrollTop = 0;
+      scrollStore.delete(`movie-${movieId}`);
     }
-    scrollStore.delete(`movie-${movieId}`);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [movieId]);
 
@@ -908,7 +913,7 @@ export default function MovieDetail() {
           </div>
           <div className="flex overflow-x-auto gap-2.5 pb-1 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
             {allCharacters.map(ch => (
-              <Link key={ch.wikidataId} href={`/character/${ch.wikidataId}`}>
+              <Link key={ch.wikidataId} href={`/character/${ch.wikidataId}${navSrclang ? `?srclang=${encodeURIComponent(navSrclang)}` : ""}`}>
                 <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
                   <div className="relative" style={{ aspectRatio: "2/3" }}>
                     {ch.imageUrl
@@ -931,7 +936,7 @@ export default function MovieDetail() {
         <div className="px-5 pt-4">
           <div className="flex items-center gap-2 mb-2">
             <Link2 className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-            <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">{t.relatedChainsLabel}</p>
+            <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">{"Chains"}</p>
             <span className="text-[10px] text-muted-foreground">{(movieChainsData?.chains ?? []).length}</span>
           </div>
           <div className="grid grid-cols-3 gap-2">
@@ -947,7 +952,7 @@ export default function MovieDetail() {
         <div className="px-5 pt-4">
           <button
             className="w-full flex items-center gap-2 text-left"
-            onClick={(e) => { const b = e.currentTarget; setShowDetails(v => { const next = !v; if (next) { setShowCollection(true); setShowSpinoffs(true); setTimeout(() => { const c = scrollRef.current; if (c) { const r = b.getBoundingClientRect(), cr = c.getBoundingClientRect(); c.scrollTo({ top: Math.max(0, c.scrollTop + r.top - cr.top), behavior: "smooth" }); } }, 50); } return next; }); }}
+            onClick={(e) => { const b = e.currentTarget; setShowDetails(v => { const next = !v; if (next) { setShowCollection(true); setShowSpinoffs(true); setTimeout(() => { const c = scrollRef.current; if (c) { const r = b.getBoundingClientRect(), cr = c.getBoundingClientRect(); c.scrollTo({ top: Math.max(0, c.scrollTop + r.top - cr.top), behavior: "smooth" }); } }, 160); } return next; }); }}
           >
             <Film className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
             <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wide flex-1">{lang === "th" ? "รายละเอียด" : "Details"}</h3>
@@ -976,92 +981,72 @@ export default function MovieDetail() {
                   <>
                     {mainMovies.length > 0 && (
                       <div className="mt-3">
-                        <button
-                          className="w-full flex items-center gap-2 text-left py-1"
-                          onClick={(e) => { const b = e.currentTarget; setShowCollection(v => { if (!v) setTimeout(() => { const c = scrollRef.current; if (c) { const r = b.getBoundingClientRect(), cr = c.getBoundingClientRect(); c.scrollTo({ top: Math.max(0, c.scrollTop + r.top - cr.top - 16), behavior: "smooth" }); } }, 50); return !v; }); }}
-                        >
+                        <div className="w-full flex items-center gap-2 py-1">
                           <Film className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                           <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">
                             {collectionData.collectionName ?? (lang === "th" ? "ภาคทั้งหมด" : "All Parts")}
                           </p>
                           <span className="text-[10px] text-muted-foreground mr-1">{mainMovies.length}</span>
-                          {showCollection
-                            ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                            : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />}
-                        </button>
-                        <div style={{ display: "grid", gridTemplateRows: showCollection ? "1fr" : "0fr", transition: "grid-template-rows 0.25s ease" }}>
-                          <div style={{ overflow: "hidden" }}>
-                            <div className="flex overflow-x-auto gap-2.5 pb-1 mt-2 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
-                              {sorted.map(m => (
-                                <Link
-                                  key={m.imdbId}
-                                  href={`/movie/${encodeURIComponent(m.imdbId)}${navSrclang ? `?srclang=${encodeURIComponent(navSrclang)}` : ""}`}
-                                  onClick={() => goToMovie(m.imdbId)}
-                                >
-                                  <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
-                                    <div className="relative" style={{ aspectRatio: "2/3" }}>
-                                      {m.posterUrl
-                                        ? <img src={m.posterUrl} alt={m.title} className="w-full h-full object-cover" loading="lazy" />
-                                        : <div className="w-full h-full flex items-center justify-center bg-zinc-900"><Film className="w-4 h-4 text-muted-foreground" /></div>
-                                      }
-                                      {m.isCurrent && (
-                                        <div className="absolute inset-x-0 bottom-0 bg-foreground/90 py-0.5 text-center">
-                                          <span className="text-[9px] text-background font-bold">{lang === "th" ? "กำลังดู" : "NOW"}</span>
-                                        </div>
-                                      )}
+                        </div>
+                        <div className="flex overflow-x-auto gap-2.5 pb-1 mt-2 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
+                          {sorted.map(m => (
+                            <Link
+                              key={m.imdbId}
+                              href={`/movie/${encodeURIComponent(m.imdbId)}${navSrclang ? `?srclang=${encodeURIComponent(navSrclang)}` : ""}`}
+                              onClick={() => goToMovie(m.imdbId)}
+                            >
+                              <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
+                                <div className="relative" style={{ aspectRatio: "2/3" }}>
+                                  {m.posterUrl
+                                    ? <img src={m.posterUrl} alt={m.title} className="w-full h-full object-cover" loading="lazy" />
+                                    : <div className="w-full h-full flex items-center justify-center bg-zinc-900"><Film className="w-4 h-4 text-muted-foreground" /></div>
+                                  }
+                                  {m.isCurrent && (
+                                    <div className="absolute inset-x-0 bottom-0 bg-foreground/90 py-0.5 text-center">
+                                      <span className="text-[9px] text-background font-bold">{lang === "th" ? "กำลังดู" : "NOW"}</span>
                                     </div>
-                                    <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
-                                      <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{m.title}</p>
-                                      {m.year && <p className="text-[8px] text-muted-foreground mt-0.5">{displayYear(m.year, lang)}</p>}
-                                    </div>
-                                  </div>
-                                </Link>
-                              ))}
-                            </div>
-                          </div>
+                                  )}
+                                </div>
+                                <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
+                                  <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{m.title}</p>
+                                  {m.year && <p className="text-[8px] text-muted-foreground mt-0.5">{displayYear(m.year, lang)}</p>}
+                                </div>
+                              </div>
+                            </Link>
+                          ))}
                         </div>
                       </div>
                     )}
                     {spinoffMovies.length > 0 && (
                       <div className="mt-3">
-                        <button
-                          className="w-full flex items-center gap-2 text-left py-1"
-                          onClick={(e) => { const b = e.currentTarget; setShowSpinoffs(v => { if (!v) setTimeout(() => { const c = scrollRef.current; if (c) { const r = b.getBoundingClientRect(), cr = c.getBoundingClientRect(); c.scrollTo({ top: Math.max(0, c.scrollTop + r.top - cr.top - 16), behavior: "smooth" }); } }, 50); return !v; }); }}
-                        >
+                        <div className="w-full flex items-center gap-2 py-1">
                           <Film className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                           <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">
                             {lang === "th" ? "ภาคเสริม / ที่เกี่ยวข้อง" : "Spin-offs / Related"}
                           </p>
                           <span className="text-[10px] text-muted-foreground mr-1">{spinoffMovies.length}</span>
-                          {showSpinoffs
-                            ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                            : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />}
-                        </button>
-                        <div style={{ display: "grid", gridTemplateRows: showSpinoffs ? "1fr" : "0fr", transition: "grid-template-rows 0.25s ease" }}>
-                          <div style={{ overflow: "hidden" }}>
-                            <div className="flex overflow-x-auto gap-2.5 pb-1 mt-2 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
-                              {spinoffMovies.map(m => (
-                                <Link
-                                  key={m.imdbId}
-                                  href={`/movie/${encodeURIComponent(m.imdbId)}${navSrclang ? `?srclang=${encodeURIComponent(navSrclang)}` : ""}`}
-                                  onClick={() => goToMovie(m.imdbId)}
-                                >
-                                  <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
-                                    <div className="relative" style={{ aspectRatio: "2/3" }}>
-                                      {m.posterUrl
-                                        ? <img src={m.posterUrl} alt={m.title} className="w-full h-full object-cover" loading="lazy" />
-                                        : <div className="w-full h-full flex items-center justify-center bg-zinc-900"><Film className="w-4 h-4 text-muted-foreground" /></div>
-                                      }
-                                    </div>
-                                    <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
-                                      <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{m.title}</p>
-                                      {m.year && <p className="text-[8px] text-muted-foreground mt-0.5">{displayYear(m.year, lang)}</p>}
-                                    </div>
-                                  </div>
-                                </Link>
-                              ))}
-                            </div>
-                          </div>
+                        </div>
+                        <div className="flex overflow-x-auto gap-2.5 pb-1 mt-2 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
+                          {spinoffMovies.map(m => (
+                            <Link
+                              key={m.imdbId}
+                              href={`/movie/${encodeURIComponent(m.imdbId)}${navSrclang ? `?srclang=${encodeURIComponent(navSrclang)}` : ""}`}
+                              onClick={() => goToMovie(m.imdbId)}
+                            >
+                              <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
+                                <div className="relative" style={{ aspectRatio: "2/3" }}>
+                                  {m.posterUrl
+                                    ? <img src={m.posterUrl} alt={m.title} className="w-full h-full object-cover" loading="lazy" />
+                                    : <div className="w-full h-full flex items-center justify-center bg-zinc-900"><Film className="w-4 h-4 text-muted-foreground" /></div>
+                                  }
+                                </div>
+                                <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
+                                  <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{m.title}</p>
+                                  {m.year && <p className="text-[8px] text-muted-foreground mt-0.5">{displayYear(m.year, lang)}</p>}
+                                </div>
+                              </div>
+                            </Link>
+                          ))}
                         </div>
                       </div>
                     )}
