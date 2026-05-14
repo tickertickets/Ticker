@@ -6,7 +6,7 @@ import {
   commentsTable,
   reportsTable,
 } from "@workspace/db/schema";
-import { eq, and, count } from "drizzle-orm";
+import { eq, and, count, desc } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { sanitize } from "../lib/sanitize";
 import { asyncHandler } from "../middlewares/error-handler";
@@ -215,6 +215,33 @@ router.post(
     });
 
     res.json({ success: true });
+  }),
+);
+
+// GET /api/reports/admin  — รายงานล่าสุด 50 รายการ (admin panel)
+router.get(
+  "/admin",
+  asyncHandler(async (req, res) => {
+    const currentUserId = req.session?.userId;
+    if (!currentUserId) throw new UnauthorizedError();
+
+    const reports = await db
+      .select({
+        id: reportsTable.id,
+        reason: reportsTable.reason,
+        details: reportsTable.details,
+        createdAt: reportsTable.createdAt,
+        ticketId: reportsTable.ticketId,
+        chainId: reportsTable.chainId,
+        reportedUserId: reportsTable.reportedUserId,
+        reporterUsername: usersTable.username,
+      })
+      .from(reportsTable)
+      .leftJoin(usersTable, eq(reportsTable.reporterId, usersTable.id))
+      .orderBy(desc(reportsTable.createdAt))
+      .limit(50);
+
+    res.json({ reports });
   }),
 );
 

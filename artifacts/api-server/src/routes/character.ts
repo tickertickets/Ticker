@@ -371,15 +371,18 @@ router.get(
     }
 
     // Fetch character names AND movie title concurrently
-    let characterEntries: Array<{ name: string; tmdbChar: string }> = [];
+    let characterEntries: Array<{ name: string; tmdbChar: string; profileUrl: string | null }> = [];
     let movieTitle = "";
+
+    const tmdbProfileUrl = (path: string | null | undefined): string | null =>
+      path ? `https://image.tmdb.org/t/p/w185${path}` : null;
 
     try {
       if (tmdbId.startsWith("tmdb_tv:")) {
         const tvId = tmdbId.replace("tmdb_tv:", "");
         const [credits, tvInfo] = await Promise.all([
           tmdbFetch<{
-            cast?: Array<{ character?: string; roles?: Array<{ character?: string }> }>;
+            cast?: Array<{ character?: string; profile_path?: string | null; roles?: Array<{ character?: string }> }>;
           }>(`/tv/${tvId}/aggregate_credits`).catch(() => ({ cast: [] })),
           tmdbFetch<{ name?: string }>(`/tv/${tvId}`).catch(() => ({})),
         ]);
@@ -387,13 +390,13 @@ router.get(
         characterEntries = (credits.cast ?? [])
           .map(c => {
             const raw = c.roles?.[0]?.character ?? c.character ?? "";
-            return { name: raw.split("/")[0].trim(), tmdbChar: raw };
+            return { name: raw.split("/")[0].trim(), tmdbChar: raw, profileUrl: tmdbProfileUrl(c.profile_path) };
           })
           .filter(e => e.name.length > 1)
           .slice(0, 15);
       } else if (/^\d+$/.test(tmdbId)) {
         const [credits, movieInfo] = await Promise.all([
-          tmdbFetch<{ cast?: Array<{ character?: string }> }>(
+          tmdbFetch<{ cast?: Array<{ character?: string; profile_path?: string | null }> }>(
             `/movie/${tmdbId}/credits`
           ).catch(() => ({ cast: [] })),
           tmdbFetch<{ title?: string }>(`/movie/${tmdbId}`).catch(() => ({})),
@@ -402,7 +405,7 @@ router.get(
         characterEntries = (credits.cast ?? [])
           .map(c => {
             const raw = c.character ?? "";
-            return { name: raw.split("/")[0].trim(), tmdbChar: raw };
+            return { name: raw.split("/")[0].trim(), tmdbChar: raw, profileUrl: tmdbProfileUrl(c.profile_path) };
           })
           .filter(e => e.name.length > 1)
           .slice(0, 15);
@@ -416,7 +419,7 @@ router.get(
 
         if (movieHit) {
           const [credits, movieInfo] = await Promise.all([
-            tmdbFetch<{ cast?: Array<{ character?: string }> }>(
+            tmdbFetch<{ cast?: Array<{ character?: string; profile_path?: string | null }> }>(
               `/movie/${movieHit.id}/credits`
             ).catch(() => ({ cast: [] })),
             tmdbFetch<{ title?: string }>(`/movie/${movieHit.id}`).catch(() => ({})),
@@ -425,14 +428,14 @@ router.get(
           characterEntries = (credits.cast ?? [])
             .map(c => {
               const raw = c.character ?? "";
-              return { name: raw.split("/")[0].trim(), tmdbChar: raw };
+              return { name: raw.split("/")[0].trim(), tmdbChar: raw, profileUrl: tmdbProfileUrl(c.profile_path) };
             })
             .filter(e => e.name.length > 1)
             .slice(0, 15);
         } else if (tvHit) {
           const [credits, tvInfo] = await Promise.all([
             tmdbFetch<{
-              cast?: Array<{ character?: string; roles?: Array<{ character?: string }> }>;
+              cast?: Array<{ character?: string; profile_path?: string | null; roles?: Array<{ character?: string }> }>;
             }>(`/tv/${tvHit.id}/aggregate_credits`).catch(() => ({ cast: [] })),
             tmdbFetch<{ name?: string }>(`/tv/${tvHit.id}`).catch(() => ({})),
           ]);
@@ -440,7 +443,7 @@ router.get(
           characterEntries = (credits.cast ?? [])
             .map(c => {
               const raw = c.roles?.[0]?.character ?? c.character ?? "";
-              return { name: raw.split("/")[0].trim(), tmdbChar: raw };
+              return { name: raw.split("/")[0].trim(), tmdbChar: raw, profileUrl: tmdbProfileUrl(c.profile_path) };
             })
             .filter(e => e.name.length > 1)
             .slice(0, 15);
@@ -458,6 +461,8 @@ router.get(
 
     // Map from cleaned name → original TMDB character string (for alias)
     const tmdbCharMap = new Map(characterEntries.map(e => [e.name, e.tmdbChar]));
+    // Map from cleaned name → actor TMDB profile image URL (fallback)
+    const actorProfileMap = new Map(characterEntries.map(e => [e.name, e.profileUrl]));
     const charNames = characterEntries.map(e => e.name);
 
     const wikiResults = await batchSearchWikipediaCharacters(charNames, movieTitle).catch(() => []);
@@ -473,12 +478,16 @@ router.get(
       const tmdbChar = matchedTmdbChar ? (tmdbCharMap.get(matchedTmdbChar) ?? "") : "";
       const alias = tmdbChar ? extractAlias(tmdbChar, r.label) : null;
 
+      // Use Wikipedia Commons image if available; otherwise fall back to actor profile photo
+      const actorProfile = matchedTmdbChar ? (actorProfileMap.get(matchedTmdbChar) ?? null) : null;
+      const imageUrl = r.imageUrl ?? actorProfile;
+
       return {
         name: r.label,
         wikidataId: r.charId,
         label: r.label,
         description: r.description,
-        imageUrl: r.imageUrl,
+        imageUrl,
         alias,
       };
     });

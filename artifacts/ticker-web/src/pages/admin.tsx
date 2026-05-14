@@ -1,7 +1,7 @@
 import { useState, useRef, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, CheckCircle, XCircle, Trash2, ExternalLink, Clock, Megaphone, Send, Popcorn, Settings, QrCode, Upload } from "lucide-react";
+import { ArrowLeft, CheckCircle, XCircle, Trash2, ExternalLink, Clock, Megaphone, Send, Popcorn, Settings, QrCode, Upload, Flag } from "lucide-react";
 import { Loader2 } from "lucide-react";
 import { navBack } from "@/lib/nav-back";
 import { useAuth } from "@/hooks/use-auth";
@@ -24,10 +24,83 @@ interface SupporterRequestRow {
 }
 
 type FilterStatus = "pending" | "approved" | "rejected" | "all";
-type Tab = "supporter" | "verify" | "broadcast" | "settings";
+type Tab = "supporter" | "verify" | "broadcast" | "settings" | "reports";
 
 class AdminForbiddenError extends Error {
   constructor() { super("forbidden"); }
+}
+
+type ReportRow = {
+  id: string;
+  reason: string;
+  details: string | null;
+  createdAt: string;
+  ticketId: string | null;
+  chainId: string | null;
+  reportedUserId: string | null;
+  reporterUsername: string | null;
+};
+
+const REASON_TH: Record<string, string> = {
+  spam: "สแปม",
+  inappropriate: "เนื้อหาไม่เหมาะสม",
+  harassment: "การคุกคาม",
+  other: "อื่นๆ",
+};
+
+function ReportsPanel() {
+  const { data, isLoading } = useQuery<{ reports: ReportRow[] }>({
+    queryKey: ["admin-reports"],
+    queryFn: () =>
+      fetch("/api/reports/admin", { credentials: "include" })
+        .then(r => { if (!r.ok) throw new Error("failed"); return r.json(); }),
+    staleTime: 30_000,
+  });
+
+  const reports = data?.reports ?? [];
+
+  return (
+    <div className="flex-1 overflow-y-auto">
+      {isLoading && (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+        </div>
+      )}
+      {!isLoading && reports.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-12 gap-2">
+          <Flag className="w-8 h-8 text-muted-foreground opacity-30" />
+          <p className="text-[13px] text-muted-foreground">ไม่มีรายงาน</p>
+        </div>
+      )}
+      {!isLoading && reports.length > 0 && (
+        <div className="divide-y divide-border">
+          {reports.map(r => (
+            <div key={r.id} className="px-4 py-3 space-y-1">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className={`flex-shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                  r.reason === "harassment" ? "bg-red-500/20 text-red-400" :
+                  r.reason === "inappropriate" ? "bg-orange-500/20 text-orange-400" :
+                  "bg-secondary text-muted-foreground"
+                }`}>
+                  {REASON_TH[r.reason] ?? r.reason}
+                </span>
+                {r.reporterUsername && (
+                  <span className="text-[11px] text-muted-foreground truncate">โดย @{r.reporterUsername}</span>
+                )}
+                <span className="ml-auto text-[11px] text-muted-foreground flex-shrink-0">{fmtDate(r.createdAt)}</span>
+              </div>
+              <div className="flex gap-2 text-[11px] text-muted-foreground flex-wrap">
+                {r.ticketId && <span className="bg-secondary px-1.5 py-0.5 rounded">Ticket: {r.ticketId.slice(0, 8)}</span>}
+                {r.chainId && <span className="bg-secondary px-1.5 py-0.5 rounded">Chain: {r.chainId.slice(0, 8)}</span>}
+                {r.reportedUserId && <span className="bg-secondary px-1.5 py-0.5 rounded">User: {r.reportedUserId.slice(0, 8)}</span>}
+              </div>
+              {r.details && <p className="text-[11px] text-foreground/70 line-clamp-2">{r.details}</p>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function useAdminRequests(status: FilterStatus) {
@@ -536,13 +609,14 @@ export default function AdminPanel() {
             {tab === "verify" && "ตรวจสอบคำขอ Badge ถังป็อปคอร์น"}
             {tab === "broadcast" && "ส่งประกาศถึงผู้ใช้"}
             {tab === "settings" && "ตั้งค่าระบบ"}
+            {tab === "reports" && "รายงานจากผู้ใช้"}
           </p>
         </div>
       </div>
 
       {/* Section tabs */}
       <div className="flex gap-1 px-4 py-3 border-b border-border overflow-x-auto">
-        {([["supporter", <CheckCircle className="w-3.5 h-3.5" />, "Supporter"], ["verify", <Popcorn className="w-3.5 h-3.5" />, "Verify"], ["broadcast", <Megaphone className="w-3.5 h-3.5" />, "ประกาศ"], ["settings", <Settings className="w-3.5 h-3.5" />, "ตั้งค่า"]] as [Tab, ReactNode, string][]).map(([id, icon, label]) => (
+        {([["supporter", <CheckCircle className="w-3.5 h-3.5" />, "Supporter"], ["verify", <Popcorn className="w-3.5 h-3.5" />, "Verify"], ["broadcast", <Megaphone className="w-3.5 h-3.5" />, "ประกาศ"], ["settings", <Settings className="w-3.5 h-3.5" />, "ตั้งค่า"], ["reports", <Flag className="w-3.5 h-3.5" />, "รายงาน"]] as [Tab, ReactNode, string][]).map(([id, icon, label]) => (
           <button key={id} onClick={() => setTab(id)} className={`flex-shrink-0 flex-1 h-9 rounded-xl text-[12px] font-bold transition-all flex items-center justify-center gap-1.5 ${tab === id ? "bg-foreground text-background" : "bg-secondary text-muted-foreground"}`}>
             {icon}{label}
           </button>
@@ -555,6 +629,8 @@ export default function AdminPanel() {
         <VerifyPanel />
       ) : tab === "settings" ? (
         <SettingsPanel />
+      ) : tab === "reports" ? (
+        <ReportsPanel />
       ) : (
         <>
           <FilterBar filter={filter} setFilter={setFilter} />

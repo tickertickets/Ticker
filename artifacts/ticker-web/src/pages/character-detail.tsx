@@ -288,6 +288,17 @@ export default function CharacterDetail() {
                     {lang === "th" ? "ยังไม่มีข้อมูลภาษานี้" : "Bio not available in this language"}
                   </p>
                 )}
+                <p className="text-[10px] text-muted-foreground/60 mt-2">
+                  {lang === "th" ? "ที่มา: " : "Source: "}
+                  <a
+                    href="https://www.wikipedia.org"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline"
+                    onClick={e => e.stopPropagation()}
+                  >Wikipedia</a>
+                  {" (CC BY-SA 4.0)"}
+                </p>
               </div>
             )}
 

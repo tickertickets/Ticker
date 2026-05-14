@@ -167,6 +167,14 @@ function nameStartsTitle(charName: string, articleTitle: string): boolean {
   return nameWords.every(w => titleWords.includes(w));
 }
 
+// ── Image license helper ──────────────────────────────────────────────────────
+// Wikimedia Commons ONLY accepts CC-licensed or Public Domain images.
+// A URL containing "/wikipedia/commons/" is always CC-safe.
+// URLs from language-specific Wikis ("/wikipedia/en/", etc.) may be fair-use.
+export function isCommonsImage(url: string): boolean {
+  return url.includes("/wikipedia/commons/");
+}
+
 // ── Wikipedia summary API ──────────────────────────────────────────────────────
 
 export async function getWikipediaSummary(pageTitle: string): Promise<{
@@ -187,9 +195,10 @@ export async function getWikipediaSummary(pageTitle: string): Promise<{
     type?: string;
   };
   if (!json.extract || json.type === "disambiguation") return null;
+  const rawImage = json.originalimage?.source ?? json.thumbnail?.source ?? null;
   return {
     extract: json.extract,
-    imageUrl: json.originalimage?.source ?? json.thumbnail?.source ?? null,
+    imageUrl: rawImage && isCommonsImage(rawImage) ? rawImage : null,
     canonicalTitle: json.title ?? pageTitle,
   };
 }

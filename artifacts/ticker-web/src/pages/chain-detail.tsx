@@ -5,7 +5,8 @@ import { scrollOnceStore } from "@/lib/scroll-store";
 import { useRoute, Link, useLocation } from "wouter";
 import { navBack } from "@/lib/nav-back";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, Link2, Play, Film, Check, X, Plus, Search, Loader2, Users, Pencil, MessageCircle, Send, Trash2, CornerDownRight } from "lucide-react";
+import { ChevronLeft, Link2, Play, Film, Check, X, Plus, Search, Loader2, Users, Pencil, MessageCircle, Send, Trash2, CornerDownRight, Flag } from "lucide-react";
+import { ReportSheet } from "@/components/ReportSheet";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -155,6 +156,7 @@ export default function ChainDetail() {
 
   // edit note on existing movie
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [reportChainOpen, setReportChainOpen] = useState(false);
 
   // ── Chain comments ────────────────────────────────────────────────────────
   const [chainCommentText, setChainCommentText] = useState("");
@@ -444,6 +446,15 @@ export default function ChainDetail() {
             <ChevronLeft className="w-5 h-5 text-foreground" />
           </button>
           <h1 className="font-display font-bold text-sm text-foreground truncate max-w-[240px]">{chain.title}</h1>
+          {user && !isOwner && (
+            <button
+              onClick={() => setReportChainOpen(true)}
+              className="absolute right-4 w-9 h-9 rounded-full bg-secondary flex items-center justify-center"
+              aria-label="Report chain"
+            >
+              <Flag className="w-4 h-4 text-muted-foreground" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -1146,6 +1157,9 @@ export default function ChainDetail() {
         )}
 
       </div>
+      {reportChainOpen && chainId && (
+        <ReportSheet type="chain" targetId={chainId} onClose={() => setReportChainOpen(false)} />
+      )}
     </div>
   );
 }

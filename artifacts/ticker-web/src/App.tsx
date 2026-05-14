@@ -39,6 +39,8 @@ import AuthLogin         from "@/pages/auth-login";
 import AdminPanel       from "@/pages/admin";
 import FeedPost         from "@/pages/feed-post";
 import PersonDetail     from "@/pages/person-detail";
+import CharacterDetail  from "@/pages/character-detail";
+import WikiDetail       from "@/pages/wiki-detail";
 import { TicketLarge, BadgeIconStatic } from "@/components/BadgeIcon";
 import { PushPermissionPrompt } from "@/components/PushPermissionPrompt";
 function BadgePreview() {
@@ -259,7 +261,9 @@ function AppRoutes() {
       /^\/profile\/[^/]+$/.test(location) ||
       /^\/movie\/.+$/.test(location) ||
       /^\/chain\/(?!new$)[^/]+$/.test(location) ||
-      /^\/person\/[^/]+$/.test(location);
+      /^\/person\/[^/]+$/.test(location) ||
+      /^\/character\/[^/]+$/.test(location) ||
+      /^\/wiki\/[^/]+$/.test(location);
 
     if (!isPublic) return <AuthLogin />;
 
@@ -300,6 +304,8 @@ function AppRoutes() {
               <Route path="/profile/:username" component={Profile} />
               <Route path="/chain/:id"         component={ChainDetail} />
               <Route path="/person/:personId"  component={PersonDetail} />
+              <Route path="/character/:wikidataId" component={CharacterDetail} />
+              <Route path="/wiki/:wikiPageId"  component={WikiDetail} />
               <Route><Redirect to="/" /></Route>
             </Switch>
           </ShimmerActiveWrapper>
@@ -357,6 +363,8 @@ function AppRoutes() {
             <Route path="/chain/:id/edit"    component={EditChain} />
             <Route path="/chain/:id"         component={ChainDetail} />
             <Route path="/person/:personId"  component={PersonDetail} />
+            <Route path="/character/:wikidataId" component={CharacterDetail} />
+            <Route path="/wiki/:wikiPageId"  component={WikiDetail} />
             <Route path="/supporter"         component={SupporterRequest} />
             <Route path="/page-verify"       component={PageVerificationRequest} />
             <Route path="/admin"             component={AdminPanel} />

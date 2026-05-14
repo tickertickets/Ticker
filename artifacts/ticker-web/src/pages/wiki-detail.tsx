@@ -515,6 +515,16 @@ export default function WikiDetail() {
                 {paragraphs.map((para, i) => (
                   <p key={i} className="text-sm text-foreground leading-relaxed">{para}</p>
                 ))}
+                <p className="text-[10px] text-muted-foreground/60">
+                  {lang === "th" ? "ที่มา: " : "Source: "}
+                  <a
+                    href={item?.url ?? "https://www.wikipedia.org"}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline"
+                  >Wikipedia</a>
+                  {" (CC BY-SA 4.0)"}
+                </p>
               </div>
             )}
 
