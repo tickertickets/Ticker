@@ -12,11 +12,24 @@ export type AniListChar = {
   description: string | null;
 };
 
+export type AniListMedia = {
+  id: number;
+  type: "ANIME" | "MANGA";
+  format: string | null;
+  titleRomaji: string | null;
+  titleEnglish: string | null;
+  coverImage: string | null;
+  averageScore: number | null;
+  popularity: number;
+  startYear: number | null;
+};
+
 export type AniListCharDetail = {
   id: number;
   name: string;
   imageUrl: string | null;
   description: string | null;
+  media: AniListMedia[];
 };
 
 async function gql<T>(query: string, variables: Record<string, unknown>): Promise<T | null> {
@@ -62,11 +75,11 @@ export async function getAniListCharacters(title: string): Promise<AniListChar[]
   const query = `
     query ($title: String) {
       Media(search: $title, type: ANIME) {
-        characters(sort: FAVOURITES_DESC, page: 1, perPage: 20) {
+        characters(sort: FAVOURITES_DESC, page: 1, perPage: 25) {
           nodes {
             id
             name { full }
-            image { medium }
+            image { large }
             description(asHtml: false)
           }
         }
@@ -80,7 +93,7 @@ export async function getAniListCharacters(title: string): Promise<AniListChar[]
         nodes?: Array<{
           id: number;
           name?: { full?: string };
-          image?: { medium?: string };
+          image?: { large?: string };
           description?: string;
         }>;
       };
@@ -92,7 +105,7 @@ export async function getAniListCharacters(title: string): Promise<AniListChar[]
     .map(n => ({
       id: n.id,
       name: n.name!.full!,
-      imageUrl: n.image?.medium ?? null,
+      imageUrl: n.image?.large ?? null,
       description: n.description ? stripHtml(n.description) : null,
     }));
 
@@ -111,6 +124,18 @@ export async function getAniListCharacterById(id: number): Promise<AniListCharDe
         name { full }
         image { large }
         description(asHtml: false)
+        media(sort: POPULARITY_DESC, perPage: 25, page: 1) {
+          nodes {
+            id
+            type
+            format
+            title { romaji english }
+            coverImage { large medium }
+            averageScore
+            popularity
+            startDate { year }
+          }
+        }
       }
     }
   `;
@@ -121,16 +146,48 @@ export async function getAniListCharacterById(id: number): Promise<AniListCharDe
       name?: { full?: string };
       image?: { large?: string };
       description?: string;
+      media?: {
+        nodes?: Array<{
+          id: number;
+          type?: string;
+          format?: string | null;
+          title?: { romaji?: string; english?: string | null };
+          coverImage?: { large?: string; medium?: string };
+          averageScore?: number | null;
+          popularity?: number;
+          startDate?: { year?: number | null };
+        }>;
+      };
     };
   }>(query, { id });
 
   const c = data?.Character;
-  const detail: AniListCharDetail | null = c ? {
+  if (!c) {
+    charDetailCache.set(id, { detail: null, ts: Date.now() });
+    return null;
+  }
+
+  const media: AniListMedia[] = (c.media?.nodes ?? [])
+    .filter(m => m.id && (m.type === "ANIME" || m.type === "MANGA"))
+    .map(m => ({
+      id: m.id,
+      type: (m.type ?? "ANIME") as "ANIME" | "MANGA",
+      format: m.format ?? null,
+      titleRomaji: m.title?.romaji ?? null,
+      titleEnglish: m.title?.english ?? null,
+      coverImage: m.coverImage?.large ?? m.coverImage?.medium ?? null,
+      averageScore: m.averageScore ?? null,
+      popularity: m.popularity ?? 0,
+      startYear: m.startDate?.year ?? null,
+    }));
+
+  const detail: AniListCharDetail = {
     id: c.id,
     name: c.name?.full ?? "",
     imageUrl: c.image?.large ?? null,
     description: c.description ? stripHtml(c.description) : null,
-  } : null;
+    media,
+  };
 
   charDetailCache.set(id, { detail, ts: Date.now() });
   return detail;

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { asyncHandler } from "../middlewares/error-handler";
 import { tmdbFetch, posterUrl } from "../lib/tmdb-client";
-import { getAniListCharacters, getAniListCharacterById } from "../lib/anilist";
+import { getAniListCharacters, getAniListCharacterById, type AniListMedia } from "../lib/anilist";
 
 const router = Router();
 
@@ -51,6 +51,24 @@ function isAnime(originalLanguage: string, genreIds: number[]): boolean {
   return originalLanguage === "ja" && genreIds.includes(16);
 }
 
+/**
+ * Strip role/acting suffixes from TMDB character names so AniList matching works.
+ * Examples: "Yuji Itadori (voice)" → "Yuji Itadori"
+ *           "Tony Stark / Iron Man" → "Tony Stark" (already handled by split("/"))
+ *           "Bruce Wayne (uncredited)" → "Bruce Wayne"
+ */
+function cleanCharacterName(raw: string): string {
+  return raw
+    .split("/")[0]
+    .replace(/\s*\(voice\)/i, "")
+    .replace(/\s*\(uncredited\)/i, "")
+    .replace(/\s*\(archive footage\)/i, "")
+    .replace(/\s*\(as [^)]+\)/i, "")
+    .replace(/\s*\(cameo\)/i, "")
+    .replace(/\s*\(segment[^)]*\)/i, "")
+    .trim();
+}
+
 function matchAniListChar(
   tmdbName: string,
   anilistChars: Array<{ id: number; name: string; imageUrl: string | null; description: string | null }>,
@@ -76,6 +94,83 @@ function matchAniListChar(
   return null;
 }
 
+/**
+ * Build filmography from AniList media appearances (anime/movies the character is in).
+ * For each AniList media item we search TMDB to get the correct poster + rating.
+ */
+async function getFilmographyFromAniListMedia(media: AniListMedia[]): Promise<FilmographyEntry[]> {
+  const animeOnly = media.filter(m => m.type === "ANIME").slice(0, 25);
+  if (animeOnly.length === 0) return [];
+
+  const results = await Promise.allSettled(
+    animeOnly.map(async (m): Promise<FilmographyEntry | null> => {
+      const searchTitle = m.titleEnglish || m.titleRomaji || "";
+      if (!searchTitle) return null;
+
+      const isMovie = m.format === "MOVIE";
+
+      if (isMovie) {
+        const sr = await tmdbFetch<{
+          results?: Array<{
+            id: number; title?: string; poster_path?: string | null;
+            release_date?: string; vote_average?: number; vote_count?: number;
+            genre_ids?: number[]; popularity?: number;
+          }>;
+        }>("/search/movie", { query: searchTitle, include_adult: "false" }).catch(() => ({ results: [] as Array<{ id: number; title?: string; poster_path?: string | null; release_date?: string; vote_average?: number; vote_count?: number; genre_ids?: number[]; popularity?: number }> }));
+
+        const hit = sr.results?.find(r => r.poster_path) ?? sr.results?.[0];
+        if (!hit) return null;
+
+        return {
+          title: hit.title ?? searchTitle,
+          year: hit.release_date?.slice(0, 4) ?? (m.startYear ? String(m.startYear) : null),
+          imdbId: hit.id ? `tmdb:${hit.id}` : null,
+          posterUrl: hit.poster_path ? posterUrl(hit.poster_path) : (m.coverImage ?? null),
+          tmdbRating: hit.vote_average != null ? String(hit.vote_average.toFixed(1)) : null,
+          voteCount: hit.vote_count ?? 0,
+          genreIds: hit.genre_ids ?? [16],
+          popularity: hit.popularity ?? m.popularity,
+          franchiseIds: [],
+          mediaType: "movie",
+        };
+      } else {
+        const sr = await tmdbFetch<{
+          results?: Array<{
+            id: number; name?: string; poster_path?: string | null;
+            first_air_date?: string; vote_average?: number; vote_count?: number;
+            genre_ids?: number[]; popularity?: number;
+          }>;
+        }>("/search/tv", { query: searchTitle, include_adult: "false" }).catch(() => ({ results: [] as Array<{ id: number; name?: string; poster_path?: string | null; first_air_date?: string; vote_average?: number; vote_count?: number; genre_ids?: number[]; popularity?: number }> }));
+
+        const hit = sr.results?.find(r => r.poster_path) ?? sr.results?.[0];
+        if (!hit) return null;
+
+        return {
+          title: hit.name ?? searchTitle,
+          year: hit.first_air_date?.slice(0, 4) ?? (m.startYear ? String(m.startYear) : null),
+          imdbId: hit.id ? `tmdb_tv:${hit.id}` : null,
+          posterUrl: hit.poster_path ? posterUrl(hit.poster_path) : (m.coverImage ?? null),
+          tmdbRating: hit.vote_average != null ? String(hit.vote_average.toFixed(1)) : null,
+          voteCount: hit.vote_count ?? 0,
+          genreIds: hit.genre_ids ?? [16],
+          popularity: hit.popularity ?? m.popularity,
+          franchiseIds: [],
+          mediaType: "tv",
+        };
+      }
+    }),
+  );
+
+  return results
+    .filter((r): r is PromiseFulfilledResult<FilmographyEntry | null> => r.status === "fulfilled")
+    .map(r => r.value)
+    .filter((v): v is FilmographyEntry => v !== null);
+}
+
+/**
+ * Supplement filmography with TMDB keyword search (finds live-action appearances).
+ * Deduplicates by imdbId vs what's already in the list.
+ */
 async function getFilmographyByKeyword(characterName: string): Promise<FilmographyEntry[]> {
   try {
     const kwData = await tmdbFetch<{ results?: Array<{ id: number; name: string }> }>(
@@ -152,6 +247,30 @@ async function getFilmographyByKeyword(characterName: string): Promise<Filmograp
   }
 }
 
+/**
+ * Merge AniList filmography + TMDB keyword filmography, deduplicating by imdbId.
+ * AniList entries take priority (more accurate for anime).
+ */
+function mergeFilmographies(anilistEntries: FilmographyEntry[], tmdbEntries: FilmographyEntry[]): FilmographyEntry[] {
+  const seen = new Set<string>();
+  const out: FilmographyEntry[] = [];
+
+  for (const e of anilistEntries) {
+    if (e.imdbId && !seen.has(e.imdbId)) {
+      seen.add(e.imdbId);
+      out.push(e);
+    }
+  }
+  for (const e of tmdbEntries) {
+    if (e.imdbId && !seen.has(e.imdbId)) {
+      seen.add(e.imdbId);
+      out.push(e);
+    }
+  }
+
+  return out.sort((a, b) => (b.voteCount ?? 0) - (a.voteCount ?? 0));
+}
+
 // ── GET /character/by-movie/:tmdbId ───────────────────────────────────────────
 
 router.get(
@@ -187,10 +306,10 @@ router.get(
         characterEntries = (credits.cast ?? [])
           .map(c => {
             const raw = c.roles?.[0]?.character ?? c.character ?? "";
-            return { name: raw.split("/")[0].trim() };
+            return { name: cleanCharacterName(raw) };
           })
           .filter(e => e.name.length > 1)
-          .slice(0, 15);
+          .slice(0, 20);
 
       } else if (/^\d+$/.test(tmdbId)) {
         const [credits, movieInfo] = await Promise.all([
@@ -206,9 +325,9 @@ router.get(
         originalLanguage = movieInfo.original_language ?? "";
         genreIds = movieInfo.genre_ids ?? (movieInfo.genres ?? []).map((g: { id: number }) => g.id);
         characterEntries = (credits.cast ?? [])
-          .map(c => ({ name: (c.character ?? "").split("/")[0].trim() }))
+          .map(c => ({ name: cleanCharacterName(c.character ?? "") }))
           .filter(e => e.name.length > 1)
-          .slice(0, 15);
+          .slice(0, 20);
 
       } else if (/^tt\d+$/.test(tmdbId)) {
         const findData = await tmdbFetch<{
@@ -224,16 +343,16 @@ router.get(
             ).catch(() => ({ cast: [] })),
             tmdbFetch<{
               title?: string; original_language?: string;
-              genres?: Array<{ id: number }>;
+              genres?: Array<{ id: number }>; genre_ids?: number[];
             }>(`/movie/${movieHit.id}`).catch((): MovieInfoShape => ({})),
           ]);
           movieTitle = movieInfo.title ?? "";
           originalLanguage = movieInfo.original_language ?? "";
-          genreIds = (movieInfo.genres ?? []).map((g: { id: number }) => g.id);
+          genreIds = movieInfo.genre_ids ?? (movieInfo.genres ?? []).map((g: { id: number }) => g.id);
           characterEntries = (credits.cast ?? [])
-            .map(c => ({ name: (c.character ?? "").split("/")[0].trim() }))
+            .map(c => ({ name: cleanCharacterName(c.character ?? "") }))
             .filter(e => e.name.length > 1)
-            .slice(0, 15);
+            .slice(0, 20);
         } else if (tvHit) {
           const [credits, tvInfo] = await Promise.all([
             tmdbFetch<{
@@ -241,19 +360,19 @@ router.get(
             }>(`/tv/${tvHit.id}/aggregate_credits`).catch(() => ({ cast: [] })),
             tmdbFetch<{
               name?: string; original_language?: string;
-              genres?: Array<{ id: number }>;
+              genres?: Array<{ id: number }>; genre_ids?: number[];
             }>(`/tv/${tvHit.id}`).catch((): TvInfoShape => ({})),
           ]);
           movieTitle = tvInfo.name ?? "";
           originalLanguage = tvInfo.original_language ?? "";
-          genreIds = (tvInfo.genres ?? []).map((g: { id: number }) => g.id);
+          genreIds = tvInfo.genre_ids ?? (tvInfo.genres ?? []).map((g: { id: number }) => g.id);
           characterEntries = (credits.cast ?? [])
             .map(c => {
               const raw = c.roles?.[0]?.character ?? c.character ?? "";
-              return { name: raw.split("/")[0].trim() };
+              return { name: cleanCharacterName(raw) };
             })
             .filter(e => e.name.length > 1)
-            .slice(0, 15);
+            .slice(0, 20);
         }
       }
     } catch { /* ignore */ }
@@ -298,7 +417,7 @@ router.get(
 
     const now = Date.now();
 
-    // AniList character
+    // ── AniList character ──────────────────────────────────────────────────────
     if (rawCharId.startsWith("al:")) {
       const anilistId = parseInt(rawCharId.slice(3), 10);
       if (isNaN(anilistId)) return res.status(400).json({ error: "Invalid AniList ID" });
@@ -311,7 +430,12 @@ router.get(
       if (filmCached && now - filmCached.ts < CACHE_TTL) {
         filmography = filmCached.filmography;
       } else {
-        filmography = await getFilmographyByKeyword(charDetail.name).catch(() => []);
+        // Build filmography from AniList media appearances + TMDB keyword fallback
+        const [anilistFilmo, kwFilmo] = await Promise.all([
+          getFilmographyFromAniListMedia(charDetail.media),
+          getFilmographyByKeyword(charDetail.name).catch(() => [] as FilmographyEntry[]),
+        ]);
+        filmography = mergeFilmographies(anilistFilmo, kwFilmo);
         FILMOGRAPHY_CACHE.set(rawCharId, { filmography, ts: now });
       }
 
@@ -326,7 +450,7 @@ router.get(
       });
     }
 
-    // TMDB-only: treat charId as character name
+    // ── TMDB-only: treat charId as character name ──────────────────────────────
     const characterName = decodeURIComponent(rawCharId);
     const filmCached = FILMOGRAPHY_CACHE.get(rawCharId);
     let filmography: FilmographyEntry[] = [];
