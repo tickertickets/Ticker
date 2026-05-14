@@ -69,26 +69,57 @@ function cleanCharacterName(raw: string): string {
     .trim();
 }
 
+/**
+ * Normalize Japanese romanization variations so matching works despite
+ * spelling differences (e.g. AniList "Yuuji Itadori" vs TMDB "Yuji Itadori",
+ * "Satoru Gojou" vs "Satoru Gojo").
+ */
+function normalizeRomaji(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/ou/g, "o")
+    .replace(/uu/g, "u")
+    .replace(/ii/g, "i")
+    .replace(/[^a-z0-9\s]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function matchAniListChar(
   tmdbName: string,
   anilistChars: Array<{ id: number; name: string; imageUrl: string | null; description: string | null }>,
 ): { id: number; name: string; imageUrl: string | null; description: string | null } | null {
   const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
   const tmdbNorm = normalize(tmdbName);
+  const tmdbRomaji = normalizeRomaji(tmdbName);
   const tmdbWords = tmdbNorm.split(/\s+/).filter(w => w.length > 1);
+  const tmdbRomajiWords = tmdbRomaji.split(/\s+/).filter(w => w.length > 1);
 
+  // Pass 1: exact match
   for (const ac of anilistChars) {
     if (normalize(ac.name) === tmdbNorm) return ac;
   }
+  // Pass 2: exact match after romaji normalization
+  for (const ac of anilistChars) {
+    if (normalizeRomaji(ac.name) === tmdbRomaji) return ac;
+  }
+  // Pass 3: word-overlap match (standard)
   for (const ac of anilistChars) {
     const alWords = normalize(ac.name).split(/\s+/).filter(w => w.length > 1);
     const overlap = tmdbWords.filter(w => alWords.includes(w));
     if (overlap.length > 0 && overlap.length >= Math.min(tmdbWords.length, alWords.length)) return ac;
   }
-  if (tmdbWords.length === 2) {
-    const reversed = `${tmdbWords[1]} ${tmdbWords[0]}`;
+  // Pass 4: word-overlap after romaji normalization (catches Yuuji vs Yuji, Gojou vs Gojo)
+  for (const ac of anilistChars) {
+    const alWords = normalizeRomaji(ac.name).split(/\s+/).filter(w => w.length > 1);
+    const overlap = tmdbRomajiWords.filter(w => alWords.includes(w));
+    if (overlap.length > 0 && overlap.length >= Math.min(tmdbRomajiWords.length, alWords.length)) return ac;
+  }
+  // Pass 5: reversed name (Japanese "Last First" order)
+  if (tmdbRomajiWords.length === 2) {
+    const reversed = `${tmdbRomajiWords[1]} ${tmdbRomajiWords[0]}`;
     for (const ac of anilistChars) {
-      if (normalize(ac.name) === reversed) return ac;
+      if (normalizeRomaji(ac.name) === reversed) return ac;
     }
   }
   return null;
@@ -276,7 +307,11 @@ function mergeFilmographies(anilistEntries: FilmographyEntry[], tmdbEntries: Fil
 router.get(
   "/by-movie/:tmdbId",
   asyncHandler(async (req, res) => {
-    const { tmdbId } = req.params as { tmdbId: string };
+    // Handle Vercel double-encoding: `tmdb_tv:xxx` → `tmdb_tv%3Axxx`, `tmdb:xxx` → `tmdb%3Axxx`
+    let tmdbId = req.params.tmdbId as string;
+    if (tmdbId.includes("%")) {
+      try { tmdbId = decodeURIComponent(tmdbId); } catch { /* keep as-is */ }
+    }
 
     const cached = BY_MOVIE_CACHE.get(tmdbId);
     if (cached && Date.now() - cached.ts < CACHE_TTL) {
@@ -308,6 +343,26 @@ router.get(
             const raw = c.roles?.[0]?.character ?? c.character ?? "";
             return { name: cleanCharacterName(raw) };
           })
+          .filter(e => e.name.length > 1)
+          .slice(0, 20);
+
+      } else if (tmdbId.startsWith("tmdb:")) {
+        // Format used by filmography entries: "tmdb:641934"
+        const movieNumId = tmdbId.replace("tmdb:", "");
+        const [credits, movieInfo] = await Promise.all([
+          tmdbFetch<{ cast?: Array<{ character?: string }> }>(
+            `/movie/${movieNumId}/credits`,
+          ).catch(() => ({ cast: [] })),
+          tmdbFetch<{
+            title?: string; original_language?: string; genre_ids?: number[];
+            genres?: Array<{ id: number }>;
+          }>(`/movie/${movieNumId}`).catch((): MovieInfoShape => ({})),
+        ]);
+        movieTitle = movieInfo.title ?? "";
+        originalLanguage = movieInfo.original_language ?? "";
+        genreIds = movieInfo.genre_ids ?? (movieInfo.genres ?? []).map((g: { id: number }) => g.id);
+        characterEntries = (credits.cast ?? [])
+          .map(c => ({ name: cleanCharacterName(c.character ?? "") }))
           .filter(e => e.name.length > 1)
           .slice(0, 20);
 
@@ -410,7 +465,15 @@ router.get(
 router.get(
   "/:charId",
   asyncHandler(async (req, res) => {
-    const rawCharId = req.params["charId"] as string;
+    // Express decodes URL params once. Vercel's rewrite proxy may double-encode `:`
+    // so `al:126635` becomes `al%3A126635` by the time Express sees it.
+    // We decode one extra time to normalise this.
+    let rawCharId = req.params["charId"] as string;
+    if (rawCharId.toLowerCase().startsWith("al%3a")) {
+      rawCharId = "al:" + rawCharId.slice(5);
+    } else if (rawCharId.includes("%")) {
+      try { rawCharId = decodeURIComponent(rawCharId); } catch { /* keep as-is */ }
+    }
     if (!rawCharId || rawCharId.length < 1) {
       return res.status(400).json({ error: "Invalid character ID" });
     }

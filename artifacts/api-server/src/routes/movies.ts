@@ -36,6 +36,7 @@ import {
 } from "../lib/errors";
 import { tmdbFetch, posterUrl, TMDB_IMG_WIDE, isoDate } from "../lib/tmdb-client";
 import { queryAwardsByImdbId } from "../lib/wikipedia";
+import { getAniListRelations } from "../lib/anilist";
 import {
   detectLanguage,
   normalizeItem,
@@ -1572,23 +1573,101 @@ router.get(
     }
 
     try {
-      // ── TV Show: use recommendations to find related/spinoff series ──────────
+      // ── TV Show: AniList relations for anime, TMDB recommendations for others ──
       if (isTv) {
+        // Fetch show info to detect anime
+        const showInfo = await tmdbFetch<{
+          name?: string; original_language?: string;
+          genre_ids?: number[]; genres?: Array<{ id: number }>;
+        }>(`/tv/${tmdbId}`).catch(() => ({}));
+
+        const showGenreIds = showInfo.genre_ids ?? (showInfo.genres ?? []).map(g => g.id);
+        const isAnime = showInfo.original_language === "ja" && showGenreIds.includes(16);
+        const showName = showInfo.name ?? "";
+
+        if (isAnime && showName) {
+          // Use AniList relations — much more accurate than TMDB recommendations for anime
+          const alRelations = await getAniListRelations(showName).catch(() => [] as Awaited<ReturnType<typeof getAniListRelations>>);
+
+          if (alRelations.length > 0) {
+            // Search TMDB for each related anime to get poster + official data
+            const relatedItems = await Promise.allSettled(
+              alRelations.map(async (rel, idx) => {
+                const searchTitle = rel.titleEnglish || rel.titleRomaji || "";
+                if (!searchTitle) return null;
+
+                const isMovie = rel.format === "MOVIE";
+                if (isMovie) {
+                  const sr = await tmdbFetch<{ results?: Array<{ id: number; title?: string; poster_path?: string | null; release_date?: string }> }>(
+                    "/search/movie", { query: searchTitle, include_adult: "false" }
+                  ).catch(() => ({ results: [] as Array<{ id: number; title?: string; poster_path?: string | null; release_date?: string }> }));
+                  const hit = sr.results?.find(r => r.poster_path) ?? sr.results?.[0];
+                  return {
+                    imdbId: hit ? `tmdb:${hit.id}` : null,
+                    tmdbId: hit?.id ?? 0,
+                    title: hit?.title ?? searchTitle,
+                    year: (hit?.release_date ?? (rel.startYear ? String(rel.startYear) : "")).slice(0, 4) || null,
+                    releaseDate: hit?.release_date ?? null,
+                    posterUrl: hit?.poster_path ? posterUrl(hit.poster_path) : (rel.coverImage ?? null),
+                    isCurrent: false,
+                    collectionIndex: idx,
+                    isSpinoff: rel.relationType !== "SEQUEL" && rel.relationType !== "PREQUEL",
+                    relationType: rel.relationType,
+                  };
+                } else {
+                  const sr = await tmdbFetch<{ results?: Array<{ id: number; name?: string; poster_path?: string | null; first_air_date?: string }> }>(
+                    "/search/tv", { query: searchTitle, include_adult: "false" }
+                  ).catch(() => ({ results: [] as Array<{ id: number; name?: string; poster_path?: string | null; first_air_date?: string }> }));
+                  const hit = sr.results?.find(r => r.poster_path) ?? sr.results?.[0];
+                  return {
+                    imdbId: hit ? `tmdb_tv:${hit.id}` : null,
+                    tmdbId: hit?.id ?? 0,
+                    title: hit?.name ?? searchTitle,
+                    year: (hit?.first_air_date ?? (rel.startYear ? String(rel.startYear) : "")).slice(0, 4) || null,
+                    releaseDate: hit?.first_air_date ?? null,
+                    posterUrl: hit?.poster_path ? posterUrl(hit.poster_path) : (rel.coverImage ?? null),
+                    isCurrent: false,
+                    collectionIndex: idx,
+                    isSpinoff: rel.relationType !== "SEQUEL" && rel.relationType !== "PREQUEL",
+                    relationType: rel.relationType,
+                  };
+                }
+              })
+            );
+
+            const movies = relatedItems
+              .filter(r => r.status === "fulfilled" && r.value?.title)
+              .map(r => (r as PromiseFulfilledResult<NonNullable<Awaited<ReturnType<typeof getAniListRelations>>[number] & object>>).value)
+              .filter(Boolean) as Array<{
+                imdbId: string | null; tmdbId: number; title: string; year: string | null;
+                releaseDate: string | null; posterUrl: string | null; isCurrent: boolean;
+                collectionIndex: number; isSpinoff: boolean;
+              }>;
+
+            if (movies.length > 0) {
+              const collectionLabel = lang === "th" ? "ซีรีส์ที่เกี่ยวข้อง" : "Related Anime";
+              res.json({ movies, collectionName: collectionLabel });
+              return;
+            }
+          }
+        }
+
+        // Fallback: TMDB recommendations + similar
         let relatedShows: Array<{ id: number; name?: string; poster_path?: string | null; first_air_date?: string }> = [];
         try {
           const [recData, recData2, simData, simData2] = await Promise.all([
             tmdbFetch<{ results?: typeof relatedShows }>(
               `/tv/${tmdbId}/recommendations`, { language: lang, page: "1" }
-            ).catch(() => ({ results: [] })),
+            ).catch(() => ({ results: [] as typeof relatedShows })),
             tmdbFetch<{ results?: typeof relatedShows }>(
               `/tv/${tmdbId}/recommendations`, { language: lang, page: "2" }
-            ).catch(() => ({ results: [] })),
+            ).catch(() => ({ results: [] as typeof relatedShows })),
             tmdbFetch<{ results?: typeof relatedShows }>(
               `/tv/${tmdbId}/similar`, { language: lang, page: "1" }
-            ).catch(() => ({ results: [] })),
+            ).catch(() => ({ results: [] as typeof relatedShows })),
             tmdbFetch<{ results?: typeof relatedShows }>(
               `/tv/${tmdbId}/similar`, { language: lang, page: "2" }
-            ).catch(() => ({ results: [] })),
+            ).catch(() => ({ results: [] as typeof relatedShows })),
           ]);
           const recResults = [...(recData.results ?? []), ...(recData2.results ?? [])];
           const simResults = [...(simData.results ?? []), ...(simData2.results ?? [])];
@@ -3051,31 +3130,84 @@ router.get(
 
     const PROFILE_BASE = "https://image.tmdb.org/t/p/w185";
 
-    const creditsData = await tmdbFetch<{
-      cast?: Array<{ id: number; name: string; character?: string; profile_path?: string | null; order?: number }>;
-      crew?: Array<{ id: number; name: string; job: string; profile_path?: string | null }>;
-    }>(`/${isTv ? "tv" : "movie"}/${tmdbId}/credits`, { language: lang });
+    let cast: Array<{ id: number; name: string; character: string; profileUrl: string | null }> = [];
+    let directors: Array<{ id: number; name: string; profileUrl: string | null }> = [];
+    let isVoiceCast = false;
 
-    const cast = (creditsData.cast ?? [])
-      .filter(c => (c.order ?? 99) < 10)
-      .sort((a, b) => (a.order ?? 99) - (b.order ?? 99))
-      .map(c => ({
-        id: c.id,
-        name: c.name,
-        character: c.character || "",
-        profileUrl: c.profile_path ? `${PROFILE_BASE}${c.profile_path}` : null,
-      }));
+    if (isTv) {
+      // aggregate_credits covers ALL episodes — gives correct voice cast + episode counts
+      const [aggData, showData] = await Promise.all([
+        tmdbFetch<{
+          cast?: Array<{
+            id: number; name: string; profile_path?: string | null;
+            roles?: Array<{ character?: string; episode_count?: number }>;
+            total_episode_count?: number; order?: number;
+          }>;
+        }>(`/tv/${tmdbId}/aggregate_credits`, { language: lang }).catch(() => ({ cast: [] })),
+        tmdbFetch<{
+          original_language?: string; genre_ids?: number[];
+          genres?: Array<{ id: number }>;
+          created_by?: Array<{ id: number; name: string; profile_path?: string | null }>;
+        }>(`/tv/${tmdbId}`).catch(() => ({})),
+      ]);
 
-    const directors = (creditsData.crew ?? [])
-      .filter(c => c.job === "Director")
-      .slice(0, 5)
-      .map(c => ({
-        id: c.id,
-        name: c.name,
-        profileUrl: c.profile_path ? `${PROFILE_BASE}${c.profile_path}` : null,
-      }));
+      const genreIds = showData.genre_ids ?? (showData.genres ?? []).map(g => g.id);
+      isVoiceCast = (showData.original_language === "ja" && genreIds.includes(16));
 
-    res.json({ cast, directors });
+      cast = (aggData.cast ?? [])
+        .filter(c => (c.order ?? 99) < 15)
+        .sort((a, b) => (a.order ?? 99) - (b.order ?? 99))
+        .slice(0, 15)
+        .map(c => ({
+          id: c.id,
+          name: c.name,
+          character: c.roles?.[0]?.character || "",
+          profileUrl: c.profile_path ? `${PROFILE_BASE}${c.profile_path}` : null,
+        }));
+
+      directors = (showData.created_by ?? [])
+        .slice(0, 5)
+        .map(c => ({
+          id: c.id,
+          name: c.name,
+          profileUrl: c.profile_path ? `${PROFILE_BASE}${c.profile_path}` : null,
+        }));
+
+    } else {
+      const creditsData = await tmdbFetch<{
+        cast?: Array<{ id: number; name: string; character?: string; profile_path?: string | null; order?: number }>;
+        crew?: Array<{ id: number; name: string; job: string; profile_path?: string | null }>;
+      }>(`/movie/${tmdbId}/credits`, { language: lang });
+
+      const movieInfo = await tmdbFetch<{
+        original_language?: string; genre_ids?: number[];
+        genres?: Array<{ id: number }>;
+      }>(`/movie/${tmdbId}`).catch(() => ({}));
+
+      const genreIds = movieInfo.genre_ids ?? (movieInfo.genres ?? []).map((g: { id: number }) => g.id);
+      isVoiceCast = (movieInfo.original_language === "ja" && genreIds.includes(16));
+
+      cast = (creditsData.cast ?? [])
+        .filter(c => (c.order ?? 99) < 10)
+        .sort((a, b) => (a.order ?? 99) - (b.order ?? 99))
+        .map(c => ({
+          id: c.id,
+          name: c.name,
+          character: c.character || "",
+          profileUrl: c.profile_path ? `${PROFILE_BASE}${c.profile_path}` : null,
+        }));
+
+      directors = (creditsData.crew ?? [])
+        .filter(c => c.job === "Director")
+        .slice(0, 5)
+        .map(c => ({
+          id: c.id,
+          name: c.name,
+          profileUrl: c.profile_path ? `${PROFILE_BASE}${c.profile_path}` : null,
+        }));
+    }
+
+    res.json({ cast, directors, isVoiceCast });
   }),
 );
 

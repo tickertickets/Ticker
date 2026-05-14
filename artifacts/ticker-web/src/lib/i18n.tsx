@@ -525,6 +525,7 @@ export interface Strings {
   trailerLabel: string;
   directorLabel: string;
   castLabel: string;
+  voiceActorLabel: string;
   watchOnLabel: string;
   seeMore: string;
   // ── Person detail ────────────────────────────────────────────────
@@ -1113,6 +1114,7 @@ const TH: Strings = {
   trailerLabel: "ตัวอย่างหนัง",
   directorLabel: "กำกับ",
   castLabel: "นักแสดง",
+  voiceActorLabel: "นักพากย์",
   watchOnLabel: "ดูได้ที่",
   seeMore: "... ดูเพิ่มเติม",
   personNotFound: "ไม่พบบุคคลนี้",
@@ -1700,6 +1702,7 @@ const EN: Strings = {
   trailerLabel: "Trailer",
   directorLabel: "Director",
   castLabel: "Cast",
+  voiceActorLabel: "Voice Cast",
   watchOnLabel: "Available on",
   seeMore: "... see more",
   personNotFound: "Person not found",

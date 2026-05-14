@@ -113,6 +113,86 @@ export async function getAniListCharacters(title: string): Promise<AniListChar[]
   return chars;
 }
 
+export type AniListRelation = {
+  id: number;
+  relationType: string;
+  format: string | null;
+  titleRomaji: string | null;
+  titleEnglish: string | null;
+  coverImage: string | null;
+  startYear: number | null;
+  averageScore: number | null;
+  popularity: number;
+};
+
+const relationsCache = new Map<string, { rels: AniListRelation[]; ts: number }>();
+
+export async function getAniListRelations(title: string): Promise<AniListRelation[]> {
+  const cached = relationsCache.get(title);
+  if (cached && Date.now() - cached.ts < CACHE_TTL) return cached.rels;
+
+  const query = `
+    query ($title: String) {
+      Media(search: $title, type: ANIME) {
+        relations {
+          edges {
+            relationType
+            node {
+              id
+              type
+              format
+              title { romaji english }
+              coverImage { large }
+              startDate { year }
+              averageScore
+              popularity
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  const data = await gql<{
+    Media?: {
+      relations?: {
+        edges?: Array<{
+          relationType?: string;
+          node?: {
+            id: number;
+            type?: string;
+            format?: string | null;
+            title?: { romaji?: string; english?: string | null };
+            coverImage?: { large?: string };
+            startDate?: { year?: number | null };
+            averageScore?: number | null;
+            popularity?: number;
+          };
+        }>;
+      };
+    };
+  }>(query, { title });
+
+  const KEEP_TYPES = new Set(["PREQUEL", "SEQUEL", "SIDE_STORY", "SPIN_OFF", "PARENT", "ALTERNATIVE", "SUMMARY"]);
+
+  const rels: AniListRelation[] = (data?.Media?.relations?.edges ?? [])
+    .filter(e => KEEP_TYPES.has(e.relationType ?? "") && e.node?.type === "ANIME" && e.node?.id)
+    .map(e => ({
+      id: e.node!.id,
+      relationType: e.relationType ?? "",
+      format: e.node!.format ?? null,
+      titleRomaji: e.node!.title?.romaji ?? null,
+      titleEnglish: e.node!.title?.english ?? null,
+      coverImage: e.node!.coverImage?.large ?? null,
+      startYear: e.node!.startDate?.year ?? null,
+      averageScore: e.node!.averageScore ?? null,
+      popularity: e.node!.popularity ?? 0,
+    }));
+
+  relationsCache.set(title, { rels, ts: Date.now() });
+  return rels;
+}
+
 export async function getAniListCharacterById(id: number): Promise<AniListCharDetail | null> {
   const cached = charDetailCache.get(id);
   if (cached && Date.now() - cached.ts < CACHE_TTL) return cached.detail;

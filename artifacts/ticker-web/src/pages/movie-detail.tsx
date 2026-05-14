@@ -444,7 +444,7 @@ export default function MovieDetail() {
   });
 
   type CreditPerson = { id: number; name: string; character?: string; profileUrl: string | null };
-  const { data: creditsData } = useQuery<{ cast: CreditPerson[]; directors: CreditPerson[] }>({
+  const { data: creditsData } = useQuery<{ cast: CreditPerson[]; directors: CreditPerson[]; isVoiceCast?: boolean }>({
     queryKey: ["/api/movies", movieId, "credits", lang],
     queryFn: async () => {
       const apiLang = lang === "en" ? "en-US" : "th-TH";
@@ -1119,7 +1119,7 @@ export default function MovieDetail() {
                 <div className="mt-3">
                   <div className="flex items-center gap-2 mb-2">
                     <Users className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">{t.castLabel}</p>
+                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">{creditsData?.isVoiceCast ? t.voiceActorLabel : t.castLabel}</p>
                     <span className="text-[10px] text-muted-foreground">{(creditsData?.cast ?? []).length}</span>
                   </div>
                   <div className="flex overflow-x-auto gap-2.5 pb-1 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
