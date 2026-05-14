@@ -338,6 +338,9 @@ let popularFetchPromise: Promise<PopularFictionItem[]> | null = null;
 const SKIP_ARTICLES = /^(Main_Page|Special:|Wikipedia:|WP:|Portal:|File:|Template:|Help:|Category:|Talk:|User:|MediaWiki:)/;
 
 async function fetchPopularFictionItems(): Promise<PopularFictionItem[]> {
+  return popularCache?.items ?? [];
+  // External Wikipedia/Wikidata search removed. Kept below for reference only.
+  // eslint-disable-next-line no-unreachable
   const todayUtc = new Date().toISOString().slice(0, 10);
   if (popularCache && popularCache.date === todayUtc) return popularCache.items;
   if (popularFetching && popularFetchPromise) return popularFetchPromise;
@@ -521,20 +524,21 @@ router.get("/bookmarks", async (req, res) => {
 // Searches Wikipedia + Wikidata and filters to fiction-only using P31 batch check.
 // Only returns wd:* IDs — real-world items are blocked by requiring P31 match.
 router.get("/search", async (req, res) => {
+  res.json({ items: [] }); return;
+  // External Wikipedia/Wikidata search removed.
+  // eslint-disable-next-line no-unreachable
   const q = typeof req.query["q"] === "string" ? req.query["q"].trim() : "";
   if (!q) { res.json({ items: [] }); return; }
   const limit = Math.min(Number(req.query["limit"]) || 12, 20);
   const lang = detectLang(q);
   const cacheKey = `${lang}:${q.toLowerCase()}`;
 
-  // Serve from cache if fresh
   const cached = searchCache.get(cacheKey);
   if (cached && Date.now() - cached.ts < SEARCH_CACHE_TTL) {
     res.json({ items: cached.items.slice(0, limit) });
     return;
   }
 
-  // Deduplicate in-flight requests for the same query
   const inflight = searchInflight.get(cacheKey);
   if (inflight) {
     try {

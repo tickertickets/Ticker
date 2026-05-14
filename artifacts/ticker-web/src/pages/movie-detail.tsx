@@ -942,6 +942,43 @@ export default function MovieDetail() {
         </div>
       )}
 
+      {/* ── Characters ── */}
+      {(charactersData?.results ?? []).length > 0 && (
+        <>
+          <div className="mx-5 border-t border-border my-4" />
+          <div className="px-5 mb-2 flex items-center gap-2">
+            <User className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+            <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">
+              {lang === "th" ? "ตัวละคร" : "Characters"}
+            </p>
+            <span className="text-[10px] text-muted-foreground">{charactersData!.results.length}</span>
+          </div>
+          <div
+            className="flex overflow-x-auto gap-2.5 pb-1 scrollbar-hide"
+            style={{ WebkitOverflowScrolling: "touch", paddingLeft: 20, paddingRight: 20 }}
+          >
+            {charactersData!.results.map(char => (
+              <Link
+                key={char.wikidataId}
+                href={`/character/${encodeURIComponent(char.wikidataId)}?srclang=${lang}`}
+              >
+                <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
+                  <div className="relative" style={{ aspectRatio: "2/3" }}>
+                    {char.imageUrl
+                      ? <img src={char.imageUrl} alt={char.name} className="w-full h-full object-cover object-top" loading="lazy" />
+                      : <div className="w-full h-full flex items-center justify-center bg-zinc-900"><User className="w-4 h-4 text-muted-foreground opacity-30" /></div>}
+                  </div>
+                  <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
+                    <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{char.name}</p>
+                    {char.alias && <p className="text-[8px] text-muted-foreground mt-0.5 truncate">{char.alias}</p>}
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </>
+      )}
+
       {/* ── Details — single collapsible (cast, directors, collection, spinoffs) ── */}
       {((creditsData?.cast ?? []).length > 0 || (creditsData?.directors ?? []).length > 0 || ((collectionData?.movies ?? []).length > 0)) && (
         <div className="px-5 pt-4">
@@ -1114,39 +1151,6 @@ export default function MovieDetail() {
         </div>
       )}
 
-      {/* ── Fictional Characters (Wikipedia) ── */}
-      {(charactersData?.results ?? []).length > 0 && (
-        <>
-          <div className="mx-5 border-t border-border my-4" />
-          <div className="px-5 mb-3 flex items-center gap-2">
-            <User className="w-3.5 h-3.5 text-muted-foreground" />
-            <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">
-              {lang === "th" ? "ตัวละคร" : "Characters"}
-            </p>
-            <span className="text-[10px] text-muted-foreground">{charactersData!.results.length}</span>
-          </div>
-          <div className="px-5 overflow-x-auto scrollbar-none">
-            <div className="flex gap-3 pb-2" style={{ width: "max-content" }}>
-              {charactersData!.results.map(char => (
-                <Link
-                  key={char.wikidataId}
-                  href={`/character/${encodeURIComponent(char.wikidataId)}?srclang=${lang}`}
-                >
-                  <div className="flex flex-col items-center gap-1.5 w-[64px]">
-                    <div className="w-[64px] h-[64px] rounded-2xl overflow-hidden bg-secondary border border-border flex-shrink-0">
-                      {char.imageUrl
-                        ? <img src={char.imageUrl} alt={char.name} className="w-full h-full object-cover object-top" loading="lazy" />
-                        : <div className="w-full h-full flex items-center justify-center"><User className="w-6 h-6 text-muted-foreground opacity-30" /></div>}
-                    </div>
-                    <p className="text-[9px] font-bold text-foreground text-center line-clamp-2 leading-tight w-full">{char.name}</p>
-                    {char.alias && <p className="text-[8px] text-muted-foreground text-center truncate w-full">{char.alias}</p>}
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </div>
-        </>
-      )}
 
       {/* ── Ticker Community section ── */}
       {(community.length >= 5 || (ratingsData && ((ratingsData.totalStars ?? 0) >= 5 || (ratingsData.totalStars ?? 0) <= -1))) && (

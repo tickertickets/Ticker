@@ -8,12 +8,12 @@ import type { ChainItem } from "@/components/ChainsSection";
 import { UpcomingCard, type UpcomingMovie } from "@/components/UpcomingCard";
 import {
   Loader2, Search as SearchIcon, User, Users, X as XIcon,
-  Ticket, Link2, Newspaper, BookOpen,
+  Ticket, Link2, Newspaper,
 } from "lucide-react";
 import { Link, useSearch } from "wouter";
 import { VerifiedBadge, isVerified } from "@/components/VerifiedBadge";
 import { BadgeIcon } from "@/components/BadgeIcon";
-import { useQuery, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useDebounceValue } from "usehooks-ts";
 import { cn } from "@/lib/utils";
 import { scrollStore } from "@/lib/scroll-store";
@@ -33,7 +33,7 @@ function useUpcomingFeed() {
   });
 }
 
-type ExploreTab = "tickets" | "chains" | "news" | "users" | "wiki";
+type ExploreTab = "tickets" | "chains" | "news" | "users";
 
 // ── UserRow ──────────────────────────────────────────────────────────────────
 
@@ -327,263 +327,18 @@ function NewsFeed() {
   );
 }
 
-// ── Wiki helpers ──────────────────────────────────────────────────────────────
-
-type WikiCategory = "all" | "character" | "item" | "location" | "movie" | "series" | "other";
-
-const WIKI_CATS: { id: WikiCategory; label: string; emoji: string }[] = [
-  { id: "all",       label: "ทั้งหมด",   emoji: "📖" },
-  { id: "character", label: "ตัวละคร",   emoji: "👤" },
-  { id: "item",      label: "ไอเทม",     emoji: "⚔️" },
-  { id: "location",  label: "สถานที่",   emoji: "🗺️" },
-];
-
-const WIKI_CAT_LABEL: Record<string, { th: string; en: string }> = {
-  character: { th: "ตัวละคร",   en: "Character" },
-  item:      { th: "ไอเทม",     en: "Item"       },
-  location:  { th: "สถานที่",   en: "Location"   },
-  movie:     { th: "ภาพยนตร์",  en: "Movie"      },
-  series:    { th: "ซีรีส์",    en: "Series"     },
-  other:     { th: "อื่นๆ",     en: "Other"      },
-};
-function wikiCatLabel(cat: string, lang: string) {
-  const entry = WIKI_CAT_LABEL[cat];
-  if (!entry) return cat;
-  return lang === "th" ? entry.th : entry.en;
-}
-
-const WIKI_CAT_COLOR: Record<string, string> = {
-  character: "bg-foreground/8 text-foreground",
-  item:      "bg-foreground/8 text-foreground",
-  location:  "bg-foreground/8 text-foreground",
-  movie:     "bg-foreground/8 text-foreground",
-  series:    "bg-foreground/8 text-foreground",
-  other:     "bg-foreground/8 text-foreground",
-};
-
-type WikiFeedItem = {
-  wikiPageId: string;
-  title: string;
-  excerpt: string | null;
-  thumbnailUrl: string | null;
-  category: string;
-  likeCount: number;
-  commentCount: number;
-};
-
-type WikiSearchResult = {
-  pageId: string;
-  wikiPageId: string;
-  title: string;
-  excerpt: string;
-  thumbnailUrl: string | null;
-  category: string;
-  lang?: string;
-};
-
-function WikiItemCard({ item }: { item: WikiFeedItem | WikiSearchResult }) {
-  const { lang } = useLang();
-  const itemLang = (item as WikiSearchResult).lang ?? "en";
-  const thumbParam = item.thumbnailUrl ? `&thumb=${encodeURIComponent(item.thumbnailUrl)}` : "";
-  const wikiHref = `/wiki/${encodeURIComponent(item.wikiPageId)}?lang=${itemLang}${thumbParam}`;
-  const [imgFailed, setImgFailed] = useState(false);
-  return (
-    <Link href={wikiHref}>
-      <div className="flex items-center gap-3 bg-secondary rounded-2xl p-3 border border-border active:opacity-70 transition-opacity cursor-pointer">
-        <div className="w-14 h-14 rounded-xl overflow-hidden bg-background flex-shrink-0 border border-border flex items-center justify-center">
-          {item.thumbnailUrl && !imgFailed ? (
-            <img
-              src={item.thumbnailUrl}
-              alt={item.title}
-              className="w-full h-full object-cover"
-              onError={() => setImgFailed(true)}
-            />
-          ) : (
-            <BookOpen className="w-5 h-5 text-muted-foreground opacity-40" />
-          )}
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="font-bold text-sm text-foreground leading-tight line-clamp-1">{item.title}</p>
-          {item.category && item.category !== "other" && (
-            <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full mt-0.5 mb-0.5 bg-foreground/8 text-foreground border border-border">
-              {wikiCatLabel(item.category, lang)}
-            </span>
-          )}
-          {item.excerpt && (
-            <p className="text-xs text-muted-foreground line-clamp-2 leading-snug">{item.excerpt}</p>
-          )}
-        </div>
-      </div>
-    </Link>
-  );
-}
-
-const SUGGESTED_SEARCHES = [
-  "Iron Man", "Harry Potter", "Thanos", "Hermione Granger",
-  "Walter White", "Daenerys Targaryen", "Luke Skywalker", "Black Panther",
-  "Mjolnir", "Elder Wand", "Infinity Gauntlet", "One Ring",
-  "Wakanda", "Hogwarts", "Westeros", "Pandora",
-  "Sherlock Holmes", "Batman", "Elsa", "Gandalf",
-];
-
-function WikiEmptyState({ onSearch }: { onSearch: (q: string) => void }) {
-  const { lang } = useLang();
-  return (
-    <div className="px-4 pt-4 pb-8">
-      <div className="flex flex-col items-center text-center mb-6 pt-10">
-        <div className="w-16 h-16 rounded-3xl bg-secondary flex items-center justify-center mb-3">
-          <BookOpen className="w-8 h-8 text-muted-foreground" />
-        </div>
-        <p className="font-bold text-foreground text-sm mb-1">{lang === "th" ? "ค้นหาจากโลกภาพยนตร์" : "Explore the Movie Universe"}</p>
-        <p className="text-xs text-muted-foreground leading-relaxed">
-          {lang === "th" ? <>ตัวละคร ไอเทม สถานที่ จากภาพยนตร์<br />และซีรีส์ที่คุณชื่นชอบ</> : <>Characters, items, locations from<br />your favorite films and series</>}
-        </p>
-      </div>
-      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-3">{lang === "th" ? "ค้นหายอดนิยม" : "Popular searches"}</p>
-      <div className="flex flex-wrap gap-2">
-        {SUGGESTED_SEARCHES.map(s => (
-          <button
-            key={s}
-            onClick={() => onSearch(s)}
-            className="px-3 py-1.5 rounded-full bg-secondary border border-border text-xs font-semibold text-foreground active:opacity-70 transition-opacity"
-          >
-            {s}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ── WikiFeed — popular fiction items from Wikipedia pageviews (infinite scroll) ──
-
-type PopularWikiPage = { items: WikiFeedItem[]; hasMore: boolean; page: number };
-
-function WikiFeed({ onSearch, scrollEl }: { onSearch: (q: string) => void; scrollEl?: HTMLDivElement | null }) {
-  const sentinelRef = useRef<HTMLDivElement>(null);
-
-  const {
-    data,
-    isLoading,
-    isFetchingNextPage,
-    fetchNextPage,
-    hasNextPage,
-  } = useInfiniteQuery<PopularWikiPage>({
-    queryKey: ["wiki-popular"],
-    queryFn: ({ pageParam }) =>
-      fetch(`/api/wiki/popular?page=${pageParam}`, { credentials: "include" }).then(r => r.json()),
-    initialPageParam: 1,
-    getNextPageParam: (last) => last.hasMore ? last.page + 1 : undefined,
-    staleTime: 1000 * 60 * 5,
-  });
-
-  const items = data?.pages.flatMap(p => p.items) ?? [];
-
-  useEffect(() => {
-    const el = sentinelRef.current;
-    if (!el) return;
-    const obs = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting && hasNextPage && !isFetchingNextPage) fetchNextPage(); },
-      { threshold: 0.1 },
-    );
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
-
-  if (isLoading) {
-    return (
-      <div className="flex justify-center py-12">
-        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
-  if (items.length === 0) {
-    return <WikiEmptyState onSearch={onSearch} />;
-  }
-
-  return (
-    <div className="flex flex-col gap-2 px-4 pt-4 pb-8">
-      {items.map(item => <WikiItemCard key={item.wikiPageId} item={item} />)}
-      {isFetchingNextPage && (
-        <div className="flex justify-center py-4">
-          <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-        </div>
-      )}
-      <div ref={sentinelRef} className="h-4" />
-    </div>
-  );
-}
-
-// ── SearchWikiFeed — wiki search results with category badge ──────────────────
-
-function SearchWikiFeed({ query, onSearch }: { query: string; onSearch: (q: string) => void }) {
-  const [debouncedQuery] = useDebounceValue(query, 150);
-  const { lang: uiLang } = useLang();
-  const { data, isLoading, isFetching } = useQuery<{ items: WikiSearchResult[] }>({
-    queryKey: ["/api/wiki/search-feed", debouncedQuery],
-    queryFn: () =>
-      debouncedQuery.trim().length < 1
-        ? Promise.resolve({ items: [] })
-        : fetch(`/api/wiki/search?q=${encodeURIComponent(debouncedQuery.trim())}`, { credentials: "include" })
-            .then(r => r.json()),
-    enabled: debouncedQuery.trim().length > 0,
-    staleTime: 5 * 60 * 1000,
-    gcTime: 15 * 60 * 1000,
-    retry: 1,
-    placeholderData: prev => prev,
-  });
-  const items = data?.items ?? [];
-
-  if (!debouncedQuery.trim()) return <WikiFeed onSearch={onSearch} />;
-
-  if (isLoading && items.length === 0) {
-    return (
-      <div className="flex justify-center py-12">
-        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
-  if (!isLoading && items.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-16 gap-4 text-center px-6">
-        <div className="w-16 h-16 rounded-3xl bg-secondary flex items-center justify-center">
-          <BookOpen className="w-8 h-8 text-muted-foreground" />
-        </div>
-        <p className="font-bold text-foreground text-sm">{uiLang === "th" ? "ไม่พบผลลัพธ์" : "No results found"}</p>
-        <p className="text-xs text-muted-foreground">{uiLang === "th" ? "ลองค้นหาชื่อตัวละครหรือภาพยนตร์อื่น" : "Try searching for another character or film"}</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex flex-col gap-2 px-4 pt-4 pb-8">
-      {isFetching && items.length > 0 && (
-        <div className="flex justify-center py-2">
-          <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-        </div>
-      )}
-      {items.map(item => (
-        <WikiItemCard key={item.wikiPageId} item={item} />
-      ))}
-    </div>
-  );
-}
-
 const TABS: { id: ExploreTab; label: string; icon: any }[] = [
   { id: "tickets", label: "Tickets",  icon: Ticket    },
   { id: "chains",  label: "Chains",   icon: Link2     },
   { id: "news",    label: "Upcoming", icon: Newspaper },
   { id: "users",   label: "Users",    icon: Users     },
-  { id: "wiki",    label: "Wiki",     icon: BookOpen  },
 ];
 
 export default function Home() {
   useSocketFeedUpdates();
   const { t } = useLang();
   const search = useSearch();
-  const VALID_TABS: ExploreTab[] = ["tickets", "chains", "news", "users", "wiki"];
+  const VALID_TABS: ExploreTab[] = ["tickets", "chains", "news", "users"];
   const [tab, setTab] = useState<ExploreTab>(() => {
     const params = new URLSearchParams(search);
     const tabParam = params.get("tab") as ExploreTab;
@@ -627,7 +382,6 @@ export default function Home() {
   const chainsRef  = useRef<HTMLDivElement>(null);
   const newsRef    = useRef<HTMLDivElement>(null);
   const usersRef   = useRef<HTMLDivElement>(null);
-  const wikiRef    = useRef<HTMLDivElement>(null);
 
   // Refs for tab pill scroll-to-center
   const tabPillContainerRef = useRef<HTMLDivElement>(null);
@@ -638,7 +392,6 @@ export default function Home() {
     chains:  chainsRef,
     news:    newsRef,
     users:   usersRef,
-    wiki:    wikiRef,
   };
 
   // Scroll active tab pill to center when tab changes
@@ -691,7 +444,7 @@ export default function Home() {
 
   // ── PWA scroll-lock fix: clamp scrollTop when content height shrinks ──────────
   useEffect(() => {
-    const refs = [ticketsRef, chainsRef, newsRef, usersRef, wikiRef];
+    const refs = [ticketsRef, chainsRef, newsRef, usersRef];
     const observers: ResizeObserver[] = [];
     refs.forEach(ref => {
       const el = ref.current;
@@ -739,14 +492,13 @@ export default function Home() {
     if (prevId === undefined) { prevUserIdRef.current = nextId; return; }
     if (prevId === nextId) return;
     prevUserIdRef.current = nextId;
-    [ticketsRef, chainsRef, newsRef, usersRef, wikiRef].forEach(r => {
+    [ticketsRef, chainsRef, newsRef, usersRef].forEach(r => {
       if (r.current) r.current.scrollTop = 0;
     });
     scrollStore.set("home-tickets", 0);
     scrollStore.set("home-chains", 0);
     scrollStore.set("home-news", 0);
     scrollStore.set("home-users", 0);
-    scrollStore.set("home-wiki", 0);
     qc.invalidateQueries({ queryKey: ["feed"] });
     qc.invalidateQueries({ queryKey: ["/api/tickets"] });
     qc.invalidateQueries({ queryKey: ["chains-feed"] });
@@ -808,7 +560,7 @@ export default function Home() {
             <SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none z-10" />
             <input
               type="text"
-              placeholder="ค้นหา Users, Tickets, Chains, Wiki..."
+              placeholder="ค้นหา Users, Tickets, Chains..."
               value={searchQuery}
               onChange={e => { setSearchQuery(e.target.value); setHeaderHidden(false); }}
               className="search-bar w-full"
@@ -889,16 +641,6 @@ export default function Home() {
         {searchQuery ? <SearchUsersFeed query={searchQuery} /> : <UsersFeed />}
       </div>
 
-      {/* ── Wiki tab ── */}
-      <div
-        ref={wikiRef}
-        className="absolute inset-0 overflow-y-auto overscroll-y-none"
-        style={{ paddingTop: headerH + (isRefreshing ? 44 : 0), display: tab === "wiki" ? "block" : "none" }}
-      >
-        {searchQuery
-          ? <SearchWikiFeed query={searchQuery} onSearch={q => { setSearchQuery(q); setHeaderHidden(false); }} />
-          : <WikiFeed onSearch={q => { setSearchQuery(q); setHeaderHidden(false); }} />}
-      </div>
 
     </div>
   );

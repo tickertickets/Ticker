@@ -1,8 +1,8 @@
 import { useRoute, Link, useLocation } from "wouter";
 import { navBack } from "@/lib/nav-back";
 import { useQuery } from "@tanstack/react-query";
-import { useState, useMemo } from "react";
-import { ChevronLeft, Film, User, Loader2 } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { ChevronLeft, Film, User, Loader2, Flag } from "lucide-react";
 import { useLang, displayYear } from "@/lib/i18n";
 import { computeCardTier, computeEffectTags, type ScoreInput } from "@/lib/ranks";
 import { MovieBadges } from "@/components/MovieBadges";
@@ -23,10 +23,12 @@ type CharacterFilm = {
 
 type CharacterData = {
   wikidataId: string;
+  charId?: string;
   name: string;
   description: string;
   imageUrl: string | null;
   filmography: CharacterFilm[];
+  source?: "anilist" | "tmdb";
 };
 
 function CharacterMovieCard({ film, navSrclang }: { film: CharacterFilm; navSrclang: string }) {
@@ -111,6 +113,15 @@ export default function CharacterDetail() {
   // Bio language: defaults to the search language (srclang).
   // EN/TH toggle is an additional option on top of the default.
   const [bioLang, setBioLang] = useState<string>(() => srcLangCode);
+  const [showReport, setShowReport] = useState(false);
+
+  useEffect(() => {
+    const meta = document.createElement("meta");
+    meta.name = "robots";
+    meta.content = "noindex, nofollow";
+    document.head.appendChild(meta);
+    return () => { document.head.removeChild(meta); };
+  }, []);
 
   // Fetch bio in the selected language when it's not English.
   const { data: altBioData, isLoading: altBioLoading } = useQuery<CharacterData>({
@@ -290,14 +301,11 @@ export default function CharacterDetail() {
                 )}
                 <p className="text-[10px] text-muted-foreground/60 mt-2">
                   {lang === "th" ? "ที่มา: " : "Source: "}
-                  <a
-                    href="https://www.wikipedia.org"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="underline"
-                    onClick={e => e.stopPropagation()}
-                  >Wikipedia</a>
-                  {" (CC BY-SA 4.0)"}
+                  {data?.source === "anilist" ? (
+                    <a href="https://anilist.co" target="_blank" rel="noopener noreferrer" className="underline" onClick={e => e.stopPropagation()}>AniList</a>
+                  ) : (
+                    <a href="https://www.themoviedb.org" target="_blank" rel="noopener noreferrer" className="underline" onClick={e => e.stopPropagation()}>TMDB</a>
+                  )}
                 </p>
               </div>
             )}
@@ -320,10 +328,58 @@ export default function CharacterDetail() {
               </>
             )}
 
+            <div className="px-5 pt-2 pb-4">
+              <button
+                onClick={() => setShowReport(true)}
+                className="flex items-center gap-1.5 text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+              >
+                <Flag className="w-3 h-3" />
+                {lang === "th" ? "แจ้งปัญหา / ขอลบข้อมูล" : "Report / Request Removal"}
+              </button>
+            </div>
             <div style={{ height: "calc(env(safe-area-inset-bottom, 0px) + 0.75rem)" }} aria-hidden />
           </div>
         )}
       </div>
+
+      {showReport && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50"
+          onClick={() => setShowReport(false)}
+        >
+          <div
+            className="bg-background rounded-t-3xl p-6 w-full max-w-lg"
+            style={{ paddingBottom: "max(1.5rem, env(safe-area-inset-bottom, 0px))" }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 className="font-bold text-base mb-2">
+              {lang === "th" ? "แจ้งปัญหา / ขอลบข้อมูล" : "Report / Request Removal"}
+            </h3>
+            <p className="text-sm text-muted-foreground mb-3 leading-relaxed">
+              {lang === "th"
+                ? "หากคิดว่าข้อมูลนี้ไม่ถูกต้อง หรือละเมิดลิขสิทธิ์ กรุณาติดต่อ:"
+                : "If you believe this content is incorrect or infringes your rights, contact:"}
+            </p>
+            <a
+              href={`mailto:support@ticker.app?subject=${encodeURIComponent(`Character Data Issue: ${data?.name ?? wikidataId}`)}&body=${encodeURIComponent(`Character: ${data?.name ?? wikidataId}\nID: ${wikidataId}\n\nDescribe the issue:\n\n`)}`}
+              className="text-sm font-semibold text-blue-500 underline"
+            >
+              support@ticker.app
+            </a>
+            <p className="text-[11px] text-muted-foreground mt-3">
+              {lang === "th"
+                ? "เราจะดำเนินการภายใน 5 วันทำการตามนโยบาย DMCA"
+                : "We process requests within 5 business days per our DMCA policy."}
+            </p>
+            <button
+              onClick={() => setShowReport(false)}
+              className="mt-4 w-full py-2.5 rounded-xl bg-secondary text-sm font-semibold"
+            >
+              {lang === "th" ? "ปิด" : "Close"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
