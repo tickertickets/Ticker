@@ -1,4 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useLang, displayYear } from "@/lib/i18n";
 import { useRoute, useLocation } from "wouter";
 import { navBack } from "@/lib/nav-back";
@@ -201,6 +202,7 @@ export default function EditChain() {
   });
   const [showTagSearch, setShowTagSearch] = useState(false);
   const [tagQuery, setTagQuery] = useState("");
+  const [showCommunityWarning, setShowCommunityWarning] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -811,19 +813,58 @@ export default function EditChain() {
       {/* ── Save button — outside scroll so it always sits at the bottom ── */}
       <div className="shrink-0 px-4 pt-3 pb-4 bg-background">
         {error && <p className="text-sm text-red-500 text-center font-semibold mb-2">{error}</p>}
-        <p className="text-[11px] text-muted-foreground text-center leading-relaxed px-1 mb-2">
-          {lang === "th"
-            ? "ความคิดเห็น การรีวิว และการให้คะแนนเป็นของผู้ใช้แต่ละคน Ticker ขอไม่รับผิดชอบต่อเนื้อหาที่ผู้ใช้สร้างขึ้น"
-            : "All reviews, ratings, and opinions are solely those of the users. Ticker is not responsible for user-generated content."}
-        </p>
         <button
-          onClick={handleSave}
+          onClick={() => { if (!saving && title.trim()) setShowCommunityWarning(true); }}
           disabled={saving || !title.trim()}
           className="w-full h-14 rounded-2xl font-bold text-base flex items-center justify-center gap-2 transition-transform bg-foreground text-background active:scale-[0.98] disabled:opacity-50"
         >
           {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : t.saveBtn}
         </button>
       </div>
+
+      {/* ── Community Rules Modal ── */}
+      {showCommunityWarning && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-end" onClick={() => setShowCommunityWarning(false)}>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+          <div
+            className="relative w-full bg-background rounded-t-3xl border-t border-border px-5 pt-5"
+            style={{ boxShadow: "0 -4px 32px rgba(0,0,0,0.18)", paddingBottom: "max(1.5rem, env(safe-area-inset-bottom, 0px) + 1rem)" }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex justify-center mb-4">
+              <div className="w-10 h-1 rounded-full bg-border" />
+            </div>
+            <p className="text-base font-bold text-foreground mb-2 text-center">{t.communityRulesTitle}</p>
+            <p className="text-xs text-muted-foreground mb-4 text-center leading-relaxed">{t.communityRulesSubtitle}</p>
+            <div className="max-h-[40vh] overflow-y-auto bg-secondary rounded-2xl px-4 py-3 mb-4">
+              {t.communityRulesBody.split("\n").map((line, i) => (
+                <p key={i} className={`text-sm text-foreground/80 leading-snug text-left${i > 0 && line === "" ? " mt-3" : i > 0 ? " mt-1.5" : ""}`}>{line || "\u00A0"}</p>
+              ))}
+              <p className="text-xs text-muted-foreground mt-4 leading-relaxed">{t.communityRulesFootnote}</p>
+            </div>
+            <p className="text-[11px] text-muted-foreground text-center leading-relaxed mb-3 px-1">
+              {lang === "th"
+                ? "ความคิดเห็น การรีวิว และการให้คะแนนเป็นของผู้ใช้แต่ละคน Ticker ขอไม่รับผิดชอบต่อเนื้อหาที่ผู้ใช้สร้างขึ้น"
+                : "All reviews, ratings, and opinions are solely those of the users. Ticker is not responsible for user-generated content."}
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => { setShowCommunityWarning(false); handleSave(); }}
+                className="w-full h-12 rounded-2xl bg-foreground text-background font-bold text-sm"
+              >
+                {t.communityRulesConfirmSave}
+              </button>
+              <button
+                onClick={() => setShowCommunityWarning(false)}
+                className="w-full h-12 rounded-2xl text-muted-foreground font-semibold text-sm"
+              >
+                {t.communityRulesCancel}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
     </div>
   );
