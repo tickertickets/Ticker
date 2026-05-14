@@ -975,6 +975,11 @@ export default function CreateChain() {
         {submitError && (
           <p className="text-sm text-rose-500 text-center font-semibold mb-2">{submitError}</p>
         )}
+        <p className="text-[11px] text-muted-foreground text-center leading-relaxed px-1 mb-2">
+          {lang === "th"
+            ? "ความคิดเห็น การรีวิว และการให้คะแนนเป็นของผู้ใช้แต่ละคน Ticker ขอไม่รับผิดชอบต่อเนื้อหาที่ผู้ใช้สร้างขึ้น"
+            : "All reviews, ratings, and opinions are solely those of the users. Ticker is not responsible for user-generated content."}
+        </p>
         <button
           onClick={() => {
             if (!canSubmit) return;

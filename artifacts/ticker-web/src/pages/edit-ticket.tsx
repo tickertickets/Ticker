@@ -260,6 +260,12 @@ export default function EditTicket() {
 
         {error && <p className="text-sm text-red-500 text-center font-semibold">{error}</p>}
 
+        <p className="text-[11px] text-muted-foreground text-center leading-relaxed px-1">
+          {lang === "th"
+            ? "ความคิดเห็น การรีวิว และการให้คะแนนเป็นของผู้ใช้แต่ละคน Ticker ขอไม่รับผิดชอบต่อเนื้อหาที่ผู้ใช้สร้างขึ้น"
+            : "All reviews, ratings, and opinions are solely those of the users. Ticker is not responsible for user-generated content."}
+        </p>
+
         {/* Save button */}
         <button onClick={() => { if (rating >= 1 && !saving) setShowCommunityWarning(true); }}
           disabled={saving || rating < 1}

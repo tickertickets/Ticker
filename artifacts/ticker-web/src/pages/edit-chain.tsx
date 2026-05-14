@@ -811,6 +811,11 @@ export default function EditChain() {
       {/* ── Save button — outside scroll so it always sits at the bottom ── */}
       <div className="shrink-0 px-4 pt-3 pb-4 bg-background">
         {error && <p className="text-sm text-red-500 text-center font-semibold mb-2">{error}</p>}
+        <p className="text-[11px] text-muted-foreground text-center leading-relaxed px-1 mb-2">
+          {lang === "th"
+            ? "ความคิดเห็น การรีวิว และการให้คะแนนเป็นของผู้ใช้แต่ละคน Ticker ขอไม่รับผิดชอบต่อเนื้อหาที่ผู้ใช้สร้างขึ้น"
+            : "All reviews, ratings, and opinions are solely those of the users. Ticker is not responsible for user-generated content."}
+        </p>
         <button
           onClick={handleSave}
           disabled={saving || !title.trim()}

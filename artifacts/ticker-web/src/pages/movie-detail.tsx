@@ -5,9 +5,9 @@ import { BadgeIcon } from "@/components/BadgeIcon";
 import { MovieBadges, BADGE_DESC_TH, BADGE_DESC_EN } from "@/components/MovieBadges";
 import { computeCardTier, computeEffectTags, TIER_VISUAL } from "@/lib/ranks";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { ChevronLeft, Film, Star, Users, Bookmark, ChevronDown, ChevronUp, Tv, Flag, Loader2, EyeOff, Lock, User, Trophy, Link2 } from "lucide-react";
+import { ChevronLeft, Film, Star, Users, Bookmark, ChevronDown, ChevronUp, Tv, Flag, Loader2, EyeOff, Lock, User, Link2 } from "lucide-react";
 import { ChainCard, PosterCollage, type ChainItem } from "@/components/ChainsSection";
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect } from "react";
 import { cn, fmtCount } from "@/lib/utils";
 import { scrollStore } from "@/lib/scroll-store";
 import { useLang, displayYear } from "@/lib/i18n";
@@ -456,62 +456,8 @@ export default function MovieDetail() {
     staleTime: 30 * 60 * 1000,
   });
 
-  type AwardEntry = { year: string; award_category: string; participants?: Array<{ name: string }> };
-  type AwardResult = { department: string; name: string; winners: AwardEntry[]; nominees: AwardEntry[] };
-  const { data: awardsData } = useQuery<{ results: AwardResult[] }>({
-    queryKey: ["/api/movies", movieId, "awards"],
-    queryFn: async () => {
-      const res = await fetch(`/api/movies/${encodeURIComponent(movieId)}/awards`);
-      if (!res.ok) return { results: [] };
-      return res.json();
-    },
-    enabled: !!movieId,
-    staleTime: 0,
-  });
-
   const collectionMovieCount = (collectionData?.movies ?? []).filter(m => !m.isSpinoff).length;
   const isFranchise = isTvShowEarly || collectionMovieCount > 1;
-
-  type CharacterMatch = { name: string; wikidataId: string; label: string; description: string; imageUrl: string | null; alias?: string | null };
-  const characterNames = (creditsData?.cast ?? [])
-    .map(c => c.character)
-    .filter((c): c is string => !!c && c.trim().length > 1)
-    .slice(0, 15);
-  const { data: characterData } = useQuery<{ results: CharacterMatch[] }>({
-    queryKey: ["/api/character/batch-search", characterNames.join(","), movie?.title ?? ""],
-    queryFn: async () => {
-      if (characterNames.length === 0) return { results: [] };
-      const res = await fetch("/api/character/batch-search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ characters: characterNames, movieTitle: movie?.title ?? "" }),
-      });
-      if (!res.ok) return { results: [] };
-      return res.json();
-    },
-    enabled: characterNames.length > 0,
-    staleTime: 60 * 60 * 1000,
-  });
-  // Secondary: fetch characters via TMDB ID → Wikipedia (supports movies & TV series)
-  const { data: movieCharData } = useQuery<{ results: CharacterMatch[] }>({
-    queryKey: ["/api/character/by-movie", movieId],
-    queryFn: async () => {
-      const res = await fetch(`/api/character/by-movie/${encodeURIComponent(movieId)}`);
-      if (!res.ok) return { results: [] };
-      return res.json();
-    },
-    enabled: !!movieId && characterNames.length === 0,
-    staleTime: 60 * 60 * 1000,
-  });
-  // Merge both sources, deduplicating by wikidataId
-  const allCharacters = useMemo<CharacterMatch[]>(() => {
-    const seen = new Set<string>();
-    const merged: CharacterMatch[] = [];
-    for (const ch of [...(characterData?.results ?? []), ...(movieCharData?.results ?? [])]) {
-      if (!seen.has(ch.wikidataId)) { seen.add(ch.wikidataId); merged.push(ch); }
-    }
-    return merged;
-  }, [characterData, movieCharData]);
 
   const isTvShow = movie?.mediaType === "tv" || movieId.startsWith("tmdb_tv:");
   const { data: seasonsData } = useQuery<{
@@ -903,37 +849,6 @@ export default function MovieDetail() {
         </div>
       )}
 
-      {/* ── Characters — standalone ── */}
-      {allCharacters.length > 0 && (
-        <div className="px-5 pt-4">
-          <div className="flex items-center gap-2 mb-2">
-            <User className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-            <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">{lang === "th" ? "ตัวละคร" : "Characters"}</p>
-            <span className="text-[10px] text-muted-foreground">{allCharacters.length}</span>
-          </div>
-          <div className="flex overflow-x-auto gap-2.5 pb-1 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
-            {allCharacters.map(ch => (
-              <Link key={ch.wikidataId} href={`/character/${ch.wikidataId}${navSrclang ? `?srclang=${encodeURIComponent(navSrclang)}` : ""}`}>
-                <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
-                  <div className="relative" style={{ aspectRatio: "2/3" }}>
-                    {ch.imageUrl
-                      ? <img src={ch.imageUrl} alt={ch.label} className="w-full h-full object-cover" style={{ objectPosition: "center top" }} loading="lazy" />
-                      : <div className="w-full h-full flex items-center justify-center bg-zinc-900"><User className="w-4 h-4 text-muted-foreground" /></div>
-                    }
-                  </div>
-                  <div className="p-1.5 pb-2 h-[52px] overflow-hidden">
-                    <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{ch.label}</p>
-                    {ch.alias && ch.alias !== ch.label && (
-                      <p className="text-[8px] text-muted-foreground mt-0.5 truncate">{ch.alias}</p>
-                    )}
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* ── Related Chains — standalone ── */}
       {(movieChainsData?.chains ?? []).length > 0 && (
         <div className="px-5 pt-4">
@@ -1015,8 +930,8 @@ export default function MovieDetail() {
         </div>
       )}
 
-      {/* ── Details — single collapsible (cast, directors, awards, collection, spinoffs) ── */}
-      {((creditsData?.cast ?? []).length > 0 || (creditsData?.directors ?? []).length > 0 || (awardsData?.results ?? []).length > 0 || ((collectionData?.movies ?? []).length > 0)) && (
+      {/* ── Details — single collapsible (cast, directors, collection, spinoffs) ── */}
+      {((creditsData?.cast ?? []).length > 0 || (creditsData?.directors ?? []).length > 0 || ((collectionData?.movies ?? []).length > 0)) && (
         <div className="px-5 pt-4">
           <button
             className="w-full flex items-center gap-2 text-left"
@@ -1121,36 +1036,6 @@ export default function MovieDetail() {
                   </>
                 );
               })()}
-
-              {/* Awards */}
-              {(awardsData?.results ?? []).length > 0 && (
-                <div className="mt-3">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Trophy className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">{t.awardsLabel}</p>
-                    <span className="text-[10px] text-muted-foreground">{awardsData!.results.length}</span>
-                  </div>
-                  <div className="flex flex-col gap-3">
-                    {(awardsData?.results ?? []).map((award, i) => (
-                      <div key={i}>
-                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide mb-1.5">{award.name}</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {award.winners.map((w, j) => (
-                            <span key={`w-${j}`} className="text-[10px] bg-amber-500/15 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-full font-semibold">
-                              🏆 {w.award_category}{w.year ? ` (${w.year})` : ""}
-                            </span>
-                          ))}
-                          {award.nominees.map((n, j) => (
-                            <span key={`n-${j}`} className="text-[10px] bg-secondary text-muted-foreground px-2 py-0.5 rounded-full">
-                              ✦ {n.award_category}{n.year ? ` (${n.year})` : ""}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
 
               {/* Directors */}
               {(creditsData?.directors ?? []).length > 0 && (
