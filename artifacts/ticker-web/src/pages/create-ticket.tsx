@@ -1487,12 +1487,6 @@ export default function CreateTicket() {
 
             {submitError && <p className="text-sm text-red-500 text-center font-semibold">{submitError}</p>}
 
-            <p className="text-[11px] text-muted-foreground text-center leading-relaxed px-1">
-              {lang === "th"
-                ? "ความคิดเห็น การรีวิว และการให้คะแนนเป็นของผู้ใช้แต่ละคน Ticker ขอไม่รับผิดชอบต่อเนื้อหาที่ผู้ใช้สร้างขึ้น"
-                : "All reviews, ratings, and opinions are solely those of the users. Ticker is not responsible for user-generated content."}
-            </p>
-
             {/* Submit */}
             <button onClick={() => { if (rating >= 1 && !createTicket.isPending) setShowCommunityWarning(true); }}
               disabled={createTicket.isPending || rating < 1}
@@ -1632,6 +1626,11 @@ export default function CreateTicket() {
               ))}
               <p className="text-xs text-muted-foreground mt-4 leading-relaxed">{t.communityRulesFootnote}</p>
             </div>
+            <p className="text-[11px] text-muted-foreground text-center leading-relaxed mb-3 px-1">
+              {lang === "th"
+                ? "ความคิดเห็น การรีวิว และการให้คะแนนเป็นของผู้ใช้แต่ละคน Ticker ขอไม่รับผิดชอบต่อเนื้อหาที่ผู้ใช้สร้างขึ้น"
+                : "All reviews, ratings, and opinions are solely those of the users. Ticker is not responsible for user-generated content."}
+            </p>
             <div className="flex flex-col gap-2">
               <button
                 onClick={() => { setShowCommunityWarning(false); handleSubmit(); }}
