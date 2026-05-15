@@ -379,7 +379,9 @@ async function lookupComicVineForMovie(
   if (!process.env["COMIC_VINE_API_KEY"]) return resultMap;
 
   await Promise.allSettled(
-    characterNames.slice(0, 12).map(async (charName) => {
+    // Only attempt CV lookup for names ≥ 5 chars to reduce false positives
+    // (e.g. "Dek"=3, "Thia"=4 → filtered; "Butcher"=7, "Homelander"=10 → matched)
+    characterNames.filter(n => n.length >= 5).slice(0, 12).map(async (charName) => {
       try {
         const cvResults = await searchComicVineCharacters(charName, 5);
         const match = cvResults.find(r => cvNameMatches(r, charName)) ?? null;
@@ -552,22 +554,24 @@ router.get(
         const alMatch = matchAniListChar(entry.name, anilistChars);
         return {
           name: alMatch?.name ?? entry.name,
-          wikidataId: alMatch ? `al:${alMatch.id}` : entry.name,
+          // als: prefix → detail handler knows to search AniList (anime context)
+          wikidataId: alMatch ? `al:${alMatch.id}` : `als:${entry.name}`,
           description: alMatch?.description ?? "",
           imageUrl: alMatch?.imageUrl ?? null,
           alias: null,
-          source: alMatch ? "anilist" : "tmdb",
+          source: "anilist",
           sourceUrl: alMatch ? `https://anilist.co/character/${alMatch.id}` : undefined,
         };
       } else {
         const cvMatch = cvLookup.get(entry.name) ?? null;
         return {
           name: cvMatch?.name ?? entry.name,
-          wikidataId: cvMatch ? `cv:${cvMatch.id}` : entry.name,
+          // cvs: prefix → detail handler knows to search CV (non-anime context)
+          wikidataId: cvMatch ? `cv:${cvMatch.id}` : `cvs:${entry.name}`,
           description: "",
           imageUrl: cvMatch?.imageUrl ?? null,
           alias: null,
-          source: cvMatch ? "comicvine" : "tmdb",
+          source: "comicvine",
           sourceUrl: cvMatch?.sourceUrl,
         };
       }
@@ -584,20 +588,18 @@ router.get(
   "/:charId",
   asyncHandler(async (req, res) => {
     let rawCharId = req.params["charId"] as string;
-    // Normalise double-encoded colons (Vercel rewrite proxy)
-    if (rawCharId.toLowerCase().startsWith("al%3a")) {
-      rawCharId = "al:" + rawCharId.slice(5);
-    } else if (rawCharId.toLowerCase().startsWith("cv%3a")) {
-      rawCharId = "cv:" + rawCharId.slice(5);
-    } else if (rawCharId.includes("%")) {
+    // Normalise URL-encoded prefixes (encodeURIComponent encodes ":" as "%3A")
+    const lower = rawCharId.toLowerCase();
+    if (lower.startsWith("al%3a"))  rawCharId = "al:"  + rawCharId.slice(5);
+    else if (lower.startsWith("cv%3a"))  rawCharId = "cv:"  + rawCharId.slice(5);
+    else if (lower.startsWith("als%3a")) rawCharId = "als:" + rawCharId.slice(6);
+    else if (lower.startsWith("cvs%3a")) rawCharId = "cvs:" + rawCharId.slice(6);
+    else if (rawCharId.includes("%")) {
       try { rawCharId = decodeURIComponent(rawCharId); } catch { /* keep as-is */ }
     }
     if (!rawCharId || rawCharId.length < 1) {
       return res.status(400).json({ error: "Invalid character ID" });
     }
-
-    // Optional ?lang parameter for bio language
-    const reqLang = (req.query["lang"] as string | undefined)?.toLowerCase() ?? "en";
 
     const now = Date.now();
 
@@ -622,16 +624,11 @@ router.get(
         FILMOGRAPHY_CACHE.set(rawCharId, { filmography, ts: now });
       }
 
-      // AniList only has English descriptions — for non-EN requests return null description
-      // so the frontend can show the correct fallback note.
-      const description = reqLang === "en" ? (charDetail.description ?? "") : null;
-
       return res.json({
         wikidataId: rawCharId,
         charId: rawCharId,
         name: charDetail.name,
-        description,
-        descriptionLang: "en",
+        description: charDetail.description ?? "",
         imageUrl: charDetail.imageUrl,
         filmography,
         source: "anilist",
@@ -652,18 +649,19 @@ router.get(
       if (filmCached && now - filmCached.ts < CACHE_TTL) {
         filmography = filmCached.filmography;
       } else {
-        // Use real_name for keyword search (e.g. "Peter Parker" finds more than "Spider-Man")
-        const searchName = cvDetail.real_name || cvDetail.name;
+        // Only use real_name for keyword search if it's specific enough (≥6 chars)
+        // to avoid flooding with generic names like "John" from Homelander
+        const specificRealName = (cvDetail.real_name && cvDetail.real_name.length >= 6)
+          ? cvDetail.real_name : null;
         const [kwFilmo1, kwFilmo2] = await Promise.allSettled([
           getFilmographyByKeyword(cvDetail.name),
-          cvDetail.real_name ? getFilmographyByKeyword(cvDetail.real_name) : Promise.resolve([] as FilmographyEntry[]),
+          specificRealName ? getFilmographyByKeyword(specificRealName) : Promise.resolve([] as FilmographyEntry[]),
         ]);
         const combined = mergeFilmographies(
           kwFilmo1.status === "fulfilled" ? kwFilmo1.value : [],
           kwFilmo2.status === "fulfilled" ? kwFilmo2.value : [],
         );
         filmography = combined;
-        void searchName; // used above
         FILMOGRAPHY_CACHE.set(rawCharId, { filmography, ts: now });
       }
 
@@ -683,15 +681,116 @@ router.get(
       });
     }
 
-    // ── Plain character name (legacy / unmatched) ─────────────────────────────
-    // Strategy:
-    //  1. Try Comic Vine first with exact match (better for Western chars)
-    //  2. Try AniList with strict validation (must be ANIME + name must closely match)
-    //  3. Return minimal stub (name only) rather than wrong data
+    // ── AniList search by name — anime context (als:<name>) ──────────────────
+    // Used when by-movie identified the movie as anime but couldn't pre-match the
+    // character to an AniList ID. Always stays within AniList; never falls through
+    // to Comic Vine.
+    if (rawCharId.startsWith("als:")) {
+      const charName = decodeURIComponent(rawCharId.slice(4));
+      const alByName = await getAniListCharacterByName(charName).catch(() => null);
 
+      if (alByName && isValidAniListNameMatch(charName, alByName)) {
+        const alCacheKey = `al:${alByName.id}`;
+        const filmCached = FILMOGRAPHY_CACHE.get(alCacheKey);
+        let filmography: FilmographyEntry[] = [];
+        if (filmCached && now - filmCached.ts < CACHE_TTL) {
+          filmography = filmCached.filmography;
+        } else {
+          const [anilistFilmo, kwFilmo] = await Promise.all([
+            getFilmographyFromAniListMedia(alByName.media),
+            getFilmographyByKeyword(alByName.name).catch(() => [] as FilmographyEntry[]),
+          ]);
+          filmography = mergeFilmographies(anilistFilmo, kwFilmo);
+          FILMOGRAPHY_CACHE.set(alCacheKey, { filmography, ts: now });
+        }
+        return res.json({
+          wikidataId: rawCharId,
+          charId: alCacheKey,
+          name: alByName.name,
+          description: alByName.description ?? "",
+          imageUrl: alByName.imageUrl,
+          filmography,
+          source: "anilist",
+          sourceUrl: `https://anilist.co/character/${alByName.id}`,
+        });
+      }
+
+      // AniList match not found or failed validation → return name-only stub
+      return res.json({
+        wikidataId: rawCharId,
+        charId: rawCharId,
+        name: charName,
+        description: "",
+        imageUrl: null,
+        filmography: [],
+        source: "anilist",
+      });
+    }
+
+    // ── Comic Vine search by name — non-anime context (cvs:<name>) ────────────
+    // Used when by-movie identified the movie as non-anime but couldn't pre-match
+    // the character to a CV ID (e.g. name was < 5 chars). Stays within CV only.
+    if (rawCharId.startsWith("cvs:")) {
+      const charName = decodeURIComponent(rawCharId.slice(4));
+
+      if (process.env["COMIC_VINE_API_KEY"]) {
+        try {
+          const cvResults = await searchComicVineCharacters(charName, 5);
+          const cvMatch = cvResults.find(r => cvNameMatches(r, charName)) ?? null;
+          if (cvMatch) {
+            const cvDetail = await getComicVineCharacterById(cvMatch.id).catch(() => null);
+            if (cvDetail) {
+              const filmCacheKey = `cv:${cvMatch.id}`;
+              const filmCached = FILMOGRAPHY_CACHE.get(filmCacheKey);
+              let filmography: FilmographyEntry[] = [];
+              if (filmCached && now - filmCached.ts < CACHE_TTL) {
+                filmography = filmCached.filmography;
+              } else {
+                const specificRealName = (cvDetail.real_name && cvDetail.real_name.length >= 6)
+                  ? cvDetail.real_name : null;
+                const [kwFilmo1, kwFilmo2] = await Promise.allSettled([
+                  getFilmographyByKeyword(cvDetail.name),
+                  specificRealName ? getFilmographyByKeyword(specificRealName) : Promise.resolve([] as FilmographyEntry[]),
+                ]);
+                filmography = mergeFilmographies(
+                  kwFilmo1.status === "fulfilled" ? kwFilmo1.value : [],
+                  kwFilmo2.status === "fulfilled" ? kwFilmo2.value : [],
+                );
+                FILMOGRAPHY_CACHE.set(filmCacheKey, { filmography, ts: now });
+              }
+              const rawDesc = cvDetail.deck || cvDetail.description || "";
+              const description = rawDesc.replace(/<[^>]+>/g, " ").replace(/\s{2,}/g, " ").trim();
+              return res.json({
+                wikidataId: rawCharId,
+                charId: `cv:${cvMatch.id}`,
+                name: cvDetail.name,
+                description,
+                imageUrl: cvDetail.image?.super_url ?? cvDetail.image?.medium_url ?? null,
+                filmography,
+                source: "comicvine",
+                sourceUrl: cvDetail.site_detail_url ?? `https://comicvine.gamespot.com/character/4005-${cvMatch.id}/`,
+              });
+            }
+          }
+        } catch { /* CV optional */ }
+      }
+
+      // No CV match found → name-only stub
+      return res.json({
+        wikidataId: rawCharId,
+        charId: rawCharId,
+        name: charName,
+        description: "",
+        imageUrl: null,
+        filmography: [],
+        source: "comicvine",
+      });
+    }
+
+    // ── Plain character name (legacy fallback for old cached wikidataIds) ──────
+    // Try CV first (better for Western chars), then AniList with strict validation.
     const characterName = decodeURIComponent(rawCharId);
 
-    // Step 1 — Comic Vine exact match
     let cvFound = false;
     if (process.env["COMIC_VINE_API_KEY"]) {
       try {
@@ -706,9 +805,11 @@ router.get(
             if (filmCached && now - filmCached.ts < CACHE_TTL) {
               filmography = filmCached.filmography;
             } else {
+              const specificRealName = (cvDetail.real_name && cvDetail.real_name.length >= 6)
+                ? cvDetail.real_name : null;
               const [kwFilmo1, kwFilmo2] = await Promise.allSettled([
                 getFilmographyByKeyword(cvDetail.name),
-                cvDetail.real_name ? getFilmographyByKeyword(cvDetail.real_name) : Promise.resolve([] as FilmographyEntry[]),
+                specificRealName ? getFilmographyByKeyword(specificRealName) : Promise.resolve([] as FilmographyEntry[]),
               ]);
               filmography = mergeFilmographies(
                 kwFilmo1.status === "fulfilled" ? kwFilmo1.value : [],
@@ -716,16 +817,13 @@ router.get(
               );
               FILMOGRAPHY_CACHE.set(`cv:${cvMatch.id}`, { filmography, ts: now });
             }
-
             const rawDesc = cvDetail.deck || cvDetail.description || "";
             const description = rawDesc.replace(/<[^>]+>/g, " ").replace(/\s{2,}/g, " ").trim();
-
             return res.json({
               wikidataId: rawCharId,
               charId: `cv:${cvMatch.id}`,
               name: cvDetail.name,
               description,
-              descriptionLang: "en",
               imageUrl: cvDetail.image?.super_url ?? cvDetail.image?.medium_url ?? null,
               filmography,
               source: "comicvine",
@@ -733,15 +831,11 @@ router.get(
             });
           }
         }
-      } catch {
-        // Comic Vine is optional
-      }
+      } catch { /* CV optional */ }
     }
 
-    // Step 2 — AniList with strict validation
     if (!cvFound) {
       const alByName = await getAniListCharacterByName(characterName).catch(() => null);
-
       if (alByName && isValidAniListNameMatch(characterName, alByName)) {
         const alCacheKey = `al:${alByName.id}`;
         const filmCached = FILMOGRAPHY_CACHE.get(alCacheKey);
@@ -756,15 +850,11 @@ router.get(
           filmography = mergeFilmographies(anilistFilmo, kwFilmo);
           FILMOGRAPHY_CACHE.set(alCacheKey, { filmography, ts: now });
         }
-
-        const description = reqLang === "en" ? (alByName.description ?? "") : null;
-
         return res.json({
           wikidataId: rawCharId,
           charId: alCacheKey,
           name: alByName.name,
-          description,
-          descriptionLang: "en",
+          description: alByName.description ?? "",
           imageUrl: alByName.imageUrl,
           filmography,
           source: "anilist",
@@ -773,17 +863,14 @@ router.get(
       }
     }
 
-    // Step 3 — Return minimal stub (name only, no wrong data)
     return res.json({
       wikidataId: rawCharId,
       charId: rawCharId,
       name: characterName,
       description: "",
-      descriptionLang: "en",
       imageUrl: null,
       filmography: [],
       source: "tmdb",
-      sourceUrl: undefined,
     });
   }),
 );

@@ -60,6 +60,10 @@ function stripHtml(raw: string): string {
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<[^>]+>/g, "")
     .replace(/~![\s\S]*?!~/g, "")
+    // Strip markdown links [text](url) → keep only text
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    // Strip any remaining bare URLs
+    .replace(/https?:\/\/\S+/g, "")
     .replace(/\n{3,}/g, "\n\n")
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
