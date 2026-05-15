@@ -1631,7 +1631,7 @@ export default function Settings() {
           </div>
 
           {/* TMDB Attribution */}
-          <div className="px-1">
+          <div className="px-1 -mt-1 pb-0">
             <a
               href="https://www.themoviedb.org"
               target="_blank"

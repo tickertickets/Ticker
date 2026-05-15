@@ -2,6 +2,7 @@ import { Router } from "express";
 import { asyncHandler } from "../middlewares/error-handler";
 import { tmdbFetch, posterUrl } from "../lib/tmdb-client";
 import { getAniListCharacters, getAniListCharacterById, getAniListCharacterByName, type AniListMedia } from "../lib/anilist";
+import { searchComicVineCharacters, getComicVineCharacterById } from "../lib/comicvine";
 
 const router = Router();
 
@@ -556,6 +557,34 @@ router.get(
       });
     }
 
+    // ── ComicVine fallback (non-anime characters) ─────────────────────────────
+    let cvImageUrl: string | null = null;
+    let cvDescription = "";
+    let cvName = characterName;
+    try {
+      if (process.env["COMIC_VINE_API_KEY"]) {
+        const cvResults = await searchComicVineCharacters(characterName, 3);
+        const cvMatch = cvResults.find(r =>
+          r.name.toLowerCase() === characterName.toLowerCase(),
+        ) ?? cvResults[0] ?? null;
+        if (cvMatch) {
+          // Fetch full detail for richer data
+          const cvDetail = await getComicVineCharacterById(cvMatch.id).catch(() => null);
+          cvName = cvDetail?.name ?? cvMatch.name ?? characterName;
+          cvImageUrl = cvDetail?.image?.super_url ?? cvDetail?.image?.medium_url
+            ?? cvMatch.image?.medium_url ?? null;
+          // Use deck (plain text) or strip HTML from description
+          const rawDesc = cvDetail?.deck || cvDetail?.description || cvMatch.deck || "";
+          cvDescription = rawDesc
+            .replace(/<[^>]+>/g, " ")
+            .replace(/\s{2,}/g, " ")
+            .trim();
+        }
+      }
+    } catch {
+      // ComicVine is optional — silently skip
+    }
+
     const filmCached = FILMOGRAPHY_CACHE.get(rawCharId);
     let filmography: FilmographyEntry[] = [];
     if (filmCached && now - filmCached.ts < CACHE_TTL) {
@@ -568,11 +597,11 @@ router.get(
     return res.json({
       wikidataId: rawCharId,
       charId: rawCharId,
-      name: characterName,
-      description: "",
-      imageUrl: null,
+      name: cvName,
+      description: cvDescription,
+      imageUrl: cvImageUrl,
       filmography,
-      source: "tmdb",
+      source: cvImageUrl || cvDescription ? "comicvine" : "tmdb",
     });
   }),
 );

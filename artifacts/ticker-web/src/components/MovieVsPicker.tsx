@@ -96,7 +96,6 @@ export function MovieVsPicker({ onClose }: { onClose: () => void }) {
   const [searching, setSearching] = useState(false);
   const [picked, setPicked] = useState<VsMovie[]>([]);
   const [winner, setWinner] = useState<VsMovie | null>(null);
-  const [shownWinnerIds, setShownWinnerIds] = useState<Set<string>>(new Set());
   const inputRef = useRef<HTMLInputElement>(null);
 
   const MAX_MOVIES = 5;
@@ -113,15 +112,9 @@ export function MovieVsPicker({ onClose }: { onClose: () => void }) {
     loadingTitle: lang === "th" ? "กำลังสุ่ม..."                 : "Picking a winner...",
     winnerLabel:  lang === "th" ? "ระบบเลือก"                   : "System picked",
     viewDetail:   lang === "th" ? "ดูรายละเอียด"                 : "View detail",
-    pickAgain:    lang === "th" ? "สุ่มใหม่"                     : "Pick again",
     noResults:    lang === "th" ? "ไม่พบหนัง"                   : "No movies found",
     addedMovies:  lang === "th" ? "หนังที่เพิ่ม"                 : "Added movies",
-    backBtn:      lang === "th" ? "กลับ"                         : "Back",
     recommended:  lang === "th" ? "แนะนำ"                        : "Recommended",
-    remaining:    (n: number) => lang === "th"
-      ? `เหลือ ${n} เรื่องที่ยังไม่ถูกสุ่ม`
-      : `${n} movie${n !== 1 ? "s" : ""} not yet picked`,
-    allShown:     lang === "th" ? "สุ่มครบทุกเรื่องแล้ว — เริ่มรอบใหม่" : "All picked — starting new round",
   };
 
   // ── Trending (recommended) ────────────────────────────────────────────────
@@ -152,14 +145,10 @@ export function MovieVsPicker({ onClose }: { onClose: () => void }) {
   // ── Pick logic ───────────────────────────────────────────────────────────
   const pickWinner = () => {
     if (picked.length < MIN_MOVIES) return;
-    const newShown = new Set<string>();
     setStep("loading");
     setTimeout(() => {
       const idx = Math.floor(Math.random() * picked.length);
-      const next = picked[idx]!;
-      newShown.add(next.imdbId);
-      setShownWinnerIds(newShown);
-      setWinner(next);
+      setWinner(picked[idx]!);
       setStep("result");
     }, 1800);
   };
@@ -172,7 +161,6 @@ export function MovieVsPicker({ onClose }: { onClose: () => void }) {
 
   const removeMovie = (imdbId: string) => {
     setPicked(prev => prev.filter(p => p.imdbId !== imdbId));
-    setShownWinnerIds(prev => { const next = new Set(prev); next.delete(imdbId); return next; });
   };
 
   const goToMovie = () => {
@@ -182,9 +170,6 @@ export function MovieVsPicker({ onClose }: { onClose: () => void }) {
   };
 
   const isAdded = (imdbId: string) => picked.some(p => p.imdbId === imdbId);
-
-  const remainingCount = picked.length - shownWinnerIds.size;
-  const allShown = picked.length > 0 && shownWinnerIds.size >= picked.length;
 
   return (
     <>
@@ -221,12 +206,6 @@ export function MovieVsPicker({ onClose }: { onClose: () => void }) {
           return (
             <div className="flex flex-col" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 1.5rem)" }}>
               <div className="relative flex items-center justify-center px-4 pt-2 pb-3">
-                <button
-                  onClick={() => setStep("pick")}
-                  className="absolute left-4 flex items-center gap-1 text-xs text-muted-foreground active:opacity-70"
-                >
-                  {s.backBtn}
-                </button>
                 <div className="flex items-center gap-1.5">
                   <Swords className="w-3.5 h-3.5 text-muted-foreground" />
                   <p className="text-xs font-semibold text-muted-foreground">VS</p>
@@ -262,29 +241,10 @@ export function MovieVsPicker({ onClose }: { onClose: () => void }) {
                 </div>
               </div>
 
-              {/* Round progress */}
-              <div className="flex justify-center mt-2 px-4 gap-1.5">
-                {picked.map(m => (
-                  <div
-                    key={m.imdbId}
-                    className={`h-1 flex-1 rounded-full transition-colors ${shownWinnerIds.has(m.imdbId) ? "bg-foreground" : "bg-border"}`}
-                  />
-                ))}
-              </div>
-              <p className="text-center text-[10px] text-muted-foreground mt-1.5">
-                {allShown ? s.allShown : s.remaining(Math.max(0, remainingCount - 1))}
-              </p>
-
-              <div className="flex gap-3 px-4 mt-3">
-                <button
-                  onClick={() => setStep("pick")}
-                  className="flex-1 flex items-center justify-center gap-2 h-12 rounded-2xl bg-secondary border border-border font-semibold text-sm text-foreground active:opacity-70 transition-opacity"
-                >
-                  <span className="whitespace-nowrap">{s.backBtn}</span>
-                </button>
+              <div className="px-4 mt-4">
                 <button
                   onClick={goToMovie}
-                  className="flex-[2] flex items-center justify-center gap-2 h-12 rounded-2xl bg-foreground text-background font-bold text-sm active:opacity-70 transition-opacity"
+                  className="w-full flex items-center justify-center gap-2 h-12 rounded-2xl bg-foreground text-background font-bold text-sm active:opacity-70 transition-opacity"
                 >
                   <span className="whitespace-nowrap">{s.viewDetail}</span>
                   <ChevronRight className="w-4 h-4 flex-shrink-0" />
@@ -319,9 +279,9 @@ export function MovieVsPicker({ onClose }: { onClose: () => void }) {
                 <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
                   {s.addedMovies} ({picked.length}/{MAX_MOVIES})
                 </p>
-                <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
+                <div className="flex gap-2 overflow-x-auto scrollbar-hide py-2">
                   {picked.map(m => (
-                    <div key={m.imdbId} className="flex-shrink-0 relative" style={{ paddingTop: 6, paddingRight: 6 }}>
+                    <div key={m.imdbId} className="flex-shrink-0 relative">
                       <div className="w-[60px] rounded-xl bg-secondary border border-border">
                         <div className="relative rounded-xl overflow-hidden" style={{ aspectRatio: "2/3" }}>
                           {m.posterUrl
@@ -335,7 +295,7 @@ export function MovieVsPicker({ onClose }: { onClose: () => void }) {
                       </div>
                       <button
                         onClick={() => removeMovie(m.imdbId)}
-                        className="absolute top-0 right-0 w-5 h-5 rounded-full bg-foreground flex items-center justify-center z-10"
+                        className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-foreground flex items-center justify-center z-10"
                       >
                         <XIcon className="w-3 h-3 text-background" />
                       </button>

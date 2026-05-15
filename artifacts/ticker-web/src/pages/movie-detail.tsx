@@ -984,7 +984,7 @@ export default function MovieDetail() {
             onClick={(e) => { const b = e.currentTarget; setShowDetails(v => { const next = !v; if (next) { setShowCollection(true); setShowSpinoffs(true); setTimeout(() => { const c = scrollRef.current; if (c) { const r = b.getBoundingClientRect(), cr = c.getBoundingClientRect(); c.scrollTo({ top: Math.max(0, c.scrollTop + r.top - cr.top - 8), behavior: "smooth" }); } }, 280); } return next; }); }}
           >
             <Film className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wide flex-1">{lang === "th" ? "รายละเอียด" : "Details"}</h3>
+            <h3 className="text-xs font-semibold text-muted-foreground tracking-wide flex-1">{lang === "th" ? "รายละเอียด" : "Details"}</h3>
             {showDetails
               ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
               : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />}

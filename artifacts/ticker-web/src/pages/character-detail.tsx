@@ -108,6 +108,10 @@ function CharacterMovieCard({ film, navSrclang }: { film: CharacterFilm; navSrcl
   );
 }
 
+function stripRawMarkers(text: string) {
+  return text.replace(/__[^_\n]+:__\s*/g, "").replace(/\n{3,}/g, "\n\n").trim();
+}
+
 export default function CharacterDetail() {
   const { lang } = useLang();
   const [, params] = useRoute("/character/:wikidataId");
@@ -188,7 +192,8 @@ export default function CharacterDetail() {
   const displayBioText = useMemo(() => {
     if (bioLang === "en") return bio;
     const alt = altBioLoading ? rawBio : (altBioData?.description ?? rawBio);
-    return parseAniListDescription(alt).bio || alt;
+    const parsed = parseAniListDescription(alt);
+    return parsed.bio || stripRawMarkers(alt);
   }, [bioLang, bio, rawBio, altBioData, altBioLoading]);
 
   const displayInfo = useMemo(() => {
@@ -349,7 +354,7 @@ export default function CharacterDetail() {
               <div className="px-5 pt-4 pb-2">
                 <div className="flex items-start gap-3">
                   <p className="text-sm text-foreground/80 leading-relaxed flex-1">
-                    {displayBioText || displayRawBio}
+                    {displayBioText || stripRawMarkers(displayRawBio)}
                   </p>
                   {/* Language toggle */}
                   <div
