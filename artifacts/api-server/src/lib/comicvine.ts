@@ -2,13 +2,14 @@ const API_KEY = process.env["COMIC_VINE_API_KEY"] ?? "";
 const BASE_URL = "https://comicvine.gamespot.com/api";
 const CACHE_TTL = 60 * 60 * 1000;
 
-type ComicVineCharacter = {
+export type ComicVineCharacter = {
   id: number;
   name: string;
   real_name: string | null;
   aliases: string | null;
   deck: string | null;
   description: string | null;
+  site_detail_url: string | null;
   image: { medium_url: string | null; super_url: string | null } | null;
   publisher: { name: string } | null;
   first_appeared_in_issue: { name: string; issue_number: string } | null;
@@ -19,7 +20,9 @@ type ComicVineSearchResult = {
     id: number;
     name: string;
     real_name: string | null;
+    aliases: string | null;
     deck: string | null;
+    site_detail_url: string | null;
     image: { medium_url: string | null } | null;
     publisher: { name: string } | null;
   }>;
@@ -56,7 +59,7 @@ export async function searchComicVineCharacters(
   const data = await cvFetch<ComicVineSearchResult>("/search/", {
     query,
     resources: "character",
-    field_list: "id,name,real_name,deck,image,publisher",
+    field_list: "id,name,real_name,aliases,deck,site_detail_url,image,publisher",
     limit: String(limit),
   });
 
@@ -74,10 +77,28 @@ export async function getComicVineCharacterById(
 
   const data = await cvFetch<{ results: ComicVineCharacter; status_code: number }>(
     `/character/4005-${characterId}/`,
-    { field_list: "id,name,real_name,aliases,deck,description,image,publisher,first_appeared_in_issue" },
+    { field_list: "id,name,real_name,aliases,deck,description,site_detail_url,image,publisher,first_appeared_in_issue" },
   );
 
   if (data.status_code !== 1) return null;
   characterCache.set(cacheKey, { data: data.results, ts: Date.now() });
   return data.results;
+}
+
+/**
+ * Check if a character name matches a Comic Vine search result,
+ * considering name, real_name, and aliases (newline-separated).
+ */
+export function cvNameMatches(result: ComicVineSearchResult["results"][0], query: string): boolean {
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
+  const q = norm(query);
+
+  if (norm(result.name) === q) return true;
+  if (result.real_name && norm(result.real_name) === q) return true;
+  if (result.aliases) {
+    for (const alias of result.aliases.split("\n")) {
+      if (norm(alias.trim()) === q) return true;
+    }
+  }
+  return false;
 }

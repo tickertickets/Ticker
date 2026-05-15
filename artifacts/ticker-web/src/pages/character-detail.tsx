@@ -76,10 +76,12 @@ type CharData = {
   wikidataId: string;
   charId?: string;
   name: string;
-  description: string;
+  description: string | null;
+  descriptionLang?: string;
   imageUrl: string | null;
   filmography: CharFilm[];
   source?: string;
+  sourceUrl?: string;
 };
 
 // ── Filmography card ──────────────────────────────────────────────────────────
@@ -192,9 +194,18 @@ export default function CharacterDetail() {
   });
 
   // ── Bio language state ──────────────────────────────────────────────────────
+  // Default to the source language of the movie page that led here.
+  // If srclang is "en" or unset, default to "en".
+  const defaultBioLang = useMemo(() => {
+    if (!srcLangCode || srcLangCode === "en") return "en";
+    // For "th" show TH toggle active; for others (ja, ko, etc.) also use "en" as display
+    // since AniList only has English — but we still honor TH preference
+    return srcLangCode;
+  }, [srcLangCode]);
 
-  const [bioLang, setBioLang] = useState<string>(() => srcLangCode);
+  const [bioLang, setBioLang] = useState<string>(() => defaultBioLang);
 
+  // Secondary fetch for non-EN bio (e.g. Thai)
   const { data: altData, isLoading: altLoading } = useQuery<CharData>({
     queryKey: ["/api/character", wikidataId, "lang", bioLang],
     queryFn: async () => {
@@ -216,23 +227,47 @@ export default function CharacterDetail() {
   const rawBioEn = data?.description ?? "";
   const parsedEn = useMemo(() => parseAniListDescription(rawBioEn), [rawBioEn]);
 
+  // When bioLang !== "en", the backend returns description: null for AniList chars
+  // (since AniList only has English). We detect this and show a fallback note.
+  const altDescriptionAvailable = useMemo(() => {
+    if (bioLang === "en") return true;
+    if (altLoading) return null; // still loading
+    return altData?.description != null && altData.description !== "";
+  }, [bioLang, altLoading, altData]);
+
   const { displayInfo, displayBio } = useMemo(() => {
     if (bioLang === "en") {
       return { displayInfo: parsedEn.info, displayBio: parsedEn.bio };
     }
-    const altRaw = altLoading
-      ? rawBioEn
-      : (altData?.description ?? rawBioEn);
-    const parsed = parseAniListDescription(altRaw);
-    return {
-      displayInfo: parsed.info.length > 0 ? parsed.info : parsedEn.info,
-      displayBio: parsed.bio || stripMarkers(altRaw),
-    };
-  }, [bioLang, parsedEn, rawBioEn, altData, altLoading]);
+    // Non-EN: use altData if available, otherwise fall back to English
+    const altRaw = altData?.description ?? null;
+    if (altRaw) {
+      const parsed = parseAniListDescription(altRaw);
+      return {
+        displayInfo: parsed.info.length > 0 ? parsed.info : parsedEn.info,
+        displayBio: parsed.bio || stripMarkers(altRaw),
+      };
+    }
+    // No translation available — show English content
+    return { displayInfo: parsedEn.info, displayBio: parsedEn.bio };
+  }, [bioLang, parsedEn, altData]);
 
-  // Bio toggle: show original-language button only if srclang is not EN/TH
+  // Show original-language button only if srclang is not EN (TH always shows, others show as label)
+  const showThToggle = true; // TH always visible
   const hasOrigLang = srcLangCode !== "en" && srcLangCode !== "th";
   const origLabel = srcLangCode.toUpperCase().slice(0, 3);
+
+  // ── Source credit ───────────────────────────────────────────────────────────
+  const sourceIsAniList = data?.source === "anilist";
+  const sourceIsComicVine = data?.source === "comicvine";
+  const sourceLabel = sourceIsAniList ? "AniList" : sourceIsComicVine ? "Comic Vine" : null;
+  const sourceHref = data?.sourceUrl
+    ? data.sourceUrl
+    : sourceIsAniList
+      ? "https://anilist.co"
+      : sourceIsComicVine
+        ? "https://comicvine.gamespot.com"
+        : null;
 
   // ── Report modal state ──────────────────────────────────────────────────────
 
@@ -292,14 +327,9 @@ export default function CharacterDetail() {
           { value: "other", label: "Other issue" },
         ];
 
-  // ── Source credit ───────────────────────────────────────────────────────────
-  // Backend returns source: "anilist" | "comicvine" | "tmdb"
-  // "anilist"  → credit AniList
-  // anything else → credit Comic Vine (comicvine or tmdb-fallback)
-
-  const sourceIsAniList = data?.source === "anilist";
-
   // ── Render ──────────────────────────────────────────────────────────────────
+
+  const hasBioContent = !!(rawBioEn || (bioLang !== "en" && altData?.description));
 
   return (
     <div className="absolute inset-0 bg-background flex flex-col overflow-hidden">
@@ -425,12 +455,29 @@ export default function CharacterDetail() {
             )}
 
             {/* Bio + language toggle */}
-            {(displayBio || rawBioEn) && (
+            {hasBioContent && (
               <div className="px-5 pt-4 pb-2">
                 <div className="flex items-start gap-3">
-                  <p className="text-sm text-foreground/80 leading-relaxed flex-1">
-                    {displayBio || stripMarkers(rawBioEn)}
-                  </p>
+                  <div className="flex-1 min-w-0">
+                    {altLoading && bioLang !== "en" ? (
+                      <p className="text-sm text-muted-foreground">
+                        {lang === "th" ? "กำลังโหลด…" : "Loading…"}
+                      </p>
+                    ) : (
+                      <p className="text-sm text-foreground/80 leading-relaxed">
+                        {displayBio || stripMarkers(rawBioEn)}
+                      </p>
+                    )}
+
+                    {/* Note when bio is shown in EN because requested lang has no data */}
+                    {bioLang !== "en" && !altLoading && altDescriptionAvailable === false && (
+                      <p className="text-xs text-muted-foreground/60 mt-1.5 italic">
+                        {lang === "th"
+                          ? "ยังไม่มีข้อมูลภาษาไทย — แสดงภาษาอังกฤษแทน"
+                          : "Not available in this language — showing English"}
+                      </p>
+                    )}
+                  </div>
 
                   {/* Language toggle pill */}
                   <div
@@ -471,60 +518,39 @@ export default function CharacterDetail() {
                     >
                       EN
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setBioLang("th")}
-                      aria-label="Bio in Thai"
-                      className="relative z-10 text-[10px] font-bold tracking-wide px-2 py-0.5 rounded-full transition-colors"
-                      style={{
-                        background: bioLang === "th" ? "#111" : "transparent",
-                        color: bioLang === "th" ? "#fff" : "#888",
-                        minWidth: 28,
-                      }}
-                    >
-                      TH
-                    </button>
+                    {showThToggle && (
+                      <button
+                        type="button"
+                        onClick={() => setBioLang("th")}
+                        aria-label="Bio in Thai"
+                        className="relative z-10 text-[10px] font-bold tracking-wide px-2 py-0.5 rounded-full transition-colors"
+                        style={{
+                          background: bioLang === "th" ? "#111" : "transparent",
+                          color: bioLang === "th" ? "#fff" : "#888",
+                          minWidth: 28,
+                        }}
+                      >
+                        TH
+                      </button>
+                    )}
                   </div>
                 </div>
 
-                {bioLang !== "en" && altLoading && (
-                  <p className="text-xs text-muted-foreground mt-2">
-                    {lang === "th" ? "กำลังโหลด…" : "Loading…"}
-                  </p>
-                )}
-                {bioLang !== "en" && !altLoading && !altData?.description && (
-                  <p className="text-xs text-muted-foreground mt-2">
-                    {lang === "th"
-                      ? "ยังไม่มีข้อมูลภาษานี้"
-                      : "Bio not available in this language"}
-                  </p>
-                )}
-
-                {/* Source credit */}
-                <p className="text-[10px] text-muted-foreground/60 mt-2">
-                  {lang === "th" ? "ที่มา: " : "Source: "}
-                  {sourceIsAniList ? (
+                {/* Source credit — AniList or Comic Vine only, with direct link */}
+                {sourceLabel && sourceHref && (
+                  <p className="text-[10px] text-muted-foreground/60 mt-2">
+                    {lang === "th" ? "ที่มา: " : "Source: "}
                     <a
-                      href="https://anilist.co"
+                      href={sourceHref}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="underline"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      AniList
+                      {sourceLabel}
                     </a>
-                  ) : (
-                    <a
-                      href="https://comicvine.gamespot.com"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="underline"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      Comic Vine
-                    </a>
-                  )}
-                </p>
+                  </p>
+                )}
               </div>
             )}
 
@@ -599,95 +625,56 @@ export default function CharacterDetail() {
                 </h3>
                 <p className="text-sm text-muted-foreground leading-relaxed">
                   {lang === "th"
-                    ? "ขอบคุณ เราจะตรวจสอบและดำเนินการภายใน 5 วันทำการ"
-                    : "Thank you. We'll review and process your request within 5 business days."}
+                    ? "ขอบคุณที่แจ้งปัญหา เราจะตรวจสอบและแก้ไขโดยเร็ว"
+                    : "Thank you for your report. We will review it shortly."}
                 </p>
                 <button
                   onClick={closeReport}
-                  className="mt-5 w-full py-2.5 rounded-xl bg-secondary text-sm font-semibold"
+                  className="mt-4 text-sm font-semibold text-foreground"
                 >
                   {lang === "th" ? "ปิด" : "Close"}
                 </button>
               </div>
             ) : (
               <>
-                <h3 className="font-bold text-base mb-1">
-                  {lang === "th"
-                    ? "แจ้งปัญหา / ขอลบข้อมูล"
-                    : "Report / Request Removal"}
+                <h3 className="font-bold text-base mb-4">
+                  {lang === "th" ? "แจ้งปัญหา" : "Report Issue"}
                 </h3>
-                <p className="text-xs text-muted-foreground mb-4">
-                  {data?.name && (
-                    <span className="font-medium text-foreground">
-                      {data.name}
-                    </span>
-                  )}
-                </p>
-
-                <p className="text-xs font-semibold text-muted-foreground mb-2">
-                  {lang === "th" ? "เหตุผล" : "Reason"}
-                </p>
-                <div className="flex flex-col gap-2 mb-4">
-                  {REASONS.map((r) => (
+                <div className="space-y-2 mb-4">
+                  {REASONS.map(r => (
                     <button
                       key={r.value}
                       onClick={() => setReason(r.value)}
-                      className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-sm text-left transition-colors ${
+                      className={`w-full text-left px-4 py-3 rounded-xl border text-sm transition-colors ${
                         reason === r.value
-                          ? "border-foreground bg-secondary font-semibold"
-                          : "border-border text-muted-foreground"
+                          ? "border-foreground bg-foreground/5 font-semibold"
+                          : "border-border"
                       }`}
                     >
-                      <div
-                        className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${
-                          reason === r.value
-                            ? "border-foreground"
-                            : "border-muted-foreground/40"
-                        }`}
-                      >
-                        {reason === r.value && (
-                          <div className="w-2 h-2 rounded-full bg-foreground" />
-                        )}
-                      </div>
                       {r.label}
                     </button>
                   ))}
                 </div>
-
                 <textarea
-                  className="w-full h-20 bg-secondary rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground resize-none border border-border outline-none focus:border-muted-foreground transition-colors"
+                  value={details}
+                  onChange={(e) => setDetails(e.target.value)}
                   placeholder={
                     lang === "th"
                       ? "รายละเอียดเพิ่มเติม (ไม่บังคับ)"
                       : "Additional details (optional)"
                   }
-                  value={details}
-                  onChange={(e) => setDetails(e.target.value)}
-                  maxLength={400}
+                  className="w-full border border-border rounded-xl px-4 py-3 text-sm bg-background resize-none mb-4 focus:outline-none focus:ring-1 focus:ring-foreground/20"
+                  rows={3}
                 />
-
-                <div className="flex gap-3 mt-4">
-                  <button
-                    onClick={closeReport}
-                    className="flex-1 py-2.5 rounded-xl border border-border text-sm font-semibold text-muted-foreground"
-                  >
-                    {lang === "th" ? "ยกเลิก" : "Cancel"}
-                  </button>
-                  <button
-                    onClick={submitReport}
-                    disabled={!reason || submitting}
-                    className="flex-[2] py-2.5 rounded-xl bg-foreground text-background text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-40 transition-opacity active:opacity-70"
-                  >
-                    {submitting ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <>
-                        <Send className="w-3.5 h-3.5" />
-                        {lang === "th" ? "ส่งรายงาน" : "Submit"}
-                      </>
-                    )}
-                  </button>
-                </div>
+                <button
+                  onClick={submitReport}
+                  disabled={!reason || submitting}
+                  className="w-full py-3 rounded-xl bg-foreground text-background text-sm font-semibold disabled:opacity-40 transition-opacity"
+                >
+                  {submitting
+                    ? lang === "th" ? "กำลังส่ง…" : "Sending…"
+                    : lang === "th" ? "ส่งรายงาน" : "Submit Report"}
+                </button>
               </>
             )}
           </div>

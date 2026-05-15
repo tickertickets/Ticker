@@ -179,6 +179,7 @@ export default function MovieDetail() {
   // Horizontal scroll refs for position save/restore
   const directorScrollRef  = useRef<HTMLDivElement>(null);
   const castScrollRef      = useRef<HTMLDivElement>(null);
+  const charScrollRef      = useRef<HTMLDivElement>(null);
   const collectionScrollRef = useRef<HTMLDivElement>(null);
   const spinoffsScrollRef  = useRef<HTMLDivElement>(null);
 
@@ -186,6 +187,7 @@ export default function MovieDetail() {
     const rows: Array<[{ current: HTMLDivElement | null }, string]> = [
       [directorScrollRef,   `movie-${movieId}-director-x`],
       [castScrollRef,       `movie-${movieId}-cast-x`],
+      [charScrollRef,       `movie-${movieId}-char-x`],
       [collectionScrollRef, `movie-${movieId}-collection-x`],
       [spinoffsScrollRef,   `movie-${movieId}-spinoffs-x`],
     ];
@@ -990,6 +992,7 @@ export default function MovieDetail() {
             </p>
           </div>
           <div
+            ref={charScrollRef}
             className="flex overflow-x-auto gap-2.5 pb-1 scrollbar-hide"
             style={{ WebkitOverflowScrolling: "touch", paddingLeft: 20, paddingRight: 20 }}
           >

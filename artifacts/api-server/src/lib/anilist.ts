@@ -8,6 +8,7 @@ const charDetailCache = new Map<number, { detail: AniListCharDetail | null; ts: 
 export type AniListChar = {
   id: number;
   name: string;
+  alternativeNames: string[];
   imageUrl: string | null;
   description: string | null;
 };
@@ -27,6 +28,7 @@ export type AniListMedia = {
 export type AniListCharDetail = {
   id: number;
   name: string;
+  alternativeNames: string[];
   imageUrl: string | null;
   description: string | null;
   media: AniListMedia[];
@@ -68,6 +70,16 @@ function stripHtml(raw: string): string {
     .slice(0, 2000);
 }
 
+function buildAlternativeNames(nameObj: { full?: string; alternative?: string[]; native?: string | null } | undefined): string[] {
+  if (!nameObj) return [];
+  const alts: string[] = [];
+  for (const a of nameObj.alternative ?? []) {
+    if (a && a.trim()) alts.push(a.trim());
+  }
+  if (nameObj.native && nameObj.native.trim()) alts.push(nameObj.native.trim());
+  return alts;
+}
+
 export async function getAniListCharacters(title: string): Promise<AniListChar[]> {
   const cached = mediaCharCache.get(title);
   if (cached && Date.now() - cached.ts < CACHE_TTL) return cached.chars;
@@ -78,7 +90,7 @@ export async function getAniListCharacters(title: string): Promise<AniListChar[]
         characters(sort: FAVOURITES_DESC, page: 1, perPage: 50) {
           nodes {
             id
-            name { full }
+            name { full alternative native }
             image { large }
             description(asHtml: false)
           }
@@ -92,7 +104,7 @@ export async function getAniListCharacters(title: string): Promise<AniListChar[]
       characters?: {
         nodes?: Array<{
           id: number;
-          name?: { full?: string };
+          name?: { full?: string; alternative?: string[]; native?: string | null };
           image?: { large?: string };
           description?: string;
         }>;
@@ -105,6 +117,7 @@ export async function getAniListCharacters(title: string): Promise<AniListChar[]
     .map(n => ({
       id: n.id,
       name: n.name!.full!,
+      alternativeNames: buildAlternativeNames(n.name),
       imageUrl: n.image?.large ?? null,
       description: n.description ? stripHtml(n.description) : null,
     }));
@@ -204,7 +217,7 @@ export async function getAniListCharacterByName(name: string): Promise<AniListCh
     query ($search: String) {
       Character(search: $search) {
         id
-        name { full }
+        name { full alternative native }
         image { large }
         description(asHtml: false)
         media(sort: POPULARITY_DESC, perPage: 20, page: 1) {
@@ -226,7 +239,7 @@ export async function getAniListCharacterByName(name: string): Promise<AniListCh
   const data = await gql<{
     Character?: {
       id: number;
-      name?: { full?: string };
+      name?: { full?: string; alternative?: string[]; native?: string | null };
       image?: { large?: string };
       description?: string;
       media?: {
@@ -267,6 +280,7 @@ export async function getAniListCharacterByName(name: string): Promise<AniListCh
   const detail: AniListCharDetail = {
     id: c.id,
     name: c.name?.full ?? name,
+    alternativeNames: buildAlternativeNames(c.name),
     imageUrl: c.image?.large ?? null,
     description: c.description ? stripHtml(c.description) : null,
     media,
@@ -285,7 +299,7 @@ export async function getAniListCharacterById(id: number): Promise<AniListCharDe
     query ($id: Int) {
       Character(id: $id) {
         id
-        name { full }
+        name { full alternative native }
         image { large }
         description(asHtml: false)
         media(sort: POPULARITY_DESC, perPage: 25, page: 1) {
@@ -307,7 +321,7 @@ export async function getAniListCharacterById(id: number): Promise<AniListCharDe
   const data = await gql<{
     Character?: {
       id: number;
-      name?: { full?: string };
+      name?: { full?: string; alternative?: string[]; native?: string | null };
       image?: { large?: string };
       description?: string;
       media?: {
@@ -348,6 +362,7 @@ export async function getAniListCharacterById(id: number): Promise<AniListCharDe
   const detail: AniListCharDetail = {
     id: c.id,
     name: c.name?.full ?? "",
+    alternativeNames: buildAlternativeNames(c.name),
     imageUrl: c.image?.large ?? null,
     description: c.description ? stripHtml(c.description) : null,
     media,
