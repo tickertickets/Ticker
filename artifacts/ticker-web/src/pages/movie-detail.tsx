@@ -177,7 +177,6 @@ export default function MovieDetail() {
   const [showSpinoffs, setShowSpinoffs] = useState(false);
 
   // Horizontal scroll refs for position save/restore
-  const charScrollRef      = useRef<HTMLDivElement>(null);
   const directorScrollRef  = useRef<HTMLDivElement>(null);
   const castScrollRef      = useRef<HTMLDivElement>(null);
   const collectionScrollRef = useRef<HTMLDivElement>(null);
@@ -185,7 +184,6 @@ export default function MovieDetail() {
 
   useEffect(() => {
     const rows: Array<[{ current: HTMLDivElement | null }, string]> = [
-      [charScrollRef,       `movie-${movieId}-chars-x`],
       [directorScrollRef,   `movie-${movieId}-director-x`],
       [castScrollRef,       `movie-${movieId}-cast-x`],
       [collectionScrollRef, `movie-${movieId}-collection-x`],
@@ -490,11 +488,18 @@ export default function MovieDetail() {
     staleTime: 30 * 60 * 1000,
   });
 
-  type CharacterResult = { name: string; wikidataId: string; description: string; imageUrl: string | null; alias: string | null };
-  const { data: charactersData } = useQuery<{ results: CharacterResult[] }>({
+  type CharResult = {
+    name: string;
+    wikidataId: string;
+    imageUrl: string | null;
+    alias: string | null;
+  };
+  const { data: charsData } = useQuery<{ results: CharResult[] }>({
     queryKey: ["/api/character/by-movie", movieId],
     queryFn: async () => {
-      const res = await fetch(`/api/character/by-movie/${encodeURIComponent(movieId)}`);
+      const res = await fetch(
+        `/api/character/by-movie/${encodeURIComponent(movieId)}`,
+      );
       if (!res.ok) return { results: [] };
       return res.json();
     },
@@ -975,7 +980,7 @@ export default function MovieDetail() {
       )}
 
       {/* ── Characters ── */}
-      {(charactersData?.results ?? []).length > 0 && (
+      {(charsData?.results ?? []).length > 0 && (
         <>
           <div className="mx-5 border-t border-border my-4" />
           <div className="px-5 mb-2 flex items-center gap-2">
@@ -985,24 +990,38 @@ export default function MovieDetail() {
             </p>
           </div>
           <div
-            ref={charScrollRef}
             className="flex overflow-x-auto gap-2.5 pb-1 scrollbar-hide"
             style={{ WebkitOverflowScrolling: "touch", paddingLeft: 20, paddingRight: 20 }}
           >
-            {charactersData!.results.map(char => (
+            {charsData!.results.map((char) => (
               <Link
                 key={char.wikidataId}
                 href={`/character/${encodeURIComponent(char.wikidataId)}${navSrclang ? `?srclang=${encodeURIComponent(navSrclang)}` : ""}`}
               >
                 <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
                   <div className="relative" style={{ aspectRatio: "2/3" }}>
-                    {char.imageUrl
-                      ? <img src={char.imageUrl} alt={char.name} className="w-full h-full object-cover object-top" loading="eager" />
-                      : <div className="w-full h-full flex items-center justify-center bg-zinc-900"><User className="w-4 h-4 text-muted-foreground opacity-30" /></div>}
+                    {char.imageUrl ? (
+                      <img
+                        src={char.imageUrl}
+                        alt={char.name}
+                        className="w-full h-full object-cover object-top"
+                        loading="eager"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-zinc-900">
+                        <User className="w-4 h-4 text-muted-foreground opacity-30" />
+                      </div>
+                    )}
                   </div>
                   <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
-                    <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{char.name}</p>
-                    {char.alias && <p className="text-[8px] text-muted-foreground mt-0.5 truncate">{char.alias}</p>}
+                    <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">
+                      {char.name}
+                    </p>
+                    {char.alias && (
+                      <p className="text-[8px] text-muted-foreground mt-0.5 truncate">
+                        {char.alias}
+                      </p>
+                    )}
                   </div>
                 </div>
               </Link>

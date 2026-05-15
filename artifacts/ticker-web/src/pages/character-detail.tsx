@@ -4,20 +4,29 @@ import { useQuery } from "@tanstack/react-query";
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { ChevronLeft, Film, User, Loader2, Flag, Send } from "lucide-react";
 import { useLang, displayYear } from "@/lib/i18n";
-import { computeCardTier, computeEffectTags, type ScoreInput } from "@/lib/ranks";
-import { MovieBadges } from "@/components/MovieBadges";
 import { scrollStore } from "@/lib/scroll-store";
 
-function parseAniListDescription(raw: string): { info: { key: string; value: string }[]; bio: string } {
+// ── AniList bio parser ────────────────────────────────────────────────────────
+// AniList descriptions embed structured data as __Key:__ Value pairs.
+// This parser extracts those pairs and returns the remaining plain text as bio.
+
+function parseAniListDescription(raw: string): {
+  info: { key: string; value: string }[];
+  bio: string;
+} {
   if (!raw) return { info: [], bio: "" };
 
   const info: { key: string; value: string }[] = [];
-  const keyPattern = /__([^_\n]+):__\s*/g;
+  const pattern = /__([^_\n]+):__\s*/g;
   const positions: { key: string; start: number; contentStart: number }[] = [];
 
-  let m;
-  while ((m = keyPattern.exec(raw)) !== null) {
-    positions.push({ key: m[1].trim(), start: m.index, contentStart: m.index + m[0].length });
+  let m: RegExpExecArray | null;
+  while ((m = pattern.exec(raw)) !== null) {
+    positions.push({
+      key: m[1].trim(),
+      start: m.index,
+      contentStart: m.index + m[0].length,
+    });
   }
 
   if (positions.length === 0) return { info: [], bio: raw.trim() };
@@ -27,14 +36,15 @@ function parseAniListDescription(raw: string): { info: { key: string; value: str
 
   for (let i = 0; i < positions.length; i++) {
     const pos = positions[i]!;
-    const nextStart = i + 1 < positions.length ? positions[i + 1]!.start : raw.length;
+    const nextStart =
+      i + 1 < positions.length ? positions[i + 1]!.start : raw.length;
     let val = raw.slice(pos.contentStart, nextStart).trim();
 
     if (i === positions.length - 1) {
-      const nlIdx = val.indexOf("\n");
-      if (nlIdx > 0) {
-        trailing = val.slice(nlIdx).trim();
-        val = val.slice(0, nlIdx).trim();
+      const nl = val.indexOf("\n");
+      if (nl > 0) {
+        trailing = val.slice(nl).trim();
+        val = val.slice(0, nl).trim();
       }
     }
 
@@ -45,103 +55,134 @@ function parseAniListDescription(raw: string): { info: { key: string; value: str
   return { info, bio };
 }
 
-type CharacterFilm = {
+function stripMarkers(text: string): string {
+  return text
+    .replace(/__[^_\n]+:__\s*/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+type CharFilm = {
   title: string;
   year: string | null;
   imdbId: string | null;
   posterUrl: string | null;
-  tmdbRating: string | null;
-  voteCount: number;
-  genreIds: number[];
-  popularity: number;
-  franchiseIds: number[];
   mediaType: "movie" | "tv";
 };
 
-type CharacterData = {
+type CharData = {
   wikidataId: string;
   charId?: string;
   name: string;
   description: string;
   imageUrl: string | null;
-  filmography: CharacterFilm[];
-  source?: "anilist" | "comicvine" | string;
+  filmography: CharFilm[];
+  source?: string;
 };
 
-function CharacterMovieCard({ film, navSrclang }: { film: CharacterFilm; navSrclang: string }) {
+// ── Filmography card ──────────────────────────────────────────────────────────
+
+function FilmCard({
+  film,
+  navSrclang,
+}: {
+  film: CharFilm;
+  navSrclang: string;
+}) {
   const { lang } = useLang();
-  const input: ScoreInput = {
-    tmdbRating: parseFloat(film.tmdbRating ?? "0"),
-    voteCount: film.voteCount ?? 0,
-    genreIds: film.genreIds ?? [],
-    popularity: film.popularity ?? 0,
-    franchiseIds: film.franchiseIds ?? [],
-  };
-  const tier = computeCardTier(input);
-  const effects = computeEffectTags(input, tier);
   const href = film.imdbId
-    ? (navSrclang
-        ? `/movie/${encodeURIComponent(film.imdbId)}?srclang=${encodeURIComponent(navSrclang)}`
-        : `/movie/${encodeURIComponent(film.imdbId)}`)
+    ? `/movie/${encodeURIComponent(film.imdbId)}${navSrclang ? `?srclang=${encodeURIComponent(navSrclang)}` : ""}`
     : "#";
 
   return (
-    <Link href={href} onClick={() => film.imdbId && scrollStore.delete(`movie-${film.imdbId}`)}>
+    <Link
+      href={href}
+      onClick={() => film.imdbId && scrollStore.delete(`movie-${film.imdbId}`)}
+    >
       <div
-        className="relative rounded-xl overflow-hidden bg-zinc-900 border border-border shimmer-no-border w-full"
+        className="relative rounded-xl overflow-hidden bg-zinc-900 border border-border w-full"
         style={{ aspectRatio: "2/3" }}
       >
-        {film.posterUrl
-          ? <img src={film.posterUrl} alt={film.title} className="w-full h-full object-cover" loading="lazy" />
-          : <div className="w-full h-full bg-zinc-800 flex items-center justify-center"><Film className="w-5 h-5 text-zinc-500" /></div>
-        }
-        <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/80" />
-        <div className="absolute" style={{ top: 6, right: 6 }}>
-          <MovieBadges tier={tier} effects={effects} size="xs" layout="col" />
-        </div>
+        {film.posterUrl ? (
+          <img
+            src={film.posterUrl}
+            alt={film.title}
+            className="w-full h-full object-cover"
+            loading="lazy"
+          />
+        ) : (
+          <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
+            <Film className="w-5 h-5 text-zinc-500" />
+          </div>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/80" />
         <div className="absolute inset-x-0 bottom-0 p-1.5">
-          <p className="text-white text-[9px] font-bold line-clamp-2 leading-tight">{film.title}</p>
-          {film.year && <p className="text-white/60 text-[8px]">{displayYear(film.year, lang)}</p>}
+          <p className="text-white text-[9px] font-bold line-clamp-2 leading-tight">
+            {film.title}
+          </p>
+          {film.year && (
+            <p className="text-white/60 text-[8px]">
+              {displayYear(film.year, lang)}
+            </p>
+          )}
         </div>
       </div>
     </Link>
   );
 }
 
-function stripRawMarkers(text: string) {
-  return text.replace(/__[^_\n]+:__\s*/g, "").replace(/\n{3,}/g, "\n\n").trim();
-}
+// ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function CharacterDetail() {
   const { lang } = useLang();
   const [, params] = useRoute("/character/:wikidataId");
   const [, navigate] = useLocation();
+
   const wikidataId = params?.wikidataId ?? "";
 
-  const srclang = useMemo(() =>
-    new URLSearchParams(
-      typeof window !== "undefined" ? window.location.search : ""
-    ).get("srclang") ?? "",
-  []);
+  // Read ?srclang from URL once on mount
+  const srclang = useMemo(
+    () =>
+      typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("srclang") ?? ""
+        : "",
+    [],
+  );
 
   const srcLangCode = useMemo(() => {
     const base = srclang.split("-")[0].toLowerCase();
     return base || "en";
   }, [srclang]);
 
-  const { data, isLoading, isError } = useQuery<CharacterData>({
+  // Noindex for character pages
+  useEffect(() => {
+    const meta = document.createElement("meta");
+    meta.name = "robots";
+    meta.content = "noindex, nofollow";
+    document.head.appendChild(meta);
+    return () => {
+      document.head.removeChild(meta);
+    };
+  }, []);
+
+  // ── Primary data fetch ──────────────────────────────────────────────────────
+
+  const { data, isLoading, isError } = useQuery<CharData>({
     queryKey: ["/api/character", wikidataId],
     queryFn: async () => {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 20_000);
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 20_000);
       try {
-        const res = await fetch(`/api/character/${encodeURIComponent(wikidataId)}`, {
-          signal: controller.signal,
-        });
-        if (!res.ok) throw new Error("Character not found");
-        return res.json() as Promise<CharacterData>;
+        const res = await fetch(
+          `/api/character/${encodeURIComponent(wikidataId)}`,
+          { signal: ctrl.signal },
+        );
+        if (!res.ok) throw new Error("not found");
+        return res.json() as Promise<CharData>;
       } finally {
-        clearTimeout(timeout);
+        clearTimeout(t);
       }
     },
     enabled: !!wikidataId,
@@ -150,30 +191,19 @@ export default function CharacterDetail() {
     retryDelay: 1000,
   });
 
+  // ── Bio language state ──────────────────────────────────────────────────────
+
   const [bioLang, setBioLang] = useState<string>(() => srcLangCode);
-  const [showReport, setShowReport] = useState(false);
-  const [reportReason, setReportReason] = useState("");
-  const [reportDetails, setReportDetails] = useState("");
-  const [reportSubmitting, setReportSubmitting] = useState(false);
-  const [reportSuccess, setReportSuccess] = useState(false);
 
-  useEffect(() => {
-    const meta = document.createElement("meta");
-    meta.name = "robots";
-    meta.content = "noindex, nofollow";
-    document.head.appendChild(meta);
-    return () => { document.head.removeChild(meta); };
-  }, []);
-
-  const { data: altBioData, isLoading: altBioLoading } = useQuery<CharacterData>({
+  const { data: altData, isLoading: altLoading } = useQuery<CharData>({
     queryKey: ["/api/character", wikidataId, "lang", bioLang],
     queryFn: async () => {
       const res = await fetch(
         `/api/character/${encodeURIComponent(wikidataId)}?lang=${encodeURIComponent(bioLang)}`,
-        { signal: AbortSignal.timeout(15_000) }
+        { signal: AbortSignal.timeout(15_000) },
       );
-      if (!res.ok) throw new Error("Not found");
-      return res.json() as Promise<CharacterData>;
+      if (!res.ok) throw new Error("not found");
+      return res.json() as Promise<CharData>;
     },
     enabled: bioLang !== "en" && !!wikidataId,
     staleTime: 30 * 60 * 1000,
@@ -181,94 +211,128 @@ export default function CharacterDetail() {
     retryDelay: 1000,
   });
 
-  const notFound = isError && !isLoading;
-  const rawBio = data?.description ?? "";
-  const { info, bio } = useMemo(() => parseAniListDescription(rawBio), [rawBio]);
+  // ── Bio parsing ─────────────────────────────────────────────────────────────
 
-  const displayRawBio = bioLang === "en"
-    ? rawBio
-    : (altBioLoading ? rawBio : (altBioData?.description ?? rawBio));
+  const rawBioEn = data?.description ?? "";
+  const parsedEn = useMemo(() => parseAniListDescription(rawBioEn), [rawBioEn]);
 
-  const displayBioText = useMemo(() => {
-    if (bioLang === "en") return bio;
-    const alt = altBioLoading ? rawBio : (altBioData?.description ?? rawBio);
-    const parsed = parseAniListDescription(alt);
-    return parsed.bio || stripRawMarkers(alt);
-  }, [bioLang, bio, rawBio, altBioData, altBioLoading]);
-
-  const displayInfo = useMemo(() => {
-    if (bioLang === "en") return info;
-    const alt = altBioLoading ? rawBio : (altBioData?.description ?? rawBio);
-    const parsed = parseAniListDescription(alt);
-    return parsed.info.length > 0 ? parsed.info : info;
-  }, [bioLang, info, rawBio, altBioData, altBioLoading]);
-
-  const hasOrigLang = srcLangCode !== "en" && srcLangCode !== "th";
-  const origLangLabel = srcLangCode.toUpperCase().slice(0, 3);
-
-  const submitReport = useCallback(async () => {
-    if (!reportReason || reportSubmitting) return;
-    setReportSubmitting(true);
-    try {
-      await fetch(`/api/reports/character/${encodeURIComponent(data?.charId ?? wikidataId)}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          reason: reportReason,
-          details: reportDetails.trim() || null,
-          characterName: data?.name ?? wikidataId,
-        }),
-      });
-      setReportSuccess(true);
-    } catch {
-      setReportSuccess(true);
-    } finally {
-      setReportSubmitting(false);
+  const { displayInfo, displayBio } = useMemo(() => {
+    if (bioLang === "en") {
+      return { displayInfo: parsedEn.info, displayBio: parsedEn.bio };
     }
-  }, [reportReason, reportDetails, data, wikidataId, reportSubmitting]);
+    const altRaw = altLoading
+      ? rawBioEn
+      : (altData?.description ?? rawBioEn);
+    const parsed = parseAniListDescription(altRaw);
+    return {
+      displayInfo: parsed.info.length > 0 ? parsed.info : parsedEn.info,
+      displayBio: parsed.bio || stripMarkers(altRaw),
+    };
+  }, [bioLang, parsedEn, rawBioEn, altData, altLoading]);
+
+  // Bio toggle: show original-language button only if srclang is not EN/TH
+  const hasOrigLang = srcLangCode !== "en" && srcLangCode !== "th";
+  const origLabel = srcLangCode.toUpperCase().slice(0, 3);
+
+  // ── Report modal state ──────────────────────────────────────────────────────
+
+  const [showReport, setShowReport] = useState(false);
+  const [reason, setReason] = useState("");
+  const [details, setDetails] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
 
   const closeReport = useCallback(() => {
     setShowReport(false);
-    setTimeout(() => { setReportSuccess(false); setReportReason(""); setReportDetails(""); }, 300);
+    setTimeout(() => {
+      setSubmitted(false);
+      setReason("");
+      setDetails("");
+    }, 300);
   }, []);
 
-  const REPORT_REASONS = lang === "th"
-    ? [
-        { value: "wrong_info", label: "ข้อมูลไม่ถูกต้อง" },
-        { value: "wrong_image", label: "รูปผิด / ไม่ใช่ตัวละครนี้" },
-        { value: "not_this_character", label: "ตัวละครไม่ตรงกับสื่อนี้" },
-        { value: "offensive", label: "เนื้อหาไม่เหมาะสม" },
-        { value: "other", label: "อื่นๆ" },
-      ]
-    : [
-        { value: "wrong_info", label: "Wrong information" },
-        { value: "wrong_image", label: "Wrong or incorrect image" },
-        { value: "not_this_character", label: "Wrong character for this media" },
-        { value: "offensive", label: "Offensive content" },
-        { value: "other", label: "Other issue" },
-      ];
+  const submitReport = useCallback(async () => {
+    if (!reason || submitting) return;
+    setSubmitting(true);
+    try {
+      await fetch(
+        `/api/reports/character/${encodeURIComponent(data?.charId ?? wikidataId)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            reason,
+            details: details.trim() || null,
+            characterName: data?.name ?? wikidataId,
+          }),
+        },
+      );
+    } catch {
+      // show success regardless
+    } finally {
+      setSubmitting(false);
+      setSubmitted(true);
+    }
+  }, [reason, details, data, wikidataId, submitting]);
+
+  const REASONS =
+    lang === "th"
+      ? [
+          { value: "wrong_info", label: "ข้อมูลไม่ถูกต้อง" },
+          { value: "wrong_image", label: "รูปผิด / ไม่ใช่ตัวละครนี้" },
+          { value: "not_this_character", label: "ตัวละครไม่ตรงกับสื่อนี้" },
+          { value: "offensive", label: "เนื้อหาไม่เหมาะสม" },
+          { value: "other", label: "อื่นๆ" },
+        ]
+      : [
+          { value: "wrong_info", label: "Wrong information" },
+          { value: "wrong_image", label: "Wrong or incorrect image" },
+          { value: "not_this_character", label: "Wrong character for this media" },
+          { value: "offensive", label: "Offensive content" },
+          { value: "other", label: "Other issue" },
+        ];
+
+  // ── Source credit ───────────────────────────────────────────────────────────
+  // Backend returns source: "anilist" | "comicvine" | "tmdb"
+  // "anilist"  → credit AniList
+  // anything else → credit Comic Vine (comicvine or tmdb-fallback)
+
+  const sourceIsAniList = data?.source === "anilist";
+
+  // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
     <div className="absolute inset-0 bg-background flex flex-col overflow-hidden">
+      {/* Back button */}
       <button
         onClick={() => navBack(navigate)}
         className="absolute z-20 left-4 w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center border border-white/20"
         style={{ top: "max(1rem, env(safe-area-inset-top, 0px))" }}
         aria-label="Back"
       >
-        <ChevronLeft className="w-5 h-5 text-white" style={{ transform: "translateX(-1px)" }} />
+        <ChevronLeft
+          className="w-5 h-5 text-white"
+          style={{ transform: "translateX(-1px)" }}
+        />
       </button>
 
       <div className="flex-1 min-h-0 overflow-y-auto overscroll-y-none">
-        {/* Hero */}
-        <div className="relative w-full bg-secondary overflow-hidden" style={{ height: 280 }}>
+        {/* ── Hero ── */}
+        <div
+          className="relative w-full bg-secondary overflow-hidden"
+          style={{ height: 280 }}
+        >
           {data?.imageUrl && (
             <>
               <img
                 src={data.imageUrl}
                 alt={data.name}
                 className="absolute inset-0 w-full h-full object-cover"
-                style={{ filter: "blur(22px)", transform: "scale(1.15)", objectPosition: "center top" }}
+                style={{
+                  filter: "blur(22px)",
+                  transform: "scale(1.15)",
+                  objectPosition: "center top",
+                }}
               />
               <div className="absolute inset-0 bg-black/35" />
             </>
@@ -281,7 +345,11 @@ export default function CharacterDetail() {
           <div className="absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-black/60 to-transparent pointer-events-none" />
           <div
             className="absolute inset-x-0 bottom-0"
-            style={{ height: "60%", background: "linear-gradient(to top, hsl(var(--background)) 20%, transparent 100%)" }}
+            style={{
+              height: "60%",
+              background:
+                "linear-gradient(to top, hsl(var(--background)) 20%, transparent 100%)",
+            }}
           />
           <div className="absolute bottom-0 left-0 right-0 px-5 pb-5">
             <div className="flex items-end gap-3">
@@ -318,13 +386,15 @@ export default function CharacterDetail() {
           </div>
         </div>
 
+        {/* ── Loading ── */}
         {isLoading && (
           <div className="flex justify-center py-10">
             <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
           </div>
         )}
 
-        {notFound && (
+        {/* ── Not found ── */}
+        {isError && !isLoading && (
           <div className="flex flex-col items-center justify-center py-24 px-6 text-center gap-3">
             <User className="w-10 h-10 text-muted-foreground opacity-40" />
             <p className="text-sm text-muted-foreground">
@@ -333,53 +403,65 @@ export default function CharacterDetail() {
           </div>
         )}
 
+        {/* ── Content ── */}
         {data && (
           <div>
-            {/* ── Info section (AniList structured data) ── */}
+            {/* AniList structured info */}
             {displayInfo.length > 0 && (
               <div className="px-5 pt-4 pb-1">
                 <div className="grid grid-cols-2 gap-x-5 gap-y-3">
                   {displayInfo.map(({ key, value }) => (
                     <div key={key} className="min-w-0">
-                      <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground leading-none mb-1">{key}</p>
-                      <p className="text-xs text-foreground leading-snug">{value}</p>
+                      <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground leading-none mb-1">
+                        {key}
+                      </p>
+                      <p className="text-xs text-foreground leading-snug">
+                        {value}
+                      </p>
                     </div>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* ── Biography ── */}
-            {(displayBioText || (displayInfo.length === 0 && displayRawBio)) && (
+            {/* Bio + language toggle */}
+            {(displayBio || rawBioEn) && (
               <div className="px-5 pt-4 pb-2">
                 <div className="flex items-start gap-3">
                   <p className="text-sm text-foreground/80 leading-relaxed flex-1">
-                    {displayBioText || stripRawMarkers(displayRawBio)}
+                    {displayBio || stripMarkers(rawBioEn)}
                   </p>
-                  {/* Language toggle */}
+
+                  {/* Language toggle pill */}
                   <div
-                    className="relative inline-flex items-center select-none shrink-0 mt-0.5 gap-0"
-                    style={{ background: "#e5e5ea", border: "1px solid #d1d1d6", borderRadius: 999, padding: 2 }}
+                    className="relative inline-flex items-center select-none shrink-0 mt-0.5"
+                    style={{
+                      background: "#e5e5ea",
+                      border: "1px solid #d1d1d6",
+                      borderRadius: 999,
+                      padding: 2,
+                    }}
                   >
                     {hasOrigLang && (
                       <button
                         type="button"
                         onClick={() => setBioLang(srcLangCode)}
-                        aria-label={`Show bio in ${origLangLabel}`}
+                        aria-label={`Bio in ${origLabel}`}
                         className="relative z-10 text-[10px] font-bold tracking-wide px-2 py-0.5 rounded-full transition-colors"
                         style={{
-                          background: bioLang === srcLangCode ? "#111" : "transparent",
+                          background:
+                            bioLang === srcLangCode ? "#111" : "transparent",
                           color: bioLang === srcLangCode ? "#fff" : "#888",
                           minWidth: 28,
                         }}
                       >
-                        {origLangLabel}
+                        {origLabel}
                       </button>
                     )}
                     <button
                       type="button"
                       onClick={() => setBioLang("en")}
-                      aria-label="Show bio in English"
+                      aria-label="Bio in English"
                       className="relative z-10 text-[10px] font-bold tracking-wide px-2 py-0.5 rounded-full transition-colors"
                       style={{
                         background: bioLang === "en" ? "#111" : "transparent",
@@ -392,7 +474,7 @@ export default function CharacterDetail() {
                     <button
                       type="button"
                       onClick={() => setBioLang("th")}
-                      aria-label="Show bio in Thai"
+                      aria-label="Bio in Thai"
                       className="relative z-10 text-[10px] font-bold tracking-wide px-2 py-0.5 rounded-full transition-colors"
                       style={{
                         background: bioLang === "th" ? "#111" : "transparent",
@@ -404,26 +486,49 @@ export default function CharacterDetail() {
                     </button>
                   </div>
                 </div>
-                {bioLang !== "en" && altBioLoading && (
-                  <p className="text-xs text-muted-foreground mt-2">{lang === "th" ? "กำลังโหลด…" : "Loading…"}</p>
-                )}
-                {bioLang !== "en" && !altBioLoading && !altBioData?.description && (
+
+                {bioLang !== "en" && altLoading && (
                   <p className="text-xs text-muted-foreground mt-2">
-                    {lang === "th" ? "ยังไม่มีข้อมูลภาษานี้" : "Bio not available in this language"}
+                    {lang === "th" ? "กำลังโหลด…" : "Loading…"}
                   </p>
                 )}
+                {bioLang !== "en" && !altLoading && !altData?.description && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    {lang === "th"
+                      ? "ยังไม่มีข้อมูลภาษานี้"
+                      : "Bio not available in this language"}
+                  </p>
+                )}
+
+                {/* Source credit */}
                 <p className="text-[10px] text-muted-foreground/60 mt-2">
                   {lang === "th" ? "ที่มา: " : "Source: "}
-                  {data?.source === "anilist" ? (
-                    <a href="https://anilist.co" target="_blank" rel="noopener noreferrer" className="underline" onClick={e => e.stopPropagation()}>AniList</a>
+                  {sourceIsAniList ? (
+                    <a
+                      href="https://anilist.co"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      AniList
+                    </a>
                   ) : (
-                    <a href="https://comicvine.gamespot.com" target="_blank" rel="noopener noreferrer" className="underline" onClick={e => e.stopPropagation()}>Comic Vine</a>
+                    <a
+                      href="https://comicvine.gamespot.com"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Comic Vine
+                    </a>
                   )}
                 </p>
               </div>
             )}
 
-            {/* ── Filmography ── */}
+            {/* Filmography */}
             {data.filmography.length > 0 && (
               <>
                 <div className="mx-5 border-t border-border my-4" />
@@ -435,23 +540,34 @@ export default function CharacterDetail() {
                 </div>
                 <div className="px-5 grid grid-cols-3 gap-2 pb-2">
                   {data.filmography.map((film, i) => (
-                    <CharacterMovieCard key={film.imdbId ?? i} film={film} navSrclang={srclang} />
+                    <FilmCard
+                      key={film.imdbId ?? i}
+                      film={film}
+                      navSrclang={srclang}
+                    />
                   ))}
                 </div>
               </>
             )}
 
-            {/* ── Report button ── */}
+            {/* Report button */}
             <div className="px-5 pt-2 pb-4">
               <button
                 onClick={() => setShowReport(true)}
                 className="flex items-center gap-1.5 text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
               >
                 <Flag className="w-3 h-3" />
-                {lang === "th" ? "แจ้งปัญหา / ขอลบข้อมูล" : "Report / Request Removal"}
+                {lang === "th"
+                  ? "แจ้งปัญหา / ขอลบข้อมูล"
+                  : "Report / Request Removal"}
               </button>
             </div>
-            <div style={{ height: "calc(env(safe-area-inset-bottom, 0px) + 0.75rem)" }} aria-hidden />
+            <div
+              style={{
+                height: "calc(env(safe-area-inset-bottom, 0px) + 0.75rem)",
+              }}
+              aria-hidden
+            />
           </div>
         )}
       </div>
@@ -464,14 +580,16 @@ export default function CharacterDetail() {
         >
           <div
             className="bg-background rounded-t-3xl px-6 pt-6 w-full max-w-lg"
-            style={{ paddingBottom: "max(1.5rem, env(safe-area-inset-bottom, 0px))" }}
-            onClick={e => e.stopPropagation()}
+            style={{
+              paddingBottom: "max(1.5rem, env(safe-area-inset-bottom, 0px))",
+            }}
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-center mb-4">
               <div className="w-10 h-1 rounded-full bg-muted-foreground/20" />
             </div>
 
-            {reportSuccess ? (
+            {submitted ? (
               <div className="text-center py-2 pb-4">
                 <div className="w-12 h-12 rounded-full bg-green-500/10 flex items-center justify-center mx-auto mb-3">
                   <Send className="w-5 h-5 text-green-500" />
@@ -494,30 +612,42 @@ export default function CharacterDetail() {
             ) : (
               <>
                 <h3 className="font-bold text-base mb-1">
-                  {lang === "th" ? "แจ้งปัญหา / ขอลบข้อมูล" : "Report / Request Removal"}
+                  {lang === "th"
+                    ? "แจ้งปัญหา / ขอลบข้อมูล"
+                    : "Report / Request Removal"}
                 </h3>
                 <p className="text-xs text-muted-foreground mb-4">
-                  {data?.name && <span className="font-medium text-foreground">{data.name}</span>}
+                  {data?.name && (
+                    <span className="font-medium text-foreground">
+                      {data.name}
+                    </span>
+                  )}
                 </p>
 
                 <p className="text-xs font-semibold text-muted-foreground mb-2">
                   {lang === "th" ? "เหตุผล" : "Reason"}
                 </p>
                 <div className="flex flex-col gap-2 mb-4">
-                  {REPORT_REASONS.map(r => (
+                  {REASONS.map((r) => (
                     <button
                       key={r.value}
-                      onClick={() => setReportReason(r.value)}
+                      onClick={() => setReason(r.value)}
                       className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-sm text-left transition-colors ${
-                        reportReason === r.value
+                        reason === r.value
                           ? "border-foreground bg-secondary font-semibold"
                           : "border-border text-muted-foreground"
                       }`}
                     >
-                      <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${
-                        reportReason === r.value ? "border-foreground" : "border-muted-foreground/40"
-                      }`}>
-                        {reportReason === r.value && <div className="w-2 h-2 rounded-full bg-foreground" />}
+                      <div
+                        className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${
+                          reason === r.value
+                            ? "border-foreground"
+                            : "border-muted-foreground/40"
+                        }`}
+                      >
+                        {reason === r.value && (
+                          <div className="w-2 h-2 rounded-full bg-foreground" />
+                        )}
                       </div>
                       {r.label}
                     </button>
@@ -526,9 +656,13 @@ export default function CharacterDetail() {
 
                 <textarea
                   className="w-full h-20 bg-secondary rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground resize-none border border-border outline-none focus:border-muted-foreground transition-colors"
-                  placeholder={lang === "th" ? "รายละเอียดเพิ่มเติม (ไม่บังคับ)" : "Additional details (optional)"}
-                  value={reportDetails}
-                  onChange={e => setReportDetails(e.target.value)}
+                  placeholder={
+                    lang === "th"
+                      ? "รายละเอียดเพิ่มเติม (ไม่บังคับ)"
+                      : "Additional details (optional)"
+                  }
+                  value={details}
+                  onChange={(e) => setDetails(e.target.value)}
                   maxLength={400}
                 />
 
@@ -541,13 +675,17 @@ export default function CharacterDetail() {
                   </button>
                   <button
                     onClick={submitReport}
-                    disabled={!reportReason || reportSubmitting}
+                    disabled={!reason || submitting}
                     className="flex-[2] py-2.5 rounded-xl bg-foreground text-background text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-40 transition-opacity active:opacity-70"
                   >
-                    {reportSubmitting
-                      ? <Loader2 className="w-4 h-4 animate-spin" />
-                      : <><Send className="w-3.5 h-3.5" />{lang === "th" ? "ส่งรายงาน" : "Submit"}</>
-                    }
+                    {submitting ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        <Send className="w-3.5 h-3.5" />
+                        {lang === "th" ? "ส่งรายงาน" : "Submit"}
+                      </>
+                    )}
                   </button>
                 </div>
               </>
