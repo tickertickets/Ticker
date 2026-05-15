@@ -373,9 +373,7 @@ export default function Search() {
   const [visitedCategories, setVisitedCategories] = useState<Set<string>>(() => new Set([activeCategory]));
   const [showRandomPicker, setShowRandomPicker]   = useState(false);
   const [showVsPicker, setShowVsPicker]           = useState(false);
-  const [showDiceTab, setShowDiceTab]             = useState(false);
-  const diceHintTimers                            = useRef<ReturnType<typeof setTimeout>[]>([]);
-
+  const [showDiceTab, setShowDiceTab]             = useState(true);
   const headerRef        = useRef<HTMLDivElement>(null);
   const pillContainerRef = useRef<HTMLDivElement>(null);
   const pillRefs         = useRef<Map<string, HTMLButtonElement>>(new Map());
@@ -429,24 +427,7 @@ export default function Search() {
     return () => el.removeEventListener("scroll", onScroll);
   }, [debouncedQuery, handleScrollChange]);
 
-  // Auto-hint: briefly slide the dice tab down then back up each time the user
-  // enters the search page — so they notice the hidden random-movie feature.
   const [location] = useLocation();
-  const triggerDiceHint = useCallback(() => {
-    diceHintTimers.current.forEach(t => clearTimeout(t));
-    // Slide down after a short delay (let the page settle first)
-    diceHintTimers.current = [
-      setTimeout(() => setShowDiceTab(true),  400),
-      // Slide back up after the user has had a moment to see it
-      setTimeout(() => setShowDiceTab(false), 2900),
-    ];
-  }, []);
-
-  useEffect(() => {
-    if (location !== "/search") return;
-    triggerDiceHint();
-    return () => diceHintTimers.current.forEach(t => clearTimeout(t));
-  }, [location, triggerDiceHint]);
 
   // nav-refresh: tap search icon when already on search page — clear query only, keep active category
   useEffect(() => {
@@ -456,12 +437,11 @@ export default function Search() {
         setQuery("");
         setHeaderHidden(false);
         qc.invalidateQueries({ queryKey: ["movies-section-v", activeCategory] });
-        triggerDiceHint();
       }
     };
     window.addEventListener("nav-refresh", handler);
     return () => window.removeEventListener("nav-refresh", handler);
-  }, [qc, activeCategory, triggerDiceHint]);
+  }, [qc, activeCategory]);
 
   const handleCategoryChange = (catId: string) => {
     setVisitedCategories(prev => new Set([...prev, catId]));

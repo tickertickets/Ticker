@@ -8,8 +8,6 @@ import { useSearchMovies } from "@workspace/api-client-react";
 import { useDebounceValue } from "usehooks-ts";
 import { ChevronLeft, Loader2, Film, X, Plus, Search, TrendingUp, Timer, Users, Lock, GripVertical, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { computeCardTier, computeEffectTags, TIER_VISUAL, type ScoreInput } from "@/lib/ranks";
-import { MovieBadges } from "@/components/MovieBadges";
 import { useEnsureMovieCores } from "@/lib/use-movie-cores";
 import { DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
@@ -50,33 +48,6 @@ type ChainData = {
   movies: ChainMovie[];
 };
 
-// ── Movie detail (for rank badge) ─────────────────────────────────────────
-// Read-only — rank-relevant fields are pre-loaded by useEnsureMovieCores at
-// the parent level via the lightweight /api/movies/core batch endpoint.
-function useMovieDetail(imdbId: string) {
-  const { data } = useQuery<any>({
-    queryKey: ["/api/movies", imdbId],
-    enabled: false,
-    staleTime: Infinity,
-  });
-  return data ?? null;
-}
-
-function getRankVisual(movie: TrendingMovie, detail?: any) {
-  const input: ScoreInput = {
-    tmdbRating: detail?.tmdbRating ? parseFloat(detail.tmdbRating) : parseFloat(movie.tmdbRating ?? "0"),
-    voteCount: detail?.voteCount ?? movie.voteCount ?? 0,
-    genreIds: detail?.genreIds ?? movie.genreIds ?? [],
-    popularity: detail?.popularity ?? movie.popularity ?? 0,
-    year: movie.year ? parseInt(movie.year) : undefined,
-    releaseDate: detail?.releaseDate ?? movie.releaseDate ?? null,
-    franchiseIds: detail?.franchiseIds ?? movie.franchiseIds ?? [],
-  };
-  const tier = computeCardTier(input);
-  const effects = computeEffectTags(input, tier);
-  return { visual: TIER_VISUAL[tier], tier, effects };
-}
-
 function SearchMovieRow({ movie, already, onAdd, addedLabel }: {
   movie: TrendingMovie;
   already: boolean;
@@ -84,8 +55,6 @@ function SearchMovieRow({ movie, already, onAdd, addedLabel }: {
   addedLabel: string;
 }) {
   const { lang } = useLang();
-  const detail = useMovieDetail(movie.imdbId);
-  const { visual, tier, effects } = getRankVisual(movie, detail);
   return (
     <div className="w-full flex items-center gap-3 px-3 py-2.5 border-b border-border/40 last:border-0">
       <div className="w-9 h-12 rounded-lg overflow-hidden bg-zinc-900 shrink-0 border border-border relative shimmer-no-border">
@@ -96,9 +65,6 @@ function SearchMovieRow({ movie, already, onAdd, addedLabel }: {
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-foreground truncate">{movie.title}</p>
         <p className="text-[11px] text-muted-foreground">{displayYear(movie.year, lang)}</p>
-        <div className="mt-1">
-          <MovieBadges tier={tier} effects={effects} size="xs" layout="row" />
-        </div>
       </div>
       {already
         ? <span className="text-[11px] text-muted-foreground shrink-0">{addedLabel}</span>

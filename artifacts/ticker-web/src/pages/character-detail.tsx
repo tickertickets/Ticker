@@ -65,7 +65,7 @@ type CharacterData = {
   description: string;
   imageUrl: string | null;
   filmography: CharacterFilm[];
-  source?: "anilist" | "tmdb";
+  source?: "anilist" | "comicvine" | string;
 };
 
 function CharacterMovieCard({ film, navSrclang }: { film: CharacterFilm; navSrclang: string }) {
@@ -417,7 +417,7 @@ export default function CharacterDetail() {
                   {data?.source === "anilist" ? (
                     <a href="https://anilist.co" target="_blank" rel="noopener noreferrer" className="underline" onClick={e => e.stopPropagation()}>AniList</a>
                   ) : (
-                    <a href="https://www.themoviedb.org" target="_blank" rel="noopener noreferrer" className="underline" onClick={e => e.stopPropagation()}>TMDB</a>
+                    <a href="https://comicvine.gamespot.com" target="_blank" rel="noopener noreferrer" className="underline" onClick={e => e.stopPropagation()}>Comic Vine</a>
                   )}
                 </p>
               </div>

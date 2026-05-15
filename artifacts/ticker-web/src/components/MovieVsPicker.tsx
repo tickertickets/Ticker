@@ -53,7 +53,7 @@ function MovieRow({
   const effects = computeEffectTags(score, tier);
   return (
     <div className="flex items-center gap-3 bg-secondary rounded-2xl px-3 py-2.5 border border-border">
-      <div className="w-10 flex-shrink-0 rounded-xl overflow-hidden bg-zinc-900 border border-border/50" style={{ height: 56 }}>
+      <div className="w-12 flex-shrink-0 rounded-xl overflow-hidden bg-zinc-900 border border-border/50" style={{ height: 68 }}>
         {m.posterUrl
           ? <img src={m.posterUrl} alt={m.title} className="w-full h-full object-cover" loading="lazy" />
           : <div className="w-full h-full flex items-center justify-center"><Film className="w-3 h-3 text-muted-foreground" /></div>
@@ -102,7 +102,7 @@ export function MovieVsPicker({ onClose }: { onClose: () => void }) {
   const MIN_MOVIES = 2;
 
   const s = {
-    title:        lang === "th" ? "VS — ให้ระบบเลือก"           : "VS — Let the System Pick",
+    title:        lang === "th" ? "ให้ระบบเลือก"                : "Let the System Pick",
     subtitle:     lang === "th" ? "เพิ่มหนัง 2–5 เรื่อง แล้วสุ่มหาผู้ชนะ" : "Add 2–5 movies and pick a winner",
     searchPlaceholder: lang === "th" ? "ค้นหาหนัง..."           : "Search movies...",
     addBtn:       lang === "th" ? "เพิ่ม"                        : "Add",
@@ -279,7 +279,7 @@ export function MovieVsPicker({ onClose }: { onClose: () => void }) {
                 <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
                   {s.addedMovies} ({picked.length}/{MAX_MOVIES})
                 </p>
-                <div className="flex gap-2 overflow-x-auto scrollbar-hide py-2">
+                <div className="flex gap-2 overflow-x-auto scrollbar-hide pt-4 pb-2">
                   {picked.map(m => (
                     <div key={m.imdbId} className="flex-shrink-0 relative">
                       <div className="w-[60px] rounded-xl bg-secondary border border-border">

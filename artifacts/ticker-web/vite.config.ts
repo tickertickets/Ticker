@@ -103,6 +103,7 @@ export default defineConfig({
         theme_color: "#000000",
         background_color: "#ffffff",
         display: "standalone",
+        display_override: ["standalone", "minimal-ui"],
         orientation: "portrait",
         scope: "/",
         start_url: "/",

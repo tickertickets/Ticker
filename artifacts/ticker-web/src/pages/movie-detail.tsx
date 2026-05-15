@@ -176,6 +176,40 @@ export default function MovieDetail() {
   const [showCollection, setShowCollection] = useState(false);
   const [showSpinoffs, setShowSpinoffs] = useState(false);
 
+  // Horizontal scroll refs for position save/restore
+  const charScrollRef      = useRef<HTMLDivElement>(null);
+  const directorScrollRef  = useRef<HTMLDivElement>(null);
+  const castScrollRef      = useRef<HTMLDivElement>(null);
+  const collectionScrollRef = useRef<HTMLDivElement>(null);
+  const spinoffsScrollRef  = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const rows: Array<[{ current: HTMLDivElement | null }, string]> = [
+      [charScrollRef,       `movie-${movieId}-chars-x`],
+      [directorScrollRef,   `movie-${movieId}-director-x`],
+      [castScrollRef,       `movie-${movieId}-cast-x`],
+      [collectionScrollRef, `movie-${movieId}-collection-x`],
+      [spinoffsScrollRef,   `movie-${movieId}-spinoffs-x`],
+    ];
+    // Restore saved positions with a brief delay so the DOM is ready
+    const tid = setTimeout(() => {
+      rows.forEach(([ref, key]) => {
+        const el = ref.current;
+        const saved = scrollStore.get(key);
+        if (el && saved != null) el.scrollLeft = saved;
+      });
+    }, 100);
+    // Save on unmount
+    return () => {
+      clearTimeout(tid);
+      rows.forEach(([ref, key]) => {
+        const el = ref.current;
+        if (el) scrollStore.set(key, el.scrollLeft);
+      });
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [movieId]);
+
   // SCROLL GUARD: while the outer container is actively scrolling, lock the
   // inner community scroll (overflow: hidden) so an ongoing outer-scroll gesture
   // cannot accidentally scroll the captions. 300 ms after the outer scroll event
@@ -951,18 +985,19 @@ export default function MovieDetail() {
             </p>
           </div>
           <div
+            ref={charScrollRef}
             className="flex overflow-x-auto gap-2.5 pb-1 scrollbar-hide"
             style={{ WebkitOverflowScrolling: "touch", paddingLeft: 20, paddingRight: 20 }}
           >
             {charactersData!.results.map(char => (
               <Link
                 key={char.wikidataId}
-                href={`/character/${encodeURIComponent(char.wikidataId)}?srclang=${lang}`}
+                href={`/character/${encodeURIComponent(char.wikidataId)}${navSrclang ? `?srclang=${encodeURIComponent(navSrclang)}` : ""}`}
               >
                 <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
                   <div className="relative" style={{ aspectRatio: "2/3" }}>
                     {char.imageUrl
-                      ? <img src={char.imageUrl} alt={char.name} className="w-full h-full object-cover object-top" loading="lazy" />
+                      ? <img src={char.imageUrl} alt={char.name} className="w-full h-full object-cover object-top" loading="eager" />
                       : <div className="w-full h-full flex items-center justify-center bg-zinc-900"><User className="w-4 h-4 text-muted-foreground opacity-30" /></div>}
                   </div>
                   <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
@@ -1016,7 +1051,7 @@ export default function MovieDetail() {
                             {collectionData.collectionName ?? (lang === "th" ? "ภาคทั้งหมด" : "All Parts")}
                           </p>
                         </div>
-                        <div className="flex overflow-x-auto gap-2.5 pb-1 mt-2 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
+                        <div ref={collectionScrollRef} className="flex overflow-x-auto gap-2.5 pb-1 mt-2 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
                           {sorted.map(m => (
                             <Link
                               key={m.imdbId}
@@ -1050,10 +1085,10 @@ export default function MovieDetail() {
                         <div className="w-full flex items-center gap-2 py-1">
                           <Film className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                           <p className="text-xs font-semibold text-muted-foreground flex-1">
-                            {lang === "th" ? "ภาคเสริม / ที่เกี่ยวข้อง" : "Spin-offs / Related"}
+                            {lang === "th" ? "ภาคเสริม" : "Spinoffs"}
                           </p>
                         </div>
-                        <div className="flex overflow-x-auto gap-2.5 pb-1 mt-2 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
+                        <div ref={spinoffsScrollRef} className="flex overflow-x-auto gap-2.5 pb-1 mt-2 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
                           {spinoffMovies.map(m => (
                             <Link
                               key={m.imdbId}
@@ -1088,7 +1123,7 @@ export default function MovieDetail() {
                     <User className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                     <p className="text-xs font-semibold text-muted-foreground flex-1">{t.directorLabel}</p>
                   </div>
-                  <div className="flex overflow-x-auto gap-2.5 pb-1 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
+                  <div ref={directorScrollRef} className="flex overflow-x-auto gap-2.5 pb-1 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
                     {(creditsData?.directors ?? []).map(p => (
                       <Link key={p.id} href={`/person/${p.id}${navSrclang ? `?srclang=${encodeURIComponent(navSrclang)}` : ""}`}>
                         <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
@@ -1115,7 +1150,7 @@ export default function MovieDetail() {
                     <Users className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                     <p className="text-xs font-semibold text-muted-foreground flex-1">{creditsData?.isVoiceCast ? t.voiceActorLabel : t.castLabel}</p>
                   </div>
-                  <div className="flex overflow-x-auto gap-2.5 pb-1 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
+                  <div ref={castScrollRef} className="flex overflow-x-auto gap-2.5 pb-1 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
                     {(creditsData?.cast ?? []).map(p => (
                       <Link
                         key={p.id}

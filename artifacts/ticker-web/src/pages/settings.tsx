@@ -1621,7 +1621,7 @@ export default function Settings() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-sm text-foreground">{t.aboutTickerLabel}</p>
-                <div className="mt-2 space-y-2">
+                <div className="mt-1.5 space-y-1.5">
                   {t.aboutTickerBody.split("\n\n").map((para, i) => (
                     <p key={i} className="text-xs text-muted-foreground leading-relaxed">{para}</p>
                   ))}
@@ -1631,7 +1631,7 @@ export default function Settings() {
           </div>
 
           {/* TMDB Attribution */}
-          <div className="px-1 -mt-1 pb-0">
+          <div className="px-1 -mt-2 pb-0">
             <a
               href="https://www.themoviedb.org"
               target="_blank"
