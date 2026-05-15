@@ -810,7 +810,7 @@ export default function MovieDetail() {
         {/* ── Trailer embed ── */}
         {videosData?.trailerKey && (
           <div>
-            <p className="text-xs font-black uppercase tracking-widest text-foreground mb-2">{t.trailerLabel}</p>
+            <p className="text-xs font-semibold text-foreground mb-2">{t.trailerLabel}</p>
             <div
               className="w-full rounded-2xl overflow-hidden bg-zinc-900"
               style={{ aspectRatio: "16/9" }}
@@ -833,8 +833,7 @@ export default function MovieDetail() {
         <div className="px-5 pt-4">
           <div className="flex items-center gap-2 mb-2">
             <Tv className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-            <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">{t.watchOnLabel}</p>
-            <span className="text-[10px] text-muted-foreground">{allProviders.length}</span>
+            <p className="text-xs font-semibold text-muted-foreground flex-1">{t.watchOnLabel}</p>
           </div>
           <div className="flex flex-wrap gap-2">
             {allProviders.map(p => (
@@ -866,8 +865,7 @@ export default function MovieDetail() {
         <div className="px-5 pt-4">
           <div className="flex items-center gap-2 mb-2">
             <Link2 className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-            <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">{"Chains"}</p>
-            <span className="text-[10px] text-muted-foreground">{(movieChainsData?.chains ?? []).length}</span>
+            <p className="text-xs font-semibold text-muted-foreground flex-1">{"Chains"}</p>
           </div>
           <div className="grid grid-cols-3 gap-2">
             {(movieChainsData?.chains ?? []).map(chain => (
@@ -948,10 +946,9 @@ export default function MovieDetail() {
           <div className="mx-5 border-t border-border my-4" />
           <div className="px-5 mb-2 flex items-center gap-2">
             <User className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-            <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">
+            <p className="text-xs font-semibold text-muted-foreground flex-1">
               {lang === "th" ? "ตัวละคร" : "Characters"}
             </p>
-            <span className="text-[10px] text-muted-foreground">{charactersData!.results.length}</span>
           </div>
           <div
             className="flex overflow-x-auto gap-2.5 pb-1 scrollbar-hide"
@@ -1015,10 +1012,9 @@ export default function MovieDetail() {
                       <div className="mt-3">
                         <div className="w-full flex items-center gap-2 py-1">
                           <Film className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                          <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">
+                          <p className="text-xs font-semibold text-muted-foreground flex-1">
                             {collectionData.collectionName ?? (lang === "th" ? "ภาคทั้งหมด" : "All Parts")}
                           </p>
-                          <span className="text-[10px] text-muted-foreground mr-1">{mainMovies.length}</span>
                         </div>
                         <div className="flex overflow-x-auto gap-2.5 pb-1 mt-2 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
                           {sorted.map(m => (
@@ -1053,10 +1049,9 @@ export default function MovieDetail() {
                       <div className="mt-3">
                         <div className="w-full flex items-center gap-2 py-1">
                           <Film className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                          <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">
+                          <p className="text-xs font-semibold text-muted-foreground flex-1">
                             {lang === "th" ? "ภาคเสริม / ที่เกี่ยวข้อง" : "Spin-offs / Related"}
                           </p>
-                          <span className="text-[10px] text-muted-foreground mr-1">{spinoffMovies.length}</span>
                         </div>
                         <div className="flex overflow-x-auto gap-2.5 pb-1 mt-2 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
                           {spinoffMovies.map(m => (
@@ -1091,8 +1086,7 @@ export default function MovieDetail() {
                 <div className="mt-3">
                   <div className="flex items-center gap-2 mb-2">
                     <User className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">{t.directorLabel}</p>
-                    <span className="text-[10px] text-muted-foreground">{(creditsData?.directors ?? []).length}</span>
+                    <p className="text-xs font-semibold text-muted-foreground flex-1">{t.directorLabel}</p>
                   </div>
                   <div className="flex overflow-x-auto gap-2.5 pb-1 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
                     {(creditsData?.directors ?? []).map(p => (
@@ -1119,8 +1113,7 @@ export default function MovieDetail() {
                 <div className="mt-3">
                   <div className="flex items-center gap-2 mb-2">
                     <Users className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground flex-1">{creditsData?.isVoiceCast ? t.voiceActorLabel : t.castLabel}</p>
-                    <span className="text-[10px] text-muted-foreground">{(creditsData?.cast ?? []).length}</span>
+                    <p className="text-xs font-semibold text-muted-foreground flex-1">{creditsData?.isVoiceCast ? t.voiceActorLabel : t.castLabel}</p>
                   </div>
                   <div className="flex overflow-x-auto gap-2.5 pb-1 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
                     {(creditsData?.cast ?? []).map(p => (

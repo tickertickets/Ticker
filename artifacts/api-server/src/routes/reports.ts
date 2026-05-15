@@ -15,7 +15,7 @@ import {
   ValidationError,
   ConflictError,
 } from "../lib/errors";
-import { notifyReport } from "../lib/discord";
+import { notifyReport, sendDiscordWebhook } from "../lib/discord";
 
 const router: IRouter = Router();
 
@@ -242,6 +242,48 @@ router.get(
       .limit(50);
 
     res.json({ reports });
+  }),
+);
+
+// POST /api/reports/character/:charId  — report character data issue (no auth required)
+router.post(
+  "/character/:charId",
+  asyncHandler(async (req, res) => {
+    const charId = String(req.params["charId"] ?? "");
+    const { reason, details, characterName } = req.body ?? {};
+
+    if (!reason || !charId) {
+      res.status(400).json({ error: "reason is required" });
+      return;
+    }
+
+    const validReasons = ["wrong_info", "wrong_image", "not_this_character", "offensive", "other"] as const;
+    const safeReason = (validReasons as readonly string[]).includes(reason) ? reason : "other";
+
+    const reasonLabels: Record<string, string> = {
+      wrong_info: "ข้อมูลผิด / Wrong Info",
+      wrong_image: "รูปผิด / Wrong Image",
+      not_this_character: "ตัวละครไม่ตรง / Wrong Character",
+      offensive: "เนื้อหาไม่เหมาะสม / Offensive",
+      other: "อื่นๆ / Other",
+    };
+
+    await sendDiscordWebhook("", [
+      {
+        title: "🎭 รายงานข้อมูลตัวละคร / Character Data Report",
+        color: 0xFF6B35,
+        fields: [
+          { name: "Character Name", value: characterName ?? charId, inline: true },
+          { name: "Character ID", value: charId, inline: true },
+          { name: "เหตุผล / Reason", value: reasonLabels[safeReason] ?? safeReason, inline: false },
+          ...(details ? [{ name: "รายละเอียด / Details", value: String(details).slice(0, 400), inline: false }] : []),
+        ],
+        timestamp: new Date().toISOString(),
+        footer: { text: "Ticker Character Report" },
+      },
+    ]);
+
+    res.json({ success: true });
   }),
 );
 

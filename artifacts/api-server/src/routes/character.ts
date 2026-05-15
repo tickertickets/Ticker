@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { asyncHandler } from "../middlewares/error-handler";
 import { tmdbFetch, posterUrl } from "../lib/tmdb-client";
-import { getAniListCharacters, getAniListCharacterById, type AniListMedia } from "../lib/anilist";
+import { getAniListCharacters, getAniListCharacterById, getAniListCharacterByName, type AniListMedia } from "../lib/anilist";
 
 const router = Router();
 
@@ -57,6 +57,19 @@ function isAnime(originalLanguage: string, genreIds: number[]): boolean {
  *           "Tony Stark / Iron Man" → "Tony Stark" (already handled by split("/"))
  *           "Bruce Wayne (uncredited)" → "Bruce Wayne"
  */
+const BLOCKED_NAMES = new Set([
+  "narration", "narrator", "additional voices", "additional voice",
+  "various", "various voices", "various characters",
+  "self", "themselves", "ensemble", "chorus",
+  "announcer", "voice over", "voiceover", "v.o.",
+  "uncredited", "extra", "background",
+]);
+
+function isBlockedCharacterName(name: string): boolean {
+  const lower = name.toLowerCase().trim();
+  return BLOCKED_NAMES.has(lower) || lower.length < 2;
+}
+
 function cleanCharacterName(raw: string): string {
   return raw
     .split("/")[0]
@@ -343,7 +356,7 @@ router.get(
             const raw = c.roles?.[0]?.character ?? c.character ?? "";
             return { name: cleanCharacterName(raw) };
           })
-          .filter(e => e.name.length > 1)
+          .filter(e => e.name.length > 1 && !isBlockedCharacterName(e.name))
           .slice(0, 20);
 
       } else if (tmdbId.startsWith("tmdb:")) {
@@ -363,7 +376,7 @@ router.get(
         genreIds = movieInfo.genre_ids ?? (movieInfo.genres ?? []).map((g: { id: number }) => g.id);
         characterEntries = (credits.cast ?? [])
           .map(c => ({ name: cleanCharacterName(c.character ?? "") }))
-          .filter(e => e.name.length > 1)
+          .filter(e => e.name.length > 1 && !isBlockedCharacterName(e.name))
           .slice(0, 20);
 
       } else if (/^\d+$/.test(tmdbId)) {
@@ -381,7 +394,7 @@ router.get(
         genreIds = movieInfo.genre_ids ?? (movieInfo.genres ?? []).map((g: { id: number }) => g.id);
         characterEntries = (credits.cast ?? [])
           .map(c => ({ name: cleanCharacterName(c.character ?? "") }))
-          .filter(e => e.name.length > 1)
+          .filter(e => e.name.length > 1 && !isBlockedCharacterName(e.name))
           .slice(0, 20);
 
       } else if (/^tt\d+$/.test(tmdbId)) {
@@ -426,7 +439,7 @@ router.get(
               const raw = c.roles?.[0]?.character ?? c.character ?? "";
               return { name: cleanCharacterName(raw) };
             })
-            .filter(e => e.name.length > 1)
+            .filter(e => e.name.length > 1 && !isBlockedCharacterName(e.name))
             .slice(0, 20);
         }
       }
@@ -514,7 +527,35 @@ router.get(
     }
 
     // ── TMDB-only: treat charId as character name ──────────────────────────────
+    // First try AniList character search by name (covers anime chars not in top-50)
     const characterName = decodeURIComponent(rawCharId);
+    const alByName = await getAniListCharacterByName(characterName).catch(() => null);
+
+    if (alByName) {
+      const alCacheKey = `al:${alByName.id}`;
+      const filmCached = FILMOGRAPHY_CACHE.get(alCacheKey);
+      let filmography: FilmographyEntry[] = [];
+      if (filmCached && now - filmCached.ts < CACHE_TTL) {
+        filmography = filmCached.filmography;
+      } else {
+        const [anilistFilmo, kwFilmo] = await Promise.all([
+          getFilmographyFromAniListMedia(alByName.media),
+          getFilmographyByKeyword(alByName.name).catch(() => [] as FilmographyEntry[]),
+        ]);
+        filmography = mergeFilmographies(anilistFilmo, kwFilmo);
+        FILMOGRAPHY_CACHE.set(alCacheKey, { filmography, ts: now });
+      }
+      return res.json({
+        wikidataId: rawCharId,
+        charId: alCacheKey,
+        name: alByName.name,
+        description: alByName.description ?? "",
+        imageUrl: alByName.imageUrl,
+        filmography,
+        source: "anilist",
+      });
+    }
+
     const filmCached = FILMOGRAPHY_CACHE.get(rawCharId);
     let filmography: FilmographyEntry[] = [];
     if (filmCached && now - filmCached.ts < CACHE_TTL) {

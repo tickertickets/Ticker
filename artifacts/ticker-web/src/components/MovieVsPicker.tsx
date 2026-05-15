@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Film, Loader2, X as XIcon, ChevronRight, Search as SearchIcon, Swords, RefreshCw, Sparkles } from "lucide-react";
+import { Film, Loader2, X as XIcon, ChevronRight, Search as SearchIcon, Swords, Sparkles } from "lucide-react";
 import { useLang, displayYear, type Lang } from "@/lib/i18n";
 import { computeCardTier, computeEffectTags } from "@/lib/ranks";
 import { MovieBadges } from "@/components/MovieBadges";
@@ -164,35 +164,6 @@ export function MovieVsPicker({ onClose }: { onClose: () => void }) {
     }, 1800);
   };
 
-  const pickAgain = () => {
-    if (picked.length < MIN_MOVIES) return;
-    setStep("loading");
-    setTimeout(() => {
-      const notShown = picked.filter(m => !shownWinnerIds.has(m.imdbId) && m.imdbId !== winner?.imdbId);
-      const sameRoundPool = picked.filter(m => m.imdbId !== winner?.imdbId);
-
-      let pool: VsMovie[];
-      let isNewRound = false;
-
-      if (notShown.length > 0) {
-        pool = notShown;
-      } else {
-        pool = sameRoundPool.length > 0 ? sameRoundPool : picked;
-        isNewRound = true;
-      }
-
-      const idx = Math.floor(Math.random() * pool.length);
-      const next = pool[idx]!;
-
-      setShownWinnerIds(prev => {
-        if (isNewRound) return new Set([next.imdbId]);
-        return new Set([...prev, next.imdbId]);
-      });
-      setWinner(next);
-      setStep("result");
-    }, 1200);
-  };
-
   const addMovie = (m: VsMovie) => {
     if (picked.length >= MAX_MOVIES) return;
     if (picked.some(p => p.imdbId === m.imdbId)) return;
@@ -306,11 +277,10 @@ export function MovieVsPicker({ onClose }: { onClose: () => void }) {
 
               <div className="flex gap-3 px-4 mt-3">
                 <button
-                  onClick={pickAgain}
+                  onClick={() => setStep("pick")}
                   className="flex-1 flex items-center justify-center gap-2 h-12 rounded-2xl bg-secondary border border-border font-semibold text-sm text-foreground active:opacity-70 transition-opacity"
                 >
-                  <RefreshCw className="w-4 h-4 flex-shrink-0" />
-                  <span className="whitespace-nowrap">{s.pickAgain}</span>
+                  <span className="whitespace-nowrap">{s.backBtn}</span>
                 </button>
                 <button
                   onClick={goToMovie}
@@ -351,9 +321,9 @@ export function MovieVsPicker({ onClose }: { onClose: () => void }) {
                 </p>
                 <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
                   {picked.map(m => (
-                    <div key={m.imdbId} className="flex-shrink-0 relative">
-                      <div className="w-[60px] rounded-xl overflow-hidden bg-secondary border border-border">
-                        <div className="relative" style={{ aspectRatio: "2/3" }}>
+                    <div key={m.imdbId} className="flex-shrink-0 relative" style={{ paddingTop: 6, paddingRight: 6 }}>
+                      <div className="w-[60px] rounded-xl bg-secondary border border-border">
+                        <div className="relative rounded-xl overflow-hidden" style={{ aspectRatio: "2/3" }}>
                           {m.posterUrl
                             ? <img src={m.posterUrl} alt={m.title} className="w-full h-full object-cover" />
                             : <div className="w-full h-full flex items-center justify-center bg-zinc-900"><Film className="w-3 h-3 text-muted-foreground" /></div>
@@ -365,9 +335,9 @@ export function MovieVsPicker({ onClose }: { onClose: () => void }) {
                       </div>
                       <button
                         onClick={() => removeMovie(m.imdbId)}
-                        className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-foreground flex items-center justify-center"
+                        className="absolute top-0 right-0 w-5 h-5 rounded-full bg-foreground flex items-center justify-center z-10"
                       >
-                        <XIcon className="w-2.5 h-2.5 text-background" />
+                        <XIcon className="w-3 h-3 text-background" />
                       </button>
                     </div>
                   ))}
