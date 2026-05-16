@@ -15,6 +15,13 @@ export type ComicVineCharacter = {
   first_appeared_in_issue: { name: string; issue_number: string } | null;
 };
 
+export type ComicVineVolume = {
+  id: number;
+  name: string;
+  publisher: { name: string } | null;
+  count_of_issues: number;
+};
+
 type ComicVineSearchResult = {
   results: Array<{
     id: number;
@@ -30,8 +37,22 @@ type ComicVineSearchResult = {
   status_code: number;
 };
 
-const characterCache = new Map<string, { data: ComicVineCharacter; ts: number }>();
-const searchCache    = new Map<string, { results: ComicVineSearchResult["results"]; ts: number }>();
+type ComicVineVolumeSearchResult = {
+  results: ComicVineVolume[];
+  status_code: number;
+};
+
+type ComicVineVolumeDetail = {
+  results: {
+    characters: Array<{ id: number; name: string; site_detail_url?: string }>;
+  };
+  status_code: number;
+};
+
+const characterCache   = new Map<string, { data: ComicVineCharacter; ts: number }>();
+const searchCache      = new Map<string, { results: ComicVineSearchResult["results"]; ts: number }>();
+const volumeSearchCache = new Map<string, { results: ComicVineVolume[]; ts: number }>();
+const volumeCharCache  = new Map<number, { chars: Array<{ id: number; name: string }>; ts: number }>();
 
 async function cvFetch<T>(path: string, params: Record<string, string> = {}): Promise<T> {
   if (!API_KEY) throw new Error("COMIC_VINE_API_KEY is not set");
@@ -42,7 +63,7 @@ async function cvFetch<T>(path: string, params: Record<string, string> = {}): Pr
 
   const res = await fetch(url.toString(), {
     headers: { "User-Agent": "Ticker/1.0" },
-    signal: AbortSignal.timeout(10_000),
+    signal: AbortSignal.timeout(12_000),
   });
   if (!res.ok) throw new Error(`Comic Vine returned ${res.status} for ${path}`);
   return res.json() as Promise<T>;
@@ -68,6 +89,50 @@ export async function searchComicVineCharacters(
   return results;
 }
 
+/**
+ * Search Comic Vine for comic volumes (series) by title.
+ * Used to find the right franchise context before looking up characters.
+ */
+export async function searchComicVineVolumes(
+  query: string,
+  limit = 10,
+): Promise<ComicVineVolume[]> {
+  const cacheKey = `vol:${query.toLowerCase()}:${limit}`;
+  const cached = volumeSearchCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < CACHE_TTL) return cached.results;
+
+  const data = await cvFetch<ComicVineVolumeSearchResult>("/search/", {
+    query,
+    resources: "volume",
+    field_list: "id,name,publisher,count_of_issues",
+    limit: String(limit),
+  });
+
+  const results = data.results ?? [];
+  volumeSearchCache.set(cacheKey, { results, ts: Date.now() });
+  return results;
+}
+
+/**
+ * Get the character list for a given CV volume ID.
+ * Returns lightweight {id, name} pairs — call getComicVineCharacterById for full detail.
+ */
+export async function getCvVolumeCharacters(
+  volumeId: number,
+): Promise<Array<{ id: number; name: string }>> {
+  const cached = volumeCharCache.get(volumeId);
+  if (cached && Date.now() - cached.ts < CACHE_TTL) return cached.chars;
+
+  const data = await cvFetch<ComicVineVolumeDetail>(`/volume/4050-${volumeId}/`, {
+    field_list: "characters",
+  });
+
+  if (data.status_code !== 1) return [];
+  const chars = (data.results.characters ?? []).map(c => ({ id: c.id, name: c.name }));
+  volumeCharCache.set(volumeId, { chars, ts: Date.now() });
+  return chars;
+}
+
 export async function getComicVineCharacterById(
   characterId: number,
 ): Promise<ComicVineCharacter | null> {
@@ -86,18 +151,32 @@ export async function getComicVineCharacterById(
 }
 
 /**
- * Check if a character name matches a Comic Vine search result,
- * considering name, real_name, and aliases (newline-separated).
+ * Check if a character name matches a Comic Vine result.
+ * Handles: exact name, real_name, aliases, and "The X" = "X" equivalence
+ * (e.g. CV "The Homelander" matches TMDB "Homelander").
  */
-export function cvNameMatches(result: ComicVineSearchResult["results"][0], query: string): boolean {
+export function cvNameMatches(
+  result: ComicVineSearchResult["results"][0] | { id: number; name: string; real_name?: string | null; aliases?: string | null },
+  query: string,
+): boolean {
   const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
-  const q = norm(query);
+  // Strip leading "the " for comparison so "The Homelander" == "Homelander"
+  const stripThe = (s: string) => norm(s).replace(/^the\s+/, "").trim();
 
-  if (norm(result.name) === q) return true;
-  if (result.real_name && norm(result.real_name) === q) return true;
-  if (result.aliases) {
+  const q       = norm(query);
+  const qStrip  = stripThe(query);
+
+  const matches = (name: string) => {
+    const n = norm(name);
+    const s = stripThe(name);
+    return n === q || s === qStrip || n === qStrip || s === q;
+  };
+
+  if (matches(result.name)) return true;
+  if ("real_name" in result && result.real_name && matches(result.real_name)) return true;
+  if ("aliases" in result && result.aliases) {
     for (const alias of result.aliases.split("\n")) {
-      if (norm(alias.trim()) === q) return true;
+      if (matches(alias.trim())) return true;
     }
   }
   return false;

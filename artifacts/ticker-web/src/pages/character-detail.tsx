@@ -7,8 +7,11 @@ import { useLang, displayYear } from "@/lib/i18n";
 import { scrollStore } from "@/lib/scroll-store";
 
 // ── AniList bio parser ────────────────────────────────────────────────────────
-// AniList wraps structured metadata as __Key:__ Value pairs inside descriptions.
-// We extract those into a clean info grid and return the remaining text as bio.
+// AniList wraps structured metadata in one of two formats:
+//   __Key:__ Value   (older format)
+//   **Key:** Value   (newer format — bold markdown)
+// We extract all key-value pairs into a grid and return remaining text as bio.
+// Any leftover ** markers in the bio text are stripped before display.
 
 function parseAniListDescription(raw: string): {
   info: { key: string; value: string }[];
@@ -17,29 +20,35 @@ function parseAniListDescription(raw: string): {
   if (!raw) return { info: [], bio: "" };
 
   const info: { key: string; value: string }[] = [];
-  const pattern = /__([^_\n]+):__\s*/g;
+  // Match both __Key:__ and **Key:** patterns
+  const pattern = /(?:__([^_\n]+):__|\*\*([^*\n]+):\*\*)\s*/g;
   const positions: { key: string; start: number; contentStart: number }[] = [];
 
   let m: RegExpExecArray | null;
   while ((m = pattern.exec(raw)) !== null) {
-    positions.push({ key: m[1].trim(), start: m.index, contentStart: m.index + m[0].length });
+    const key = (m[1] ?? m[2] ?? "").trim();
+    if (key) positions.push({ key, start: m.index, contentStart: m.index + m[0].length });
   }
 
-  if (positions.length === 0) return { info: [], bio: raw.trim() };
+  if (positions.length === 0) {
+    // No structured data — clean the raw text and return as bio
+    const bio = raw.replace(/\*\*/g, "").trim();
+    return { info: [], bio };
+  }
 
-  const preBio = raw.slice(0, positions[0].start).trim();
+  const preBio = raw.slice(0, positions[0]!.start).replace(/\*\*/g, "").trim();
   let trailing = "";
 
   for (let i = 0; i < positions.length; i++) {
     const pos = positions[i]!;
     const nextStart = i + 1 < positions.length ? positions[i + 1]!.start : raw.length;
-    let val = raw.slice(pos.contentStart, nextStart).trim();
+    let val = raw.slice(pos.contentStart, nextStart).replace(/\*\*/g, "").trim();
 
     if (i === positions.length - 1) {
       const nl = val.indexOf("\n");
       if (nl > 0) {
-        trailing = val.slice(nl).trim();
-        val = val.slice(0, nl).trim();
+        trailing = val.slice(nl).replace(/\*\*/g, "").trim();
+        val = val.slice(0, nl).replace(/\*\*/g, "").trim();
       }
     }
 
