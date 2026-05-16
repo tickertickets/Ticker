@@ -175,40 +175,60 @@ function volumeTitleScore(cvTitle: string, movieTitle: string): number {
 
 // ── AniList match helpers ─────────────────────────────────────────────────────
 
+/**
+ * Match a TMDB character name against the AniList character list.
+ *
+ * Matching rules (strictest first):
+ *  1. Exact full name match (normalised)
+ *  2. Exact romaji full name match
+ *  3. Reversed 2-word name (Japanese surname-given ↔ given-surname)
+ *  4. Exact complete alternative-name match
+ *  5. Single-component match: the TMDB query is a single word that EXACTLY
+ *     equals one word-component of a 2-word AniList name.
+ *     Requires ≥ 4 characters to avoid false positives on short/generic
+ *     names like "Ma", "Jo", "Ko".
+ *
+ * IMPORTANT: partial/substring matching is intentionally excluded.
+ * "Sukuna" matching "Ryomen Sukuna" is valid only via rule 5 (single
+ * component, ≥4 chars).  "Jo" matching "Jo Someone" is NOT valid.
+ */
 function matchAniListChar(tmdbName: string, anilistChars: AniListChar[]): AniListChar | null {
-  const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
-  const tmdbNorm    = normalize(tmdbName);
-  const tmdbRomaji  = normalizeRomaji(tmdbName);
-  const tmdbWords   = tmdbNorm.split(/\s+/).filter(w => w.length > 1);
-  const tmdbRomajiW = tmdbRomaji.split(/\s+/).filter(w => w.length > 1);
+  const normalize  = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
+  const tmdbNorm   = normalize(tmdbName);
+  const tmdbRomaji = normalizeRomaji(tmdbName);
 
-  // 1. Exact name match
+  // 1. Exact full name match
   for (const ac of anilistChars) { if (normalize(ac.name) === tmdbNorm) return ac; }
-  // 2. Romaji exact
+  // 2. Romaji exact match
   for (const ac of anilistChars) { if (normalizeRomaji(ac.name) === tmdbRomaji) return ac; }
-  // 3. Full word overlap (normalised)
-  for (const ac of anilistChars) {
-    const alWords = normalize(ac.name).split(/\s+/).filter(w => w.length > 1);
-    const overlap = tmdbWords.filter(w => alWords.includes(w));
-    if (overlap.length > 0 && overlap.length >= Math.min(tmdbWords.length, alWords.length)) return ac;
+  // 3. Reversed 2-word name (e.g. "Itadori Yuuji" ↔ "Yuuji Itadori")
+  const tmdbWords      = tmdbNorm.split(/\s+/).filter(w => w.length > 1);
+  const tmdbRomajiW    = tmdbRomaji.split(/\s+/).filter(w => w.length > 1);
+  if (tmdbWords.length === 2) {
+    const rev    = `${tmdbWords[1]} ${tmdbWords[0]}`;
+    const revRom = `${tmdbRomajiW[1] ?? ""} ${tmdbRomajiW[0] ?? ""}`;
+    for (const ac of anilistChars) {
+      if (normalize(ac.name) === rev || normalizeRomaji(ac.name) === rev ||
+          normalize(ac.name) === revRom || normalizeRomaji(ac.name) === revRom) return ac;
+    }
   }
-  // 4. Full word overlap (romaji)
-  for (const ac of anilistChars) {
-    const alWords = normalizeRomaji(ac.name).split(/\s+/).filter(w => w.length > 1);
-    const overlap = tmdbRomajiW.filter(w => alWords.includes(w));
-    if (overlap.length > 0 && overlap.length >= Math.min(tmdbRomajiW.length, alWords.length)) return ac;
-  }
-  // 5. Reversed two-word romaji
-  if (tmdbRomajiW.length === 2) {
-    const reversed = `${tmdbRomajiW[1]} ${tmdbRomajiW[0]}`;
-    for (const ac of anilistChars) { if (normalizeRomaji(ac.name) === reversed) return ac; }
-  }
-  // 6. Alternative names
+  // 4. Exact complete alternative name match
   for (const ac of anilistChars) {
     for (const alt of ac.alternativeNames) {
-      const altNorm   = normalize(alt);
-      const altRomaji = normalizeRomaji(alt);
-      if (altNorm === tmdbNorm || altRomaji === tmdbRomaji) return ac;
+      if (normalize(alt) === tmdbNorm || normalizeRomaji(alt) === tmdbRomaji) return ac;
+    }
+  }
+  // 5. Single-component match (TMDB has only one word, ≥ 4 chars)
+  //    Matches if that word exactly equals one word in a 2-word AniList name.
+  //    e.g. "Sukuna" → "Ryomen Sukuna", "Gojo" → "Satoru Gojo"
+  if (tmdbWords.length === 1 && tmdbWords[0]!.length >= 4) {
+    const q      = tmdbWords[0]!;
+    const qRom   = tmdbRomaji;
+    for (const ac of anilistChars) {
+      const acW    = normalize(ac.name).split(/\s+/).filter(w => w.length > 1);
+      const acWRom = normalizeRomaji(ac.name).split(/\s+/).filter(w => w.length > 1);
+      if (acW.length === 2   && acW.includes(q))    return ac;
+      if (acWRom.length === 2 && acWRom.includes(qRom)) return ac;
     }
   }
   return null;
@@ -326,17 +346,46 @@ function mergeFilmographies(a: FilmographyEntry[], b: FilmographyEntry[]): Filmo
 
 // ── Franchise terms helper ────────────────────────────────────────────────────
 
-function buildFranchiseTerms(movieTitle: string, franchiseName: string | null): string[] {
-  const terms = new Set<string>();
-  if (franchiseName && franchiseName.length > 2) terms.add(franchiseName);
-  if (movieTitle && movieTitle.length > 2) terms.add(movieTitle);
-  // Strip subtitle after colon/dash: "Predator: Badlands" → "Predator"
-  const base = movieTitle.replace(/[:\-–—].+$/, "").trim();
-  if (base && base.length > 2 && base !== movieTitle) terms.add(base);
-  // Strip year suffixes: "The Boys (2019)" → "The Boys"
+type FranchiseTerms = {
+  /** Strict terms used for VOLUME SEARCH (pass 1).
+   *  Only specific, complete titles — never a bare generic base name.
+   *  Prevents "Punisher" base from matching the 200-issue Punisher omnibus. */
+  volumeSearch: string[];
+  /** Broad terms used for FRANCHISE VALIDATION (pass 2 volume_credits check).
+   *  Includes the stripped base name so a character can be validated against
+   *  the wider franchise even if the volume title is only the root name. */
+  validation: string[];
+};
+
+function buildFranchiseTerms(movieTitle: string, franchiseName: string | null): FranchiseTerms {
+  const volumeSearch = new Set<string>();
+  const validation   = new Set<string>();
+
+  const add = (s: string, sets: Set<string>[]) => {
+    if (s && s.trim().length > 3) sets.forEach(set => set.add(s.trim()));
+  };
+
+  // Franchise name (e.g. "The Boys Collection", "Predator Collection")
+  if (franchiseName) add(franchiseName, [volumeSearch, validation]);
+
+  // Full movie/show title
+  add(movieTitle, [volumeSearch, validation]);
+
+  // Strip year suffix: "The Boys (2019)" → "The Boys"
   const noYear = movieTitle.replace(/\s*\(\d{4}\)\s*$/, "").trim();
-  if (noYear && noYear !== movieTitle) terms.add(noYear);
-  return [...terms].filter(t => t.length > 2);
+  if (noYear !== movieTitle) add(noYear, [volumeSearch, validation]);
+
+  // Base name (strip subtitle): "Punisher: One Last Kill" → "Punisher"
+  // Only added to VALIDATION so it can confirm franchise membership,
+  // but NOT to volumeSearch — that would pull in every story arc in the
+  // entire Punisher run.
+  const base = movieTitle.replace(/[:\-–—].+$/, "").trim();
+  if (base && base !== movieTitle) add(base, [validation]);
+
+  return {
+    volumeSearch: [...volumeSearch],
+    validation:   [...validation],
+  };
 }
 
 /**
@@ -383,19 +432,23 @@ async function lookupComicVineForMovie(
   const resultMap = new Map<string, { id: number; name: string; imageUrl: string | null; sourceUrl: string }>();
   if (!process.env["COMIC_VINE_API_KEY"] || !movieTitle) return resultMap;
 
-  const franchiseTerms = buildFranchiseTerms(movieTitle, franchiseName);
+  const terms = buildFranchiseTerms(movieTitle, franchiseName);
 
   // ── Pass 1: Volume-based matching ─────────────────────────────────────────
+  // Only search using SPECIFIC, complete titles (volumeSearch terms).
+  // We do NOT use the stripped base name here: searching for "Punisher" alone
+  // would match the 200-issue omnibus and pull in unrelated characters.
 
   let bestVolume: { id: number; name: string } | null = null;
   let bestScore = 0;
 
-  for (const query of franchiseTerms) {
+  for (const query of terms.volumeSearch) {
     const volumes = await searchComicVineVolumes(query, 10).catch(() => []);
     for (const vol of volumes) {
       let score = 0;
-      for (const term of franchiseTerms) {
-        score = Math.max(score, volumeTitleScore(vol.name, term));
+      // Score against ALL volumeSearch terms (strictest possible match)
+      for (const t of terms.volumeSearch) {
+        score = Math.max(score, volumeTitleScore(vol.name, t));
       }
       if (score > bestScore) {
         bestScore = score;
@@ -405,7 +458,6 @@ async function lookupComicVineForMovie(
     if (bestScore >= 0.9) break;
   }
 
-  // Only use the volume if we have a strong enough title match
   const VOLUME_THRESHOLD = 0.75;
   const matchedVolumeChars: Array<{ id: number; name: string }> = [];
 
@@ -437,35 +489,38 @@ async function lookupComicVineForMovie(
   );
 
   // ── Pass 2: Direct search + volume_credits franchise validation ────────────
-  // Only for chars not found in volume pass
+  // For chars not found in pass 1.
+  // Uses ALL validation terms (including stripped base name) to confirm the
+  // character belongs to the wider franchise.
+  //
+  // Min-length guard: skip character names shorter than 3 characters.
+  // This prevents generic short names ("Ma", "Jo", "V") from false-matching
+  // unrelated characters in CV that happen to share that name.
 
   await Promise.allSettled(
     [...unmatchedNames].map(async (charName) => {
+      // Skip names that are too short to unambiguously identify a character
+      if (charName.trim().length < 3) return;
       try {
-        // Search CV for up to 10 results for this character name
         const cvResults = await searchComicVineCharacters(charName, 10);
         const candidates = cvResults.filter(r => cvNameMatches(r, charName));
         if (candidates.length === 0) return;
 
         for (const candidate of candidates) {
-          // Use volume_credits from search result first (avoids extra fetch)
+          // Use volume_credits from search result; fetch detail if absent
           let volumeCredits = candidate.volume_credits;
-
-          // If not in search result, fetch full detail to get volume_credits
           if (!volumeCredits || volumeCredits.length === 0) {
             const full = await getComicVineCharacterById(candidate.id).catch(() => null);
             volumeCredits = full?.volume_credits ?? [];
           }
 
-          // Validate franchise
-          if (!characterBelongsToFranchise(volumeCredits, franchiseTerms)) continue;
+          // Validate franchise using broad validation terms
+          if (!characterBelongsToFranchise(volumeCredits, terms.validation)) continue;
 
-          // Fetch full detail for image/description
           const cvDetail = await getComicVineCharacterById(candidate.id).catch(() => null);
           if (!cvDetail) continue;
 
-          // Require at least an image OR a non-empty description for pass-2 matches
-          // This prevents blank/placeholder CV entries from polluting results
+          // Require image OR description — rejects empty placeholder entries
           const hasImage = !!(cvDetail.image?.super_url || cvDetail.image?.medium_url);
           const hasDesc  = !!(cvDetail.deck || cvDetail.description);
           if (!hasImage && !hasDesc) continue;
@@ -476,7 +531,7 @@ async function lookupComicVineForMovie(
             imageUrl: cvDetail.image?.super_url ?? cvDetail.image?.medium_url ?? null,
             sourceUrl: cvDetail.site_detail_url ?? `https://comicvine.gamespot.com/character/4005-${cvDetail.id}/`,
           });
-          break; // First valid match wins
+          break;
         }
       } catch { /* ignore */ }
     }),
@@ -837,8 +892,42 @@ router.get(
         }
       }
 
-      // Character not found within this specific media — return name-only stub
-      // (no wrong data, no cross-franchise confusion)
+      // Character not found in the pre-fetched list for this media.
+      // Fallback: search AniList by name and check if the result has this
+      // EXACT media ID in their media appearances. This handles cases where
+      // the character appears in the franchise under a different season title
+      // but is the same underlying character.
+      const alByName = await getAniListCharacterByName(charName).catch(() => null);
+      if (alByName && alByName.media.some(m => m.id === mediaId)) {
+        // Character confirmed to belong to this exact media
+        const alCacheKey2 = `al:${alByName.id}`;
+        const filmCached2 = FILMOGRAPHY_CACHE.get(alCacheKey2);
+        let filmography2: FilmographyEntry[] = [];
+        if (filmCached2 && now - filmCached2.ts < CACHE_TTL) {
+          filmography2 = filmCached2.filmography;
+        } else {
+          const [af2, kf2] = await Promise.all([
+            getFilmographyFromAniListMedia(alByName.media),
+            getFilmographyByKeyword(alByName.name).catch(() => [] as FilmographyEntry[]),
+          ]);
+          filmography2 = mergeFilmographies(af2, kf2);
+          FILMOGRAPHY_CACHE.set(alCacheKey2, { filmography: filmography2, ts: now });
+        }
+        return res.json({
+          wikidataId: rawCharId,
+          charId: alCacheKey2,
+          name: alByName.name,
+          description: alByName.description ?? "",
+          structuredInfo: alByName.structuredInfo ?? [],
+          imageUrl: alByName.imageUrl,
+          filmography: filmography2,
+          source: "anilist",
+          sourceUrl: `https://anilist.co/character/${alByName.id}`,
+        });
+      }
+
+      // No confirmed match found in this franchise — return name-only stub
+      // (avoids showing wrong character from a different franchise)
       return res.json({
         wikidataId: rawCharId,
         charId: rawCharId,
