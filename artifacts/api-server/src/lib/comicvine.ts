@@ -2,6 +2,11 @@ const API_KEY = process.env["COMIC_VINE_API_KEY"] ?? "";
 const BASE_URL = "https://comicvine.gamespot.com/api";
 const CACHE_TTL = 60 * 60 * 1000;
 
+export type VolumeCredit = {
+  id: number;
+  name: string;
+};
+
 export type ComicVineCharacter = {
   id: number;
   name: string;
@@ -13,6 +18,7 @@ export type ComicVineCharacter = {
   image: { medium_url: string | null; super_url: string | null } | null;
   publisher: { name: string } | null;
   first_appeared_in_issue: { name: string; issue_number: string } | null;
+  volume_credits?: VolumeCredit[];
 };
 
 export type ComicVineVolume = {
@@ -30,8 +36,9 @@ type ComicVineSearchResult = {
     aliases: string | null;
     deck: string | null;
     site_detail_url: string | null;
-    image: { medium_url: string | null } | null;
+    image: { medium_url: string | null; super_url: string | null } | null;
     publisher: { name: string } | null;
+    volume_credits?: VolumeCredit[];
   }>;
   number_of_page_results: number;
   status_code: number;
@@ -49,10 +56,10 @@ type ComicVineVolumeDetail = {
   status_code: number;
 };
 
-const characterCache   = new Map<string, { data: ComicVineCharacter; ts: number }>();
-const searchCache      = new Map<string, { results: ComicVineSearchResult["results"]; ts: number }>();
+const characterCache    = new Map<string, { data: ComicVineCharacter; ts: number }>();
+const searchCache       = new Map<string, { results: ComicVineSearchResult["results"]; ts: number }>();
 const volumeSearchCache = new Map<string, { results: ComicVineVolume[]; ts: number }>();
-const volumeCharCache  = new Map<number, { chars: Array<{ id: number; name: string }>; ts: number }>();
+const volumeCharCache   = new Map<number, { chars: Array<{ id: number; name: string }>; ts: number }>();
 
 async function cvFetch<T>(path: string, params: Record<string, string> = {}): Promise<T> {
   if (!API_KEY) throw new Error("COMIC_VINE_API_KEY is not set");
@@ -69,6 +76,10 @@ async function cvFetch<T>(path: string, params: Record<string, string> = {}): Pr
   return res.json() as Promise<T>;
 }
 
+/**
+ * Search Comic Vine characters by name.
+ * Includes volume_credits so we can validate franchise context without an extra fetch.
+ */
 export async function searchComicVineCharacters(
   query: string,
   limit = 5,
@@ -80,7 +91,7 @@ export async function searchComicVineCharacters(
   const data = await cvFetch<ComicVineSearchResult>("/search/", {
     query,
     resources: "character",
-    field_list: "id,name,real_name,aliases,deck,site_detail_url,image,publisher",
+    field_list: "id,name,real_name,aliases,deck,site_detail_url,image,publisher,volume_credits",
     limit: String(limit),
   });
 
@@ -91,7 +102,6 @@ export async function searchComicVineCharacters(
 
 /**
  * Search Comic Vine for comic volumes (series) by title.
- * Used to find the right franchise context before looking up characters.
  */
 export async function searchComicVineVolumes(
   query: string,
@@ -115,7 +125,6 @@ export async function searchComicVineVolumes(
 
 /**
  * Get the character list for a given CV volume ID.
- * Returns lightweight {id, name} pairs — call getComicVineCharacterById for full detail.
  */
 export async function getCvVolumeCharacters(
   volumeId: number,
@@ -133,6 +142,10 @@ export async function getCvVolumeCharacters(
   return chars;
 }
 
+/**
+ * Get full Comic Vine character detail by ID.
+ * Includes volume_credits for franchise validation.
+ */
 export async function getComicVineCharacterById(
   characterId: number,
 ): Promise<ComicVineCharacter | null> {
@@ -142,7 +155,7 @@ export async function getComicVineCharacterById(
 
   const data = await cvFetch<{ results: ComicVineCharacter; status_code: number }>(
     `/character/4005-${characterId}/`,
-    { field_list: "id,name,real_name,aliases,deck,description,site_detail_url,image,publisher,first_appeared_in_issue" },
+    { field_list: "id,name,real_name,aliases,deck,description,site_detail_url,image,publisher,first_appeared_in_issue,volume_credits" },
   );
 
   if (data.status_code !== 1) return null;
@@ -151,16 +164,44 @@ export async function getComicVineCharacterById(
 }
 
 /**
+ * Clean Comic Vine HTML description to plain text.
+ * Removes HTML tags, markdown, and extra whitespace.
+ */
+export function cleanCvDescription(raw: string | null): string {
+  if (!raw) return "";
+  return raw
+    .replace(/<h[1-6][^>]*>/gi, "\n")
+    .replace(/<\/h[1-6]>/gi, "\n")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<p[^>]*>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<li[^>]*>/gi, "\n• ")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/https?:\/\/\S+/g, "")
+    .replace(/\*\*/g, "")
+    .replace(/__/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim()
+    .slice(0, 2000);
+}
+
+/**
  * Check if a character name matches a Comic Vine result.
- * Handles: exact name, real_name, aliases, and "The X" = "X" equivalence
- * (e.g. CV "The Homelander" matches TMDB "Homelander").
+ * Handles: exact name, real_name, aliases, and "The X" = "X" equivalence.
  */
 export function cvNameMatches(
-  result: ComicVineSearchResult["results"][0] | { id: number; name: string; real_name?: string | null; aliases?: string | null },
+  result: { id: number; name: string; real_name?: string | null; aliases?: string | null },
   query: string,
 ): boolean {
   const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
-  // Strip leading "the " for comparison so "The Homelander" == "Homelander"
   const stripThe = (s: string) => norm(s).replace(/^the\s+/, "").trim();
 
   const q       = norm(query);

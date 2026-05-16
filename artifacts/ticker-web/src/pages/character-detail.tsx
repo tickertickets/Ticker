@@ -6,60 +6,9 @@ import { ChevronLeft, Film, User, Loader2, Flag, Send } from "lucide-react";
 import { useLang, displayYear } from "@/lib/i18n";
 import { scrollStore } from "@/lib/scroll-store";
 
-// ── AniList bio parser ────────────────────────────────────────────────────────
-// AniList wraps structured metadata in one of two formats:
-//   __Key:__ Value   (older format)
-//   **Key:** Value   (newer format — bold markdown)
-// We extract all key-value pairs into a grid and return remaining text as bio.
-// Any leftover ** markers in the bio text are stripped before display.
-
-function parseAniListDescription(raw: string): {
-  info: { key: string; value: string }[];
-  bio: string;
-} {
-  if (!raw) return { info: [], bio: "" };
-
-  const info: { key: string; value: string }[] = [];
-  // Match both __Key:__ and **Key:** patterns
-  const pattern = /(?:__([^_\n]+):__|\*\*([^*\n]+):\*\*)\s*/g;
-  const positions: { key: string; start: number; contentStart: number }[] = [];
-
-  let m: RegExpExecArray | null;
-  while ((m = pattern.exec(raw)) !== null) {
-    const key = (m[1] ?? m[2] ?? "").trim();
-    if (key) positions.push({ key, start: m.index, contentStart: m.index + m[0].length });
-  }
-
-  if (positions.length === 0) {
-    // No structured data — clean the raw text and return as bio
-    const bio = raw.replace(/\*\*/g, "").trim();
-    return { info: [], bio };
-  }
-
-  const preBio = raw.slice(0, positions[0]!.start).replace(/\*\*/g, "").trim();
-  let trailing = "";
-
-  for (let i = 0; i < positions.length; i++) {
-    const pos = positions[i]!;
-    const nextStart = i + 1 < positions.length ? positions[i + 1]!.start : raw.length;
-    let val = raw.slice(pos.contentStart, nextStart).replace(/\*\*/g, "").trim();
-
-    if (i === positions.length - 1) {
-      const nl = val.indexOf("\n");
-      if (nl > 0) {
-        trailing = val.slice(nl).replace(/\*\*/g, "").trim();
-        val = val.slice(0, nl).replace(/\*\*/g, "").trim();
-      }
-    }
-
-    if (pos.key && val) info.push({ key: pos.key, value: val });
-  }
-
-  const bio = [preBio, trailing].filter(Boolean).join(" ").trim();
-  return { info, bio };
-}
-
 // ── Types ─────────────────────────────────────────────────────────────────────
+
+type StructuredInfo = { key: string; value: string };
 
 type CharFilm = {
   title: string;
@@ -74,11 +23,35 @@ type CharData = {
   charId?: string;
   name: string;
   description: string | null;
+  structuredInfo?: StructuredInfo[];
   imageUrl: string | null;
   filmography: CharFilm[];
   source?: string;
   sourceUrl?: string;
 };
+
+// ── Text cleaners ─────────────────────────────────────────────────────────────
+
+/**
+ * Strip any remaining markdown/wiki markup from plain text.
+ * Handles: **bold**, __underline__, *italic*, _italic_, bare URLs,
+ * [text](url) links, and source/note markers.
+ */
+function cleanMarkdown(text: string): string {
+  if (!text) return "";
+  return text
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")   // [text](url) → text
+    .replace(/https?:\/\/\S+/g, "")             // bare URLs
+    .replace(/\*\*([^*]*)\*\*/g, "$1")          // **bold**
+    .replace(/__([^_]*)__/g, "$1")              // __underline__
+    .replace(/\*([^*]*)\*/g, "$1")              // *italic*
+    .replace(/_([^_]*)_/g, "$1")               // _italic_
+    .replace(/\*\*/g, "")                       // stray **
+    .replace(/__/g, "")                         // stray __
+    .replace(/\*/g, "")                         // stray *
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
 
 // ── Filmography card ──────────────────────────────────────────────────────────
 
@@ -157,28 +130,38 @@ export default function CharacterDetail() {
     retryDelay: 1000,
   });
 
-  // ── Bio parsing ─────────────────────────────────────────────────────────────
-  // Both AniList and Comic Vine descriptions are English-only.
-  // Parse out __Key:__ Value structured pairs from AniList bios.
+  // ── Bio & structured info ────────────────────────────────────────────────────
+  // structuredInfo comes pre-parsed from the server.
+  // bio text is already cleaned on the server; apply a client-side markdown
+  // strip as a safety net for any residual markup.
 
-  const rawBio = data?.description ?? "";
-  const { info: bioInfo, bio: bioText } = useMemo(() => parseAniListDescription(rawBio), [rawBio]);
+  const bioInfo: StructuredInfo[] = useMemo(
+    () => (data?.structuredInfo ?? []).filter(e => e.key && e.value),
+    [data],
+  );
 
-  // ── Source credit ───────────────────────────────────────────────────────────
-  const sourceIsAniList    = data?.source === "anilist";
-  const sourceIsComicVine  = data?.source === "comicvine";
+  const bioText = useMemo(
+    () => cleanMarkdown(data?.description ?? ""),
+    [data?.description],
+  );
+
+  const hasBioContent = !!(bioText.trim());
+
+  // ── Source credit ────────────────────────────────────────────────────────────
+  const sourceIsAniList   = data?.source === "anilist";
+  const sourceIsComicVine = data?.source === "comicvine";
   const sourceLabel = sourceIsAniList ? "AniList" : sourceIsComicVine ? "Comic Vine" : null;
   const sourceHref  = data?.sourceUrl
-    ?? (sourceIsAniList    ? "https://anilist.co"              : null)
-    ?? (sourceIsComicVine  ? "https://comicvine.gamespot.com"  : null);
+    ?? (sourceIsAniList    ? "https://anilist.co"             : null)
+    ?? (sourceIsComicVine  ? "https://comicvine.gamespot.com" : null);
 
-  // ── Report modal ────────────────────────────────────────────────────────────
+  // ── Report modal ─────────────────────────────────────────────────────────────
 
-  const [showReport, setShowReport] = useState(false);
-  const [reason, setReason] = useState("");
-  const [details, setDetails] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  const [showReport, setShowReport]   = useState(false);
+  const [reason, setReason]           = useState("");
+  const [details, setDetails]         = useState("");
+  const [submitting, setSubmitting]   = useState(false);
+  const [submitted, setSubmitted]     = useState(false);
 
   const closeReport = useCallback(() => {
     setShowReport(false);
@@ -200,23 +183,21 @@ export default function CharacterDetail() {
 
   const REASONS = lang === "th"
     ? [
-        { value: "wrong_info",           label: "ข้อมูลไม่ถูกต้อง" },
-        { value: "wrong_image",          label: "รูปผิด / ไม่ใช่ตัวละครนี้" },
-        { value: "not_this_character",   label: "ตัวละครไม่ตรงกับสื่อนี้" },
-        { value: "offensive",            label: "เนื้อหาไม่เหมาะสม" },
-        { value: "other",                label: "อื่นๆ" },
+        { value: "wrong_info",         label: "ข้อมูลไม่ถูกต้อง" },
+        { value: "wrong_image",        label: "รูปผิด / ไม่ใช่ตัวละครนี้" },
+        { value: "not_this_character", label: "ตัวละครไม่ตรงกับสื่อนี้" },
+        { value: "offensive",          label: "เนื้อหาไม่เหมาะสม" },
+        { value: "other",              label: "อื่นๆ" },
       ]
     : [
-        { value: "wrong_info",           label: "Wrong information" },
-        { value: "wrong_image",          label: "Wrong or incorrect image" },
-        { value: "not_this_character",   label: "Wrong character for this media" },
-        { value: "offensive",            label: "Offensive content" },
-        { value: "other",                label: "Other issue" },
+        { value: "wrong_info",         label: "Wrong information" },
+        { value: "wrong_image",        label: "Wrong or incorrect image" },
+        { value: "not_this_character", label: "Wrong character for this media" },
+        { value: "offensive",          label: "Offensive content" },
+        { value: "other",              label: "Other issue" },
       ];
 
-  // ── Render ──────────────────────────────────────────────────────────────────
-
-  const hasBioContent = !!(rawBio.trim());
+  // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
     <div className="absolute inset-0 bg-background flex flex-col overflow-hidden">
@@ -309,7 +290,7 @@ export default function CharacterDetail() {
         {/* ── Content ── */}
         {data && (
           <div>
-            {/* Structured info grid (AniList __Key:__ values) */}
+            {/* Structured info grid (key-value pairs from AniList bio) */}
             {bioInfo.length > 0 && (
               <div className="px-5 pt-4 pb-1">
                 <div className="grid grid-cols-2 gap-x-5 gap-y-3">
@@ -328,25 +309,27 @@ export default function CharacterDetail() {
             {/* Bio text */}
             {hasBioContent && (
               <div className="px-5 pt-4 pb-2">
-                <p className="text-sm text-foreground/80 leading-relaxed">
-                  {bioText || rawBio}
+                <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-line">
+                  {bioText}
                 </p>
+              </div>
+            )}
 
-                {/* Source credit */}
-                {sourceLabel && sourceHref && (
-                  <p className="text-[10px] text-muted-foreground/50 mt-2">
-                    {lang === "th" ? "ที่มา: " : "Source: "}
-                    <a
-                      href={sourceHref}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="underline"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {sourceLabel}
-                    </a>
-                  </p>
-                )}
+            {/* Source credit — shown whenever we have a source, regardless of bio */}
+            {sourceLabel && sourceHref && (
+              <div className={`px-5 ${hasBioContent ? "pb-2" : "pt-4 pb-2"}`}>
+                <p className="text-[10px] text-muted-foreground/50">
+                  {lang === "th" ? "ที่มา: " : "Source: "}
+                  <a
+                    href={sourceHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {sourceLabel}
+                  </a>
+                </p>
               </div>
             )}
 

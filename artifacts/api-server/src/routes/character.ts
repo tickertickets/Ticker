@@ -2,9 +2,10 @@ import { Router } from "express";
 import { asyncHandler } from "../middlewares/error-handler";
 import { tmdbFetch, posterUrl } from "../lib/tmdb-client";
 import {
-  getAniListCharacters,
+  getAniListMediaWithChars,
   getAniListCharacterById,
   getAniListCharacterByName,
+  getAniListCharactersByMediaId,
   type AniListMedia,
   type AniListChar,
   type AniListCharDetail,
@@ -14,7 +15,9 @@ import {
   searchComicVineVolumes,
   getCvVolumeCharacters,
   getComicVineCharacterById,
+  cleanCvDescription,
   cvNameMatches,
+  type VolumeCredit,
 } from "../lib/comicvine";
 
 const router = Router();
@@ -44,6 +47,8 @@ type FilmographyEntry = {
   mediaType: "movie" | "tv";
 };
 
+type StructuredInfoEntry = { key: string; value: string };
+
 type TvInfoShape = {
   name?: string;
   original_language?: string;
@@ -64,9 +69,9 @@ type FindShape = {
 
 // ── Caches ────────────────────────────────────────────────────────────────────
 
-const BY_MOVIE_CACHE      = new Map<string, { results: CharResult[]; ts: number }>();
-const FILMOGRAPHY_CACHE   = new Map<string, { filmography: FilmographyEntry[]; ts: number }>();
-const CACHE_TTL           = 12 * 60 * 60 * 1000;
+const BY_MOVIE_CACHE    = new Map<string, { results: CharResult[]; ts: number }>();
+const FILMOGRAPHY_CACHE = new Map<string, { filmography: FilmographyEntry[]; ts: number }>();
+const CACHE_TTL         = 12 * 60 * 60 * 1000;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -119,10 +124,6 @@ function normalizeRomaji(s: string): string {
     .trim();
 }
 
-/**
- * Normalize a title for CV volume matching.
- * Strips "The" prefix, punctuation, and extra spaces.
- */
 function normTitle(s: string): string {
   return s
     .toLowerCase()
@@ -134,82 +135,108 @@ function normTitle(s: string): string {
 }
 
 /**
- * Check if a CV volume title is a good match for a movie/series title.
- * Returns a numeric score (0 = no match, 1 = perfect match).
+ * Score how well a CV volume title matches a movie/series title.
+ * Returns 0–1 (0 = no match, 1 = exact).
+ *
+ * Key fix: penalise very short/generic CV titles that are merely substrings
+ * of a longer movie title (e.g. "Punisher" must NOT score high against
+ * "Punisher: One Last Kill" because that would pull in every Punisher character
+ * from unrelated story arcs).
  */
 function volumeTitleScore(cvTitle: string, movieTitle: string): number {
   const cv = normTitle(cvTitle);
   const mv = normTitle(movieTitle);
   if (!cv || !mv) return 0;
-  if (cv === mv) return 1;
-  if (cv.includes(mv) || mv.includes(cv)) return 0.9;
 
+  // Exact match
+  if (cv === mv) return 1;
+
+  // CV title contains the full movie title → the volume is a superset, good
+  if (cv.includes(mv)) return 0.9;
+
+  // Movie title contains the CV title — only accept if CV title is substantial
+  // relative to movie title. "Punisher" (8 chars) vs "Punisher One Last Kill"
+  // (22 chars) = ratio 0.36 → score 0.3 (below any useful threshold).
+  if (mv.includes(cv)) {
+    const ratio = cv.length / mv.length;
+    if (ratio >= 0.65) return 0.85;
+    if (ratio >= 0.45) return 0.60;
+    return 0.25; // Too generic — reject
+  }
+
+  // Word-overlap fallback
   const cvWords = cv.split(" ").filter(w => w.length > 2);
   const mvWords = mv.split(" ").filter(w => w.length > 2);
   if (cvWords.length === 0 || mvWords.length === 0) return 0;
   const overlap = cvWords.filter(w => mvWords.includes(w));
-  return overlap.length / Math.min(cvWords.length, mvWords.length);
+  // Use max length to penalise one-sided overlap
+  return overlap.length / Math.max(cvWords.length, mvWords.length);
 }
 
 // ── AniList match helpers ─────────────────────────────────────────────────────
 
 function matchAniListChar(tmdbName: string, anilistChars: AniListChar[]): AniListChar | null {
   const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
-  const tmdbNorm = normalize(tmdbName);
-  const tmdbRomaji = normalizeRomaji(tmdbName);
-  const tmdbWords = tmdbNorm.split(/\s+/).filter(w => w.length > 1);
-  const tmdbRomajiWords = tmdbRomaji.split(/\s+/).filter(w => w.length > 1);
+  const tmdbNorm    = normalize(tmdbName);
+  const tmdbRomaji  = normalizeRomaji(tmdbName);
+  const tmdbWords   = tmdbNorm.split(/\s+/).filter(w => w.length > 1);
+  const tmdbRomajiW = tmdbRomaji.split(/\s+/).filter(w => w.length > 1);
 
+  // 1. Exact name match
   for (const ac of anilistChars) { if (normalize(ac.name) === tmdbNorm) return ac; }
+  // 2. Romaji exact
   for (const ac of anilistChars) { if (normalizeRomaji(ac.name) === tmdbRomaji) return ac; }
+  // 3. Full word overlap (normalised)
   for (const ac of anilistChars) {
     const alWords = normalize(ac.name).split(/\s+/).filter(w => w.length > 1);
     const overlap = tmdbWords.filter(w => alWords.includes(w));
     if (overlap.length > 0 && overlap.length >= Math.min(tmdbWords.length, alWords.length)) return ac;
   }
+  // 4. Full word overlap (romaji)
   for (const ac of anilistChars) {
     const alWords = normalizeRomaji(ac.name).split(/\s+/).filter(w => w.length > 1);
-    const overlap = tmdbRomajiWords.filter(w => alWords.includes(w));
-    if (overlap.length > 0 && overlap.length >= Math.min(tmdbRomajiWords.length, alWords.length)) return ac;
+    const overlap = tmdbRomajiW.filter(w => alWords.includes(w));
+    if (overlap.length > 0 && overlap.length >= Math.min(tmdbRomajiW.length, alWords.length)) return ac;
   }
-  if (tmdbRomajiWords.length === 2) {
-    const reversed = `${tmdbRomajiWords[1]} ${tmdbRomajiWords[0]}`;
+  // 5. Reversed two-word romaji
+  if (tmdbRomajiW.length === 2) {
+    const reversed = `${tmdbRomajiW[1]} ${tmdbRomajiW[0]}`;
     for (const ac of anilistChars) { if (normalizeRomaji(ac.name) === reversed) return ac; }
   }
+  // 6. Alternative names
   for (const ac of anilistChars) {
     for (const alt of ac.alternativeNames) {
-      const altNorm = normalize(alt);
+      const altNorm   = normalize(alt);
       const altRomaji = normalizeRomaji(alt);
-      if (altNorm === tmdbNorm) return ac;
-      if (altRomaji === tmdbRomaji) return ac;
+      if (altNorm === tmdbNorm || altRomaji === tmdbRomaji) return ac;
     }
   }
   return null;
 }
 
-function isValidAniListNameMatch(query: string, result: AniListCharDetail): boolean {
-  const hasAnimeMedia = result.media.some(m => m.type === "ANIME");
-  if (!hasAnimeMedia) return false;
+/**
+ * Validate that an AniList character search result actually belongs to an
+ * anime whose title matches the expected media title.
+ */
+function isValidAniListForMedia(
+  charDetail: AniListCharDetail,
+  expectedTitle: string,
+): boolean {
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
+  const exp = norm(expectedTitle);
+  if (!exp) return charDetail.media.some(m => m.type === "ANIME");
 
-  const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
-  const q = normalize(query);
-  const qRomaji = normalizeRomaji(query);
-  const qWords = q.split(/\s+/).filter(w => w.length > 2);
-
-  if (normalize(result.name) === q) return true;
-  if (normalizeRomaji(result.name) === qRomaji) return true;
-
-  const nameWords = normalize(result.name).split(/\s+/).filter(w => w.length > 2);
-  if (qWords.length > 0 && nameWords.length > 0) {
-    const overlap = qWords.filter(w => nameWords.includes(w));
-    if (overlap.length >= Math.min(qWords.length, nameWords.length)) return true;
-  }
-
-  for (const alt of result.alternativeNames) {
-    if (normalize(alt) === q) return true;
-    if (normalizeRomaji(alt) === qRomaji) return true;
-  }
-  return false;
+  return charDetail.media.some(m => {
+    if (m.type !== "ANIME") return false;
+    const titleE = m.titleEnglish ? norm(m.titleEnglish) : "";
+    const titleR = m.titleRomaji  ? norm(m.titleRomaji)  : "";
+    if (titleE === exp || titleR === exp) return true;
+    if (titleE && exp.includes(titleE)) return true;
+    if (titleR && exp.includes(titleR)) return true;
+    if (titleE && titleE.includes(exp)) return true;
+    if (titleR && titleR.includes(exp)) return true;
+    return false;
+  });
 }
 
 // ── Filmography helpers ───────────────────────────────────────────────────────
@@ -297,16 +324,56 @@ function mergeFilmographies(a: FilmographyEntry[], b: FilmographyEntry[]): Filmo
   return out.sort((x, y) => (y.voteCount ?? 0) - (x.voteCount ?? 0));
 }
 
-// ── CV Volume-First Lookup ────────────────────────────────────────────────────
+// ── Franchise terms helper ────────────────────────────────────────────────────
+
+function buildFranchiseTerms(movieTitle: string, franchiseName: string | null): string[] {
+  const terms = new Set<string>();
+  if (franchiseName && franchiseName.length > 2) terms.add(franchiseName);
+  if (movieTitle && movieTitle.length > 2) terms.add(movieTitle);
+  // Strip subtitle after colon/dash: "Predator: Badlands" → "Predator"
+  const base = movieTitle.replace(/[:\-–—].+$/, "").trim();
+  if (base && base.length > 2 && base !== movieTitle) terms.add(base);
+  // Strip year suffixes: "The Boys (2019)" → "The Boys"
+  const noYear = movieTitle.replace(/\s*\(\d{4}\)\s*$/, "").trim();
+  if (noYear && noYear !== movieTitle) terms.add(noYear);
+  return [...terms].filter(t => t.length > 2);
+}
+
 /**
- * For non-anime movies/shows: find the matching Comic Vine volume (series),
- * then cross-reference TMDB character names against that volume's character list.
+ * Check if a CV character's volume_credits include any volume title that
+ * matches one of the franchise terms well enough.
+ * This is the core franchise-validation gate that prevents wrong characters.
+ */
+function characterBelongsToFranchise(
+  volumeCredits: VolumeCredit[] | undefined,
+  franchiseTerms: string[],
+): boolean {
+  if (!volumeCredits || volumeCredits.length === 0) return false;
+  for (const vc of volumeCredits) {
+    for (const term of franchiseTerms) {
+      if (volumeTitleScore(vc.name, term) >= 0.65) return true;
+    }
+  }
+  return false;
+}
+
+// ── CV Volume-First + Fallback Lookup ────────────────────────────────────────
+
+/**
+ * For non-anime movies/shows: find matching Comic Vine characters while
+ * strictly validating they belong to the correct franchise.
  *
- * This prevents false positives like "Stone" (Punisher) matching the Marvel
- * Daredevil "Stone", or "Bud" (Predator) matching Harley Quinn's hyena.
- * We only return characters whose name AND franchise/series both match.
+ * Two-pass strategy:
+ *  Pass 1 — Volume-based (strict 0.75 threshold):
+ *    Find the CV volume that best matches the franchise title, then
+ *    cross-reference TMDB character names against that volume's characters.
  *
- * Returns a map of TMDB char name → CV match data.
+ *  Pass 2 — Direct search + volume_credits validation (for chars missed in pass 1):
+ *    Search CV for the character name directly, then validate via
+ *    volume_credits that the result actually belongs to this franchise.
+ *    Only include results that have an image (or at minimum a description).
+ *
+ * Characters not validated by either pass are excluded entirely.
  */
 async function lookupComicVineForMovie(
   characterNames: string[],
@@ -316,67 +383,109 @@ async function lookupComicVineForMovie(
   const resultMap = new Map<string, { id: number; name: string; imageUrl: string | null; sourceUrl: string }>();
   if (!process.env["COMIC_VINE_API_KEY"] || !movieTitle) return resultMap;
 
-  // Build search queries: try franchise name first (more specific), then movie title
-  const queries = [...new Set([
-    franchiseName ?? "",
-    movieTitle,
-    // Strip year/subtitle for cleaner search
-    movieTitle.replace(/:\s*.+$/, "").trim(),
-    movieTitle.replace(/\s*\(\d{4}\)/, "").trim(),
-  ].filter(q => q.length > 2))];
+  const franchiseTerms = buildFranchiseTerms(movieTitle, franchiseName);
+
+  // ── Pass 1: Volume-based matching ─────────────────────────────────────────
 
   let bestVolume: { id: number; name: string } | null = null;
   let bestScore = 0;
 
-  for (const query of queries) {
+  for (const query of franchiseTerms) {
     const volumes = await searchComicVineVolumes(query, 10).catch(() => []);
     for (const vol of volumes) {
-      // Score against both movie title and franchise name
-      const s1 = volumeTitleScore(vol.name, movieTitle);
-      const s2 = franchiseName ? volumeTitleScore(vol.name, franchiseName) : 0;
-      const score = Math.max(s1, s2);
-      if (score > bestScore && score >= 0.5) {
+      let score = 0;
+      for (const term of franchiseTerms) {
+        score = Math.max(score, volumeTitleScore(vol.name, term));
+      }
+      if (score > bestScore) {
         bestScore = score;
         bestVolume = vol;
       }
     }
-    if (bestScore >= 0.9) break; // Perfect match found
+    if (bestScore >= 0.9) break;
   }
 
-  if (!bestVolume) return resultMap; // No CV volume found for this franchise
+  // Only use the volume if we have a strong enough title match
+  const VOLUME_THRESHOLD = 0.75;
+  const matchedVolumeChars: Array<{ id: number; name: string }> = [];
 
-  // Get all characters from the matched volume
-  const volumeChars = await getCvVolumeCharacters(bestVolume.id).catch(() => []);
-  if (volumeChars.length === 0) return resultMap;
-
-  // Cross-reference TMDB character names against volume characters
-  const toFetch: Array<{ charName: string; cvId: number }> = [];
-  for (const charName of characterNames) {
-    const match = volumeChars.find(vc => cvNameMatches(vc, charName));
-    if (match) toFetch.push({ charName, cvId: match.id });
+  if (bestVolume && bestScore >= VOLUME_THRESHOLD) {
+    const vChars = await getCvVolumeCharacters(bestVolume.id).catch(() => []);
+    matchedVolumeChars.push(...vChars);
   }
 
-  // Fetch full details (with images) for matched characters
+  const unmatchedNames = new Set(characterNames);
+
+  // Process volume matches first
   await Promise.allSettled(
-    toFetch.map(async ({ charName, cvId }) => {
+    characterNames.map(async (charName) => {
+      const match = matchedVolumeChars.find(vc => cvNameMatches(vc, charName));
+      if (!match) return;
       try {
-        const cvDetail = await getComicVineCharacterById(cvId);
+        const cvDetail = await getComicVineCharacterById(match.id);
         if (cvDetail) {
           resultMap.set(charName, {
-            id: cvId,
+            id: match.id,
             name: cvDetail.name,
             imageUrl: cvDetail.image?.super_url ?? cvDetail.image?.medium_url ?? null,
-            sourceUrl: cvDetail.site_detail_url ?? `https://comicvine.gamespot.com/character/4005-${cvId}/`,
+            sourceUrl: cvDetail.site_detail_url ?? `https://comicvine.gamespot.com/character/4005-${match.id}/`,
           });
+          unmatchedNames.delete(charName);
         }
-      } catch { /* ignore individual failures */ }
+      } catch { /* ignore */ }
+    }),
+  );
+
+  // ── Pass 2: Direct search + volume_credits franchise validation ────────────
+  // Only for chars not found in volume pass
+
+  await Promise.allSettled(
+    [...unmatchedNames].map(async (charName) => {
+      try {
+        // Search CV for up to 10 results for this character name
+        const cvResults = await searchComicVineCharacters(charName, 10);
+        const candidates = cvResults.filter(r => cvNameMatches(r, charName));
+        if (candidates.length === 0) return;
+
+        for (const candidate of candidates) {
+          // Use volume_credits from search result first (avoids extra fetch)
+          let volumeCredits = candidate.volume_credits;
+
+          // If not in search result, fetch full detail to get volume_credits
+          if (!volumeCredits || volumeCredits.length === 0) {
+            const full = await getComicVineCharacterById(candidate.id).catch(() => null);
+            volumeCredits = full?.volume_credits ?? [];
+          }
+
+          // Validate franchise
+          if (!characterBelongsToFranchise(volumeCredits, franchiseTerms)) continue;
+
+          // Fetch full detail for image/description
+          const cvDetail = await getComicVineCharacterById(candidate.id).catch(() => null);
+          if (!cvDetail) continue;
+
+          // Require at least an image OR a non-empty description for pass-2 matches
+          // This prevents blank/placeholder CV entries from polluting results
+          const hasImage = !!(cvDetail.image?.super_url || cvDetail.image?.medium_url);
+          const hasDesc  = !!(cvDetail.deck || cvDetail.description);
+          if (!hasImage && !hasDesc) continue;
+
+          resultMap.set(charName, {
+            id: cvDetail.id,
+            name: cvDetail.name,
+            imageUrl: cvDetail.image?.super_url ?? cvDetail.image?.medium_url ?? null,
+            sourceUrl: cvDetail.site_detail_url ?? `https://comicvine.gamespot.com/character/4005-${cvDetail.id}/`,
+          });
+          break; // First valid match wins
+        }
+      } catch { /* ignore */ }
     }),
   );
 
   return resultMap;
 }
 
-// ── Build CV detail response (shared by cv: handler and cvs: handler) ─────────
+// ── Build CV detail response ──────────────────────────────────────────────────
 
 async function buildCvDetailResponse(cvId: number, now: number) {
   const cvDetail = await getComicVineCharacterById(cvId).catch(() => null);
@@ -401,14 +510,21 @@ async function buildCvDetailResponse(cvId: number, now: number) {
     FILMOGRAPHY_CACHE.set(filmCacheKey, { filmography, ts: now });
   }
 
-  const rawDesc = cvDetail.deck || cvDetail.description || "";
-  const description = rawDesc.replace(/<[^>]+>/g, " ").replace(/\s{2,}/g, " ").trim();
+  // Use deck as primary short description; fall back to first paragraph of description
+  const deckText = cvDetail.deck?.trim() ?? "";
+  const descText = cleanCvDescription(cvDetail.description);
+  // Combine deck + description (avoid duplication)
+  let fullDescription = deckText;
+  if (descText && !descText.startsWith(deckText)) {
+    fullDescription = deckText ? `${deckText}\n\n${descText}` : descText;
+  }
 
   return {
     wikidataId: `cv:${cvId}`,
     charId: `cv:${cvId}`,
     name: cvDetail.name,
-    description,
+    description: fullDescription.trim(),
+    structuredInfo: [] as StructuredInfoEntry[],
     imageUrl: cvDetail.image?.super_url ?? cvDetail.image?.medium_url ?? null,
     filmography,
     source: "comicvine" as const,
@@ -442,7 +558,7 @@ router.get(
     try {
       if (tmdbId.startsWith("tmdb_tv:")) {
         isTvSeries = true;
-        hasFranchise = true; // TV series are always ongoing franchises
+        hasFranchise = true;
         const tvId = tmdbId.replace("tmdb_tv:", "");
         const [credits, tvInfo] = await Promise.all([
           tmdbFetch<{ cast?: Array<{ character?: string; roles?: Array<{ character?: string }> }> }>(
@@ -459,7 +575,6 @@ router.get(
           .slice(0, 20);
 
       } else {
-        // Movie paths — resolve to a numeric TMDB movie ID
         let movieNumId: string | null = null;
 
         if (tmdbId.startsWith("tmdb:")) {
@@ -473,7 +588,6 @@ router.get(
           const movieHit = findData.movie_results?.[0];
           const tvHit = findData.tv_results?.[0];
           if (tvHit && !movieHit) {
-            // IMDb ID resolved to a TV show — re-enter as TV
             isTvSeries = true;
             hasFranchise = true;
             const [credits, tvInfo] = await Promise.all([
@@ -514,7 +628,7 @@ router.get(
       }
     } catch { /* ignore */ }
 
-    // Standalone movies (no franchise collection) → no character section
+    // Standalone movies with no franchise collection → no character section
     if (!isTvSeries && !hasFranchise) {
       BY_MOVIE_CACHE.set(tmdbId, { results: [], ts: Date.now() });
       return res.json({ results: [] });
@@ -528,12 +642,21 @@ router.get(
     const anime = isAnime(originalLanguage, genreIds);
 
     // ── Anime: match via AniList ──────────────────────────────────────────────
+    // Use getAniListMediaWithChars so we capture the media ID.
+    // Matched chars get `al:ID`; unmatched chars get `alm:mediaId:charName`
+    // so the detail handler can validate them against the exact media.
+    let anilistMediaId: number | null = null;
     let anilistChars: AniListChar[] = [];
+
     if (anime && movieTitle) {
-      anilistChars = await getAniListCharacters(movieTitle).catch(() => []);
+      const mediaInfo = await getAniListMediaWithChars(movieTitle).catch(() => null);
+      if (mediaInfo) {
+        anilistMediaId = mediaInfo.mediaId;
+        anilistChars = mediaInfo.chars;
+      }
     }
 
-    // ── Non-anime: match via CV volume-first (must validate against franchise) ─
+    // ── Non-anime: match via CV two-pass lookup ───────────────────────────────
     let cvLookup = new Map<string, { id: number; name: string; imageUrl: string | null; sourceUrl: string }>();
     if (!anime) {
       cvLookup = await lookupComicVineForMovie(
@@ -543,14 +666,14 @@ router.get(
       );
     }
 
-    // Build results — only include characters that were successfully matched.
-    // Unmatched characters are excluded entirely (no stubs, no wrong data).
+    // Build results
     const results: CharResult[] = [];
 
     for (const entry of characterEntries) {
       if (anime) {
         const alMatch = matchAniListChar(entry.name, anilistChars);
         if (alMatch) {
+          // Confirmed match within the specific anime
           results.push({
             name: alMatch.name,
             wikidataId: `al:${alMatch.id}`,
@@ -560,22 +683,22 @@ router.get(
             source: "anilist",
             sourceUrl: `https://anilist.co/character/${alMatch.id}`,
           });
-        } else {
-          // Include as AniList-context stub (no image yet, but correct source)
-          // als: prefix tells the detail handler to search AniList only
+        } else if (anilistMediaId) {
+          // Unmatched in pre-fetched list — encode media ID for validated lazy fetch
+          // `alm:mediaId:charName` tells the detail handler to search within that specific media
           results.push({
             name: entry.name,
-            wikidataId: `als:${entry.name}`,
+            wikidataId: `alm:${anilistMediaId}:${encodeURIComponent(entry.name)}`,
             description: "",
             imageUrl: null,
             alias: null,
             source: "anilist",
           });
         }
+        // If anilistMediaId is null (AniList doesn't know this anime), skip entirely
       } else {
         const cvMatch = cvLookup.get(entry.name) ?? null;
         if (cvMatch) {
-          // Only show characters that are validated against the franchise volume
           results.push({
             name: cvMatch.name,
             wikidataId: `cv:${cvMatch.id}`,
@@ -585,8 +708,8 @@ router.get(
             source: "comicvine",
             sourceUrl: cvMatch.sourceUrl,
           });
-          // Unmatched non-anime chars are intentionally excluded
         }
+        // Unmatched non-anime chars excluded entirely — no stubs
       }
     }
 
@@ -608,9 +731,11 @@ router.get(
     else if (lower.startsWith("cv%3a"))  rawCharId = "cv:"  + rawCharId.slice(5);
     else if (lower.startsWith("als%3a")) rawCharId = "als:" + rawCharId.slice(6);
     else if (lower.startsWith("cvs%3a")) rawCharId = "cvs:" + rawCharId.slice(6);
+    else if (lower.startsWith("alm%3a")) rawCharId = "alm:" + rawCharId.slice(6);
     else if (rawCharId.includes("%")) {
       try { rawCharId = decodeURIComponent(rawCharId); } catch { /* keep */ }
     }
+
     if (!rawCharId || rawCharId.length < 1) {
       return res.status(400).json({ error: "Invalid character ID" });
     }
@@ -643,6 +768,7 @@ router.get(
         charId: rawCharId,
         name: charDetail.name,
         description: charDetail.description ?? "",
+        structuredInfo: charDetail.structuredInfo ?? [],
         imageUrl: charDetail.imageUrl,
         filmography,
         source: "anilist",
@@ -660,45 +786,120 @@ router.get(
       return res.json({ ...result, wikidataId: rawCharId });
     }
 
-    // ── als:<name>  — AniList search by name (anime context) ─────────────────
-    // Triggered when by-movie found the title is anime but couldn't pre-match
-    // the character to an AniList ID. Stays within AniList — never touches CV.
-    if (rawCharId.startsWith("als:")) {
-      const charName = decodeURIComponent(rawCharId.slice(4));
-      const alByName = await getAniListCharacterByName(charName).catch(() => null);
+    // ── alm:<mediaId>:<charName>  — AniList char validated against specific media
+    // Used by new by-movie stubs for unmatched anime characters.
+    if (rawCharId.startsWith("alm:")) {
+      const rest = rawCharId.slice(4);
+      const colonIdx = rest.indexOf(":");
+      if (colonIdx < 1) {
+        return res.json({ wikidataId: rawCharId, charId: rawCharId, name: decodeURIComponent(rest), description: "", structuredInfo: [], imageUrl: null, filmography: [], source: "anilist" });
+      }
+      const mediaId  = parseInt(rest.slice(0, colonIdx), 10);
+      const charName = decodeURIComponent(rest.slice(colonIdx + 1));
 
-      if (alByName && isValidAniListNameMatch(charName, alByName)) {
-        const alCacheKey = `al:${alByName.id}`;
-        const filmCached = FILMOGRAPHY_CACHE.get(alCacheKey);
-        let filmography: FilmographyEntry[] = [];
-        if (filmCached && now - filmCached.ts < CACHE_TTL) {
-          filmography = filmCached.filmography;
-        } else {
-          const [anilistFilmo, kwFilmo] = await Promise.all([
-            getFilmographyFromAniListMedia(alByName.media),
-            getFilmographyByKeyword(alByName.name).catch(() => [] as FilmographyEntry[]),
-          ]);
-          filmography = mergeFilmographies(anilistFilmo, kwFilmo);
-          FILMOGRAPHY_CACHE.set(alCacheKey, { filmography, ts: now });
-        }
-        return res.json({
-          wikidataId: rawCharId,
-          charId: alCacheKey,
-          name: alByName.name,
-          description: alByName.description ?? "",
-          imageUrl: alByName.imageUrl,
-          filmography,
-          source: "anilist",
-          sourceUrl: `https://anilist.co/character/${alByName.id}`,
-        });
+      if (isNaN(mediaId)) {
+        return res.json({ wikidataId: rawCharId, charId: rawCharId, name: charName, description: "", structuredInfo: [], imageUrl: null, filmography: [], source: "anilist" });
       }
 
-      // No valid AniList match
-      return res.json({ wikidataId: rawCharId, charId: rawCharId, name: decodeURIComponent(rawCharId.slice(4)), description: "", imageUrl: null, filmography: [], source: "anilist" });
+      // Fetch the character list for this specific AniList media ID
+      const mediaChars = await getAniListCharactersByMediaId(mediaId).catch(() => [] as AniListChar[]);
+      const alMatch = matchAniListChar(charName, mediaChars);
+
+      if (alMatch) {
+        // Found within the exact media — treat as a confirmed al: character
+        const alCacheKey = `al:${alMatch.id}`;
+        const charDetail = await getAniListCharacterById(alMatch.id).catch(() => null);
+
+        if (charDetail) {
+          const filmCached = FILMOGRAPHY_CACHE.get(alCacheKey);
+          let filmography: FilmographyEntry[] = [];
+          if (filmCached && now - filmCached.ts < CACHE_TTL) {
+            filmography = filmCached.filmography;
+          } else {
+            const [anilistFilmo, kwFilmo] = await Promise.all([
+              getFilmographyFromAniListMedia(charDetail.media),
+              getFilmographyByKeyword(charDetail.name).catch(() => [] as FilmographyEntry[]),
+            ]);
+            filmography = mergeFilmographies(anilistFilmo, kwFilmo);
+            FILMOGRAPHY_CACHE.set(alCacheKey, { filmography, ts: now });
+          }
+          return res.json({
+            wikidataId: rawCharId,
+            charId: alCacheKey,
+            name: charDetail.name,
+            description: charDetail.description ?? "",
+            structuredInfo: charDetail.structuredInfo ?? [],
+            imageUrl: charDetail.imageUrl ?? alMatch.imageUrl,
+            filmography,
+            source: "anilist",
+            sourceUrl: `https://anilist.co/character/${alMatch.id}`,
+          });
+        }
+      }
+
+      // Character not found within this specific media — return name-only stub
+      // (no wrong data, no cross-franchise confusion)
+      return res.json({
+        wikidataId: rawCharId,
+        charId: rawCharId,
+        name: charName,
+        description: "",
+        structuredInfo: [],
+        imageUrl: null,
+        filmography: [],
+        source: "anilist",
+      });
     }
 
-    // ── cvs:<name>  — CV search by name (non-anime, backward compat) ─────────
-    // Generated by old cached by-movie data. Does a name-based CV search.
+    // ── als:<name>  — Legacy AniList name search (backward compat only) ───────
+    // Old cached entries may still use this prefix.
+    // We now do a name search but do NOT validate against franchise context,
+    // so we only return results with very strong name matches and anime media.
+    if (rawCharId.startsWith("als:")) {
+      const charName = decodeURIComponent(rawCharId.slice(4));
+      // Strip any legacy pipe-encoded media title
+      const cleanName = charName.split("|")[0]!.trim();
+
+      const alByName = await getAniListCharacterByName(cleanName).catch(() => null);
+
+      if (alByName && alByName.media.some(m => m.type === "ANIME")) {
+        const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
+        const exactMatch =
+          normalize(alByName.name) === normalize(cleanName) ||
+          alByName.alternativeNames.some(a => normalize(a) === normalize(cleanName));
+
+        if (exactMatch) {
+          const alCacheKey = `al:${alByName.id}`;
+          const filmCached = FILMOGRAPHY_CACHE.get(alCacheKey);
+          let filmography: FilmographyEntry[] = [];
+          if (filmCached && now - filmCached.ts < CACHE_TTL) {
+            filmography = filmCached.filmography;
+          } else {
+            const [anilistFilmo, kwFilmo] = await Promise.all([
+              getFilmographyFromAniListMedia(alByName.media),
+              getFilmographyByKeyword(alByName.name).catch(() => [] as FilmographyEntry[]),
+            ]);
+            filmography = mergeFilmographies(anilistFilmo, kwFilmo);
+            FILMOGRAPHY_CACHE.set(alCacheKey, { filmography, ts: now });
+          }
+          return res.json({
+            wikidataId: rawCharId,
+            charId: alCacheKey,
+            name: alByName.name,
+            description: alByName.description ?? "",
+            structuredInfo: alByName.structuredInfo ?? [],
+            imageUrl: alByName.imageUrl,
+            filmography,
+            source: "anilist",
+            sourceUrl: `https://anilist.co/character/${alByName.id}`,
+          });
+        }
+      }
+
+      return res.json({ wikidataId: rawCharId, charId: rawCharId, name: cleanName, description: "", structuredInfo: [], imageUrl: null, filmography: [], source: "anilist" });
+    }
+
+    // ── cvs:<name>  — Legacy CV name search (backward compat only) ────────────
     if (rawCharId.startsWith("cvs:")) {
       const charName = decodeURIComponent(rawCharId.slice(4));
 
@@ -713,10 +914,10 @@ router.get(
         } catch { /* CV optional */ }
       }
 
-      return res.json({ wikidataId: rawCharId, charId: rawCharId, name: charName, description: "", imageUrl: null, filmography: [], source: "comicvine" });
+      return res.json({ wikidataId: rawCharId, charId: rawCharId, name: charName, description: "", structuredInfo: [], imageUrl: null, filmography: [], source: "comicvine" });
     }
 
-    // ── Plain name (legacy fallback for old cached wikidataIds) ──────────────
+    // ── Plain name (legacy fallback) ──────────────────────────────────────────
     const characterName = decodeURIComponent(rawCharId);
 
     let cvFound = false;
@@ -734,34 +935,38 @@ router.get(
 
     if (!cvFound) {
       const alByName = await getAniListCharacterByName(characterName).catch(() => null);
-      if (alByName && isValidAniListNameMatch(characterName, alByName)) {
-        const alCacheKey = `al:${alByName.id}`;
-        const filmCached = FILMOGRAPHY_CACHE.get(alCacheKey);
-        let filmography: FilmographyEntry[] = [];
-        if (filmCached && now - filmCached.ts < CACHE_TTL) {
-          filmography = filmCached.filmography;
-        } else {
-          const [anilistFilmo, kwFilmo] = await Promise.all([
-            getFilmographyFromAniListMedia(alByName.media),
-            getFilmographyByKeyword(alByName.name).catch(() => [] as FilmographyEntry[]),
-          ]);
-          filmography = mergeFilmographies(anilistFilmo, kwFilmo);
-          FILMOGRAPHY_CACHE.set(alCacheKey, { filmography, ts: now });
+      if (alByName && alByName.media.some(m => m.type === "ANIME")) {
+        const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
+        if (normalize(alByName.name) === normalize(characterName)) {
+          const alCacheKey = `al:${alByName.id}`;
+          const filmCached = FILMOGRAPHY_CACHE.get(alCacheKey);
+          let filmography: FilmographyEntry[] = [];
+          if (filmCached && now - filmCached.ts < CACHE_TTL) {
+            filmography = filmCached.filmography;
+          } else {
+            const [anilistFilmo, kwFilmo] = await Promise.all([
+              getFilmographyFromAniListMedia(alByName.media),
+              getFilmographyByKeyword(alByName.name).catch(() => [] as FilmographyEntry[]),
+            ]);
+            filmography = mergeFilmographies(anilistFilmo, kwFilmo);
+            FILMOGRAPHY_CACHE.set(alCacheKey, { filmography, ts: now });
+          }
+          return res.json({
+            wikidataId: rawCharId,
+            charId: alCacheKey,
+            name: alByName.name,
+            description: alByName.description ?? "",
+            structuredInfo: alByName.structuredInfo ?? [],
+            imageUrl: alByName.imageUrl,
+            filmography,
+            source: "anilist",
+            sourceUrl: `https://anilist.co/character/${alByName.id}`,
+          });
         }
-        return res.json({
-          wikidataId: rawCharId,
-          charId: alCacheKey,
-          name: alByName.name,
-          description: alByName.description ?? "",
-          imageUrl: alByName.imageUrl,
-          filmography,
-          source: "anilist",
-          sourceUrl: `https://anilist.co/character/${alByName.id}`,
-        });
       }
     }
 
-    return res.json({ wikidataId: rawCharId, charId: rawCharId, name: characterName, description: "", imageUrl: null, filmography: [], source: "tmdb" });
+    return res.json({ wikidataId: rawCharId, charId: rawCharId, name: characterName, description: "", structuredInfo: [], imageUrl: null, filmography: [], source: "tmdb" });
   }),
 );
 
