@@ -18,6 +18,7 @@ import {
   cleanCvDescription,
   cvNameMatches,
   type VolumeCredit,
+  type ComicVineVolume,
 } from "../lib/comicvine";
 
 const router = Router();
