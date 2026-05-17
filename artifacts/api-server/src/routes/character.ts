@@ -384,26 +384,15 @@ async function getFilmographyFromCvVolumeCredits(
         const movItems = movRes.status === "fulfilled" ? (movRes.value.results ?? []) : [];
         const tvItems  = tvRes.status  === "fulfilled" ? (tvRes.value.results  ?? []) : [];
 
-        // Best movie hit: has poster, not adult, enough votes
-        const movHit = movItems.find(r => !r.adult && r.poster_path && (r.vote_count ?? 0) >= 10);
-        if (movHit && !isPornParody(movHit.title ?? "")) {
-          return {
-            title: movHit.title ?? vc.name,
-            year: movHit.release_date?.slice(0, 4) ?? null,
-            imdbId: `tmdb:${movHit.id}`,
-            posterUrl: movHit.poster_path ? posterUrl(movHit.poster_path) : null,
-            tmdbRating: movHit.vote_average != null ? String(movHit.vote_average.toFixed(1)) : null,
-            voteCount: movHit.vote_count ?? 0,
-            genreIds: movHit.genre_ids ?? [],
-            popularity: movHit.popularity ?? 0,
-            franchiseIds: [],
-            mediaType: "movie",
-          };
-        }
+        const MIN_SCORE = 0.75;
 
-        // Best TV hit
-        const tvHit = tvItems.find(r => !r.adult && r.poster_path && (r.vote_count ?? 0) >= 10);
-        if (tvHit && !isPornParody(tvHit.name ?? "")) {
+        // Prefer TV first — comic volumes are far more often adapted to TV series
+        const tvHit = tvItems.find(r =>
+          !r.adult && r.poster_path && (r.vote_count ?? 0) >= 10 &&
+          !isPornParody(r.name ?? "") &&
+          volumeTitleScore(r.name ?? "", vc.name) >= MIN_SCORE,
+        );
+        if (tvHit) {
           return {
             title: tvHit.name ?? vc.name,
             year: tvHit.first_air_date?.slice(0, 4) ?? null,
@@ -415,6 +404,27 @@ async function getFilmographyFromCvVolumeCredits(
             popularity: tvHit.popularity ?? 0,
             franchiseIds: [],
             mediaType: "tv",
+          };
+        }
+
+        // Fallback: movie — must also meet title-match threshold
+        const movHit = movItems.find(r =>
+          !r.adult && r.poster_path && (r.vote_count ?? 0) >= 10 &&
+          !isPornParody(r.title ?? "") &&
+          volumeTitleScore(r.title ?? "", vc.name) >= MIN_SCORE,
+        );
+        if (movHit) {
+          return {
+            title: movHit.title ?? vc.name,
+            year: movHit.release_date?.slice(0, 4) ?? null,
+            imdbId: `tmdb:${movHit.id}`,
+            posterUrl: movHit.poster_path ? posterUrl(movHit.poster_path) : null,
+            tmdbRating: movHit.vote_average != null ? String(movHit.vote_average.toFixed(1)) : null,
+            voteCount: movHit.vote_count ?? 0,
+            genreIds: movHit.genre_ids ?? [],
+            popularity: movHit.popularity ?? 0,
+            franchiseIds: [],
+            mediaType: "movie",
           };
         }
 
@@ -739,10 +749,19 @@ router.get(
         movieTitle = tvInfo.name ?? "";
         originalLanguage = tvInfo.original_language ?? "";
         genreIds = tvInfo.genre_ids ?? (tvInfo.genres ?? []).map(g => g.id);
-        characterEntries = (credits.cast ?? [])
-          .map(c => ({ name: cleanCharacterName(c.roles?.[0]?.character ?? c.character ?? "") }))
-          .filter(e => e.name.length > 1 && !isBlockedCharacterName(e.name))
-          .slice(0, 20);
+        {
+          const seen = new Set<string>();
+          characterEntries = (credits.cast ?? [])
+            .map(c => ({ name: cleanCharacterName(c.roles?.[0]?.character ?? c.character ?? "") }))
+            .filter(e => {
+              if (e.name.length <= 1 || isBlockedCharacterName(e.name)) return false;
+              const k = e.name.toLowerCase();
+              if (seen.has(k)) return false;
+              seen.add(k);
+              return true;
+            })
+            .slice(0, 20);
+        }
 
       } else {
         let movieNumId: string | null = null;
@@ -769,10 +788,19 @@ router.get(
             movieTitle = tvInfo.name ?? "";
             originalLanguage = tvInfo.original_language ?? "";
             genreIds = tvInfo.genre_ids ?? (tvInfo.genres ?? []).map(g => g.id);
-            characterEntries = (credits.cast ?? [])
-              .map(c => ({ name: cleanCharacterName(c.roles?.[0]?.character ?? c.character ?? "") }))
-              .filter(e => e.name.length > 1 && !isBlockedCharacterName(e.name))
-              .slice(0, 20);
+            {
+              const seen = new Set<string>();
+              characterEntries = (credits.cast ?? [])
+                .map(c => ({ name: cleanCharacterName(c.roles?.[0]?.character ?? c.character ?? "") }))
+                .filter(e => {
+                  if (e.name.length <= 1 || isBlockedCharacterName(e.name)) return false;
+                  const k = e.name.toLowerCase();
+                  if (seen.has(k)) return false;
+                  seen.add(k);
+                  return true;
+                })
+                .slice(0, 20);
+            }
           } else if (movieHit) {
             movieNumId = String(movieHit.id);
           }
@@ -790,10 +818,19 @@ router.get(
           genreIds = movieInfo.genre_ids ?? (movieInfo.genres ?? []).map(g => g.id);
           hasFranchise = !!movieInfo.belongs_to_collection;
           franchiseName = movieInfo.belongs_to_collection?.name ?? null;
-          characterEntries = (credits.cast ?? [])
-            .map(c => ({ name: cleanCharacterName(c.character ?? "") }))
-            .filter(e => e.name.length > 1 && !isBlockedCharacterName(e.name))
-            .slice(0, 20);
+          {
+            const seen = new Set<string>();
+            characterEntries = (credits.cast ?? [])
+              .map(c => ({ name: cleanCharacterName(c.character ?? "") }))
+              .filter(e => {
+                if (e.name.length <= 1 || isBlockedCharacterName(e.name)) return false;
+                const k = e.name.toLowerCase();
+                if (seen.has(k)) return false;
+                seen.add(k);
+                return true;
+              })
+              .slice(0, 20);
+          }
         }
       }
     } catch { /* ignore */ }
@@ -902,7 +939,8 @@ router.get(
     else if (lower.startsWith("als%3a")) rawCharId = "als:" + rawCharId.slice(6);
     else if (lower.startsWith("cvs%3a")) rawCharId = "cvs:" + rawCharId.slice(6);
     else if (lower.startsWith("alm%3a")) rawCharId = "alm:" + rawCharId.slice(6);
-    else if (rawCharId.includes("%")) {
+    // Always decode remaining percent-encoding (e.g. alm:204066%3ASuguru%20Geto has a second %3A)
+    if (rawCharId.includes("%")) {
       try { rawCharId = decodeURIComponent(rawCharId); } catch { /* keep */ }
     }
 

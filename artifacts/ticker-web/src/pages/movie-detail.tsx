@@ -258,18 +258,19 @@ export default function MovieDetail() {
     const el = scrollRef.current;
     const key = `movie-${movieId}`;
 
+    // Seed from store so cleanup always preserves the last-known position,
+    // even if the scroll container hasn't rendered yet (movie data still loading).
+    let lastScrollTop = scrollStore.get(key) ?? 0;
+
     if (!el) {
-      // No scroll container yet. Save on unmount using a live ref read.
-      return () => {
-        const late = scrollRef.current;
-        if (late) scrollStore.set(key, late.scrollTop);
-      };
+      // Scroll container not yet in the DOM (data loading). On unmount, carry
+      // forward the seed value so the stored position is never overwritten with 0.
+      return () => { scrollStore.set(key, lastScrollTop); };
     }
 
     // Cache last known scrollTop in a closure variable — reading el.scrollTop
     // after the element is detached from the DOM returns 0 in many browsers,
     // which would overwrite a correctly-saved position in the cleanup function.
-    let lastScrollTop = scrollStore.get(key) ?? 0;
     const onScroll = () => {
       lastScrollTop = el.scrollTop;
       scrollStore.set(key, lastScrollTop);
@@ -328,12 +329,13 @@ export default function MovieDetail() {
 
     attempt();
     const t1 = setTimeout(attempt, 80);
-    const t2 = setTimeout(() => {
+    const t2 = setTimeout(attempt, 300);
+    const t3 = setTimeout(() => {
       attempt();
       done = true;
       ro.disconnect();
       scrollRef.current?.removeEventListener("scroll", onUserScroll);
-    }, 350);
+    }, 1200);
 
     return () => {
       done = true;
@@ -341,6 +343,7 @@ export default function MovieDetail() {
       scrollRef.current?.removeEventListener("scroll", onUserScroll);
       clearTimeout(t1);
       clearTimeout(t2);
+      clearTimeout(t3);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [movieId]);
