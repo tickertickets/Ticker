@@ -5,6 +5,7 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import { ChevronLeft, Film, User, Loader2, Flag, Send } from "lucide-react";
 import { useLang, displayYear } from "@/lib/i18n";
 import { scrollStore } from "@/lib/scroll-store";
+import { usePageScroll } from "@/hooks/use-page-scroll";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -92,6 +93,9 @@ export default function CharacterDetail() {
   const [, navigate] = useLocation();
 
   const wikidataId = params?.wikidataId ?? "";
+
+  // Save and restore scroll position so "back" returns to where the user was
+  const scrollRef = usePageScroll(`character-${wikidataId}`);
 
   const srclang = useMemo(
     () =>
@@ -211,7 +215,7 @@ export default function CharacterDetail() {
         <ChevronLeft className="w-5 h-5 text-white" style={{ transform: "translateX(-1px)" }} />
       </button>
 
-      <div className="flex-1 min-h-0 overflow-y-auto overscroll-y-none">
+      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto overscroll-y-none">
         {/* ── Hero ── */}
         <div className="relative w-full bg-secondary overflow-hidden" style={{ height: 280 }}>
           {data?.imageUrl && (

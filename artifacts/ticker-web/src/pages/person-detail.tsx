@@ -10,6 +10,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { scrollStore } from "@/lib/scroll-store";
+import { usePageScroll } from "@/hooks/use-page-scroll";
 
 type PersonMovie = {
   imdbId: string;
@@ -95,6 +96,9 @@ export default function PersonDetail() {
   const [, params] = useRoute("/person/:personId");
   const [, navigate] = useLocation();
   const personId = params?.personId ?? "";
+
+  // Save and restore scroll position so "back" returns to where the user was
+  const scrollRef = usePageScroll(`person-${personId}`);
 
   const [bioExpanded, setBioExpanded] = useState(false);
   const [showAwards, setShowAwards] = useState(false);
@@ -213,7 +217,7 @@ export default function PersonDetail() {
       )}
 
       {/* ── Scrollable body ── */}
-      <div className="flex-1 min-h-0 overflow-y-auto overscroll-y-none">
+      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto overscroll-y-none">
 
         {/* ── Hero ── */}
         <div className="relative w-full bg-secondary overflow-hidden" style={{ height: 280 }}>

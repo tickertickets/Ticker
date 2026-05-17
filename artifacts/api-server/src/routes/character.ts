@@ -345,6 +345,90 @@ function mergeFilmographies(a: FilmographyEntry[], b: FilmographyEntry[]): Filmo
   return out.sort((x, y) => (y.voteCount ?? 0) - (x.voteCount ?? 0));
 }
 
+/**
+ * Build filmography from a CV character's volume_credits by searching TMDB
+ * for each volume title. Supplements keyword-based search — especially useful
+ * when the character's name differs from their media title (e.g. Homelander
+ * in "The Boys"). Searches both movie and TV endpoints and returns the best
+ * poster-bearing hit per volume.
+ */
+async function getFilmographyFromCvVolumeCredits(
+  volumeCredits: VolumeCredit[],
+): Promise<FilmographyEntry[]> {
+  if (volumeCredits.length === 0) return [];
+
+  // Deduplicate by normalised title; cap at 15 volumes to stay within rate limits
+  const seen = new Set<string>();
+  const toSearch: VolumeCredit[] = [];
+  for (const vc of volumeCredits) {
+    const key = normTitle(vc.name);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    toSearch.push(vc);
+    if (toSearch.length >= 15) break;
+  }
+
+  const results = await Promise.allSettled(
+    toSearch.map(async (vc): Promise<FilmographyEntry | null> => {
+      try {
+        type MovResult = { id: number; title?: string; poster_path?: string | null; release_date?: string; vote_average?: number; vote_count?: number; genre_ids?: number[]; popularity?: number; adult?: boolean };
+        type TvResult  = { id: number; name?: string; poster_path?: string | null; first_air_date?: string; vote_average?: number; vote_count?: number; genre_ids?: number[]; popularity?: number; adult?: boolean };
+
+        const [movRes, tvRes] = await Promise.allSettled([
+          tmdbFetch<{ results?: MovResult[] }>("/search/movie", { query: vc.name, include_adult: "false" })
+            .catch(() => ({ results: [] as MovResult[] })),
+          tmdbFetch<{ results?: TvResult[]  }>("/search/tv",    { query: vc.name, include_adult: "false" })
+            .catch(() => ({ results: [] as TvResult[] })),
+        ]);
+
+        const movItems = movRes.status === "fulfilled" ? (movRes.value.results ?? []) : [];
+        const tvItems  = tvRes.status  === "fulfilled" ? (tvRes.value.results  ?? []) : [];
+
+        // Best movie hit: has poster, not adult, enough votes
+        const movHit = movItems.find(r => !r.adult && r.poster_path && (r.vote_count ?? 0) >= 10);
+        if (movHit && !isPornParody(movHit.title ?? "")) {
+          return {
+            title: movHit.title ?? vc.name,
+            year: movHit.release_date?.slice(0, 4) ?? null,
+            imdbId: `tmdb:${movHit.id}`,
+            posterUrl: movHit.poster_path ? posterUrl(movHit.poster_path) : null,
+            tmdbRating: movHit.vote_average != null ? String(movHit.vote_average.toFixed(1)) : null,
+            voteCount: movHit.vote_count ?? 0,
+            genreIds: movHit.genre_ids ?? [],
+            popularity: movHit.popularity ?? 0,
+            franchiseIds: [],
+            mediaType: "movie",
+          };
+        }
+
+        // Best TV hit
+        const tvHit = tvItems.find(r => !r.adult && r.poster_path && (r.vote_count ?? 0) >= 10);
+        if (tvHit && !isPornParody(tvHit.name ?? "")) {
+          return {
+            title: tvHit.name ?? vc.name,
+            year: tvHit.first_air_date?.slice(0, 4) ?? null,
+            imdbId: `tmdb_tv:${tvHit.id}`,
+            posterUrl: tvHit.poster_path ? posterUrl(tvHit.poster_path) : null,
+            tmdbRating: tvHit.vote_average != null ? String(tvHit.vote_average.toFixed(1)) : null,
+            voteCount: tvHit.vote_count ?? 0,
+            genreIds: tvHit.genre_ids ?? [],
+            popularity: tvHit.popularity ?? 0,
+            franchiseIds: [],
+            mediaType: "tv",
+          };
+        }
+
+        return null;
+      } catch { return null; }
+    }),
+  );
+
+  return results
+    .filter((r): r is PromiseFulfilledResult<FilmographyEntry | null> => r.status === "fulfilled")
+    .map(r => r.value)
+    .filter((v): v is FilmographyEntry => v !== null);
+}
+
 // ── Franchise terms helper ────────────────────────────────────────────────────
 
 type FranchiseTerms = {
@@ -440,7 +524,7 @@ async function lookupComicVineForMovie(
   // We do NOT use the stripped base name here: searching for "Punisher" alone
   // would match the 200-issue omnibus and pull in unrelated characters.
 
-  let bestVolume: { id: number; name: string } | null = null;
+  let bestVolume: ComicVineVolume | null = null;
   let bestScore = 0;
 
   for (const query of terms.volumeSearch) {
@@ -451,7 +535,11 @@ async function lookupComicVineForMovie(
       for (const t of terms.volumeSearch) {
         score = Math.max(score, volumeTitleScore(vol.name, t));
       }
-      if (score > bestScore) {
+      // Prefer higher score; tiebreak by issue count (main series > one-shots)
+      if (
+        score > bestScore ||
+        (score === bestScore && (vol.count_of_issues ?? 0) > (bestVolume?.count_of_issues ?? 0))
+      ) {
         bestScore = score;
         bestVolume = vol;
       }
@@ -507,6 +595,12 @@ async function lookupComicVineForMovie(
         const candidates = cvResults.filter(r => cvNameMatches(r, charName));
         if (candidates.length === 0) return;
 
+        // Score ALL validated candidates and pick the highest-quality one.
+        // Quality = image (2 pts) + description (1 pt) + best franchise score (0–3 pts).
+        // This prevents picking a low-quality stub when a richer entry exists.
+        let bestEntry: { id: number; name: string; imageUrl: string | null; sourceUrl: string } | null = null;
+        let bestQuality = -1;
+
         for (const candidate of candidates) {
           // Use volume_credits from search result; fetch detail if absent
           let volumeCredits = candidate.volume_credits;
@@ -526,14 +620,32 @@ async function lookupComicVineForMovie(
           const hasDesc  = !!(cvDetail.deck || cvDetail.description);
           if (!hasImage && !hasDesc) continue;
 
-          resultMap.set(charName, {
-            id: cvDetail.id,
-            name: cvDetail.name,
-            imageUrl: cvDetail.image?.super_url ?? cvDetail.image?.medium_url ?? null,
-            sourceUrl: cvDetail.site_detail_url ?? `https://comicvine.gamespot.com/character/4005-${cvDetail.id}/`,
-          });
-          break;
+          // Compute quality score
+          let qualScore = 0;
+          if (hasImage) qualScore += 2;
+          if (hasDesc)  qualScore += 1;
+          // Best franchise match across volume_credits (0–1 scaled to 0–3 pts)
+          let bestFranchise = 0;
+          for (const vc of (cvDetail.volume_credits ?? [])) {
+            for (const term of terms.validation) {
+              const s = volumeTitleScore(vc.name, term);
+              if (s > bestFranchise) bestFranchise = s;
+            }
+          }
+          qualScore += bestFranchise * 3;
+
+          if (qualScore > bestQuality) {
+            bestQuality = qualScore;
+            bestEntry = {
+              id: cvDetail.id,
+              name: cvDetail.name,
+              imageUrl: cvDetail.image?.super_url ?? cvDetail.image?.medium_url ?? null,
+              sourceUrl: cvDetail.site_detail_url ?? `https://comicvine.gamespot.com/character/4005-${cvDetail.id}/`,
+            };
+          }
         }
+
+        if (bestEntry) resultMap.set(charName, bestEntry);
       } catch { /* ignore */ }
     }),
   );
@@ -555,14 +667,16 @@ async function buildCvDetailResponse(cvId: number, now: number) {
   } else {
     const specificRealName = (cvDetail.real_name && cvDetail.real_name.length >= 6)
       ? cvDetail.real_name : null;
-    const [kwFilmo1, kwFilmo2] = await Promise.allSettled([
+    // Three filmography sources: keyword (char name), keyword (real name), volume_credits TMDB search
+    const [kwFilmo1, kwFilmo2, vcFilmo] = await Promise.allSettled([
       getFilmographyByKeyword(cvDetail.name),
       specificRealName ? getFilmographyByKeyword(specificRealName) : Promise.resolve([] as FilmographyEntry[]),
+      getFilmographyFromCvVolumeCredits(cvDetail.volume_credits ?? []),
     ]);
-    filmography = mergeFilmographies(
-      kwFilmo1.status === "fulfilled" ? kwFilmo1.value : [],
-      kwFilmo2.status === "fulfilled" ? kwFilmo2.value : [],
-    );
+    const kw1 = kwFilmo1.status === "fulfilled" ? kwFilmo1.value : [];
+    const kw2 = kwFilmo2.status === "fulfilled" ? kwFilmo2.value : [];
+    const vc  = vcFilmo.status  === "fulfilled" ? vcFilmo.value  : [];
+    filmography = mergeFilmographies(mergeFilmographies(kw1, kw2), vc);
     FILMOGRAPHY_CACHE.set(filmCacheKey, { filmography, ts: now });
   }
 

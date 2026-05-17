@@ -266,11 +266,20 @@ export default function MovieDetail() {
       };
     }
 
-    const onScroll = () => scrollStore.set(key, el.scrollTop);
+    // Cache last known scrollTop in a closure variable — reading el.scrollTop
+    // after the element is detached from the DOM returns 0 in many browsers,
+    // which would overwrite a correctly-saved position in the cleanup function.
+    let lastScrollTop = scrollStore.get(key) ?? 0;
+    const onScroll = () => {
+      lastScrollTop = el.scrollTop;
+      scrollStore.set(key, lastScrollTop);
+    };
     el.addEventListener("scroll", onScroll, { passive: true });
     return () => {
       el.removeEventListener("scroll", onScroll);
-      scrollStore.set(key, el.scrollTop);
+      // Use cached lastScrollTop — NOT el.scrollTop — because the element
+      // may already be detached from the DOM when cleanup runs.
+      scrollStore.set(key, lastScrollTop);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [movieId]);
@@ -1000,6 +1009,7 @@ export default function MovieDetail() {
               <Link
                 key={char.wikidataId}
                 href={`/character/${encodeURIComponent(char.wikidataId)}${navSrclang ? `?srclang=${encodeURIComponent(navSrclang)}` : ""}`}
+                onClick={() => scrollStore.delete(`character-${char.wikidataId}`)}
               >
                 <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
                   <div className="relative" style={{ aspectRatio: "2/3" }}>
@@ -1147,7 +1157,7 @@ export default function MovieDetail() {
                   </div>
                   <div ref={directorScrollRef} className="flex overflow-x-auto gap-2.5 pb-1 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
                     {(creditsData?.directors ?? []).map(p => (
-                      <Link key={p.id} href={`/person/${p.id}${navSrclang ? `?srclang=${encodeURIComponent(navSrclang)}` : ""}`}>
+                      <Link key={p.id} href={`/person/${p.id}${navSrclang ? `?srclang=${encodeURIComponent(navSrclang)}` : ""}`} onClick={() => scrollStore.delete(`person-${p.id}`)}>
                         <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
                           <div className="relative" style={{ aspectRatio: "2/3" }}>
                             {p.profileUrl
@@ -1177,6 +1187,7 @@ export default function MovieDetail() {
                       <Link
                         key={p.id}
                         href={`/person/${p.id}${navSrclang ? `?srclang=${encodeURIComponent(navSrclang)}` : ""}`}
+                        onClick={() => scrollStore.delete(`person-${p.id}`)}
                       >
                         <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
                           <div className="relative" style={{ aspectRatio: "2/3" }}>
