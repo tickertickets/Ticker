@@ -384,7 +384,7 @@ export default function TicketDetail() {
           <ChevronLeft className="w-5 h-5 text-foreground" />
         </button>
         <h1 className="absolute left-0 right-0 text-center font-display font-bold text-xl tracking-tight text-foreground pointer-events-none">Ticker</h1>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 ml-auto">
           <button
             onClick={() => {
               if (!user) { toast({ title: t.signInToLike, duration: 1500 }); return; }

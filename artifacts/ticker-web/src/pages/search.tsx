@@ -298,8 +298,11 @@ function MovieSectionVertical({ categoryId }: { categoryId: string }) {
       ) : (
         <>
           <div className="grid grid-cols-3 gap-2.5 px-4 pt-3 pb-2.5">
-            {movies.map(movie => <MovieCard key={movie.imdbId} movie={movie} grid srclang={lang} />)}
-            {!hasNextPage && movies.length % 3 !== 0 && Array.from({ length: 3 - (movies.length % 3) }).map((_, i) => (
+            {(isFetchingNextPage
+              ? movies.slice(0, Math.floor(movies.length / 3) * 3)
+              : movies
+            ).map(movie => <MovieCard key={movie.imdbId} movie={movie} grid srclang={lang} />)}
+            {!isFetchingNextPage && !hasNextPage && movies.length % 3 !== 0 && Array.from({ length: 3 - (movies.length % 3) }).map((_, i) => (
               <div key={`placeholder-${i}`} aria-hidden="true" />
             ))}
           </div>

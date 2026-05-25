@@ -5,8 +5,8 @@ import { BadgeIcon } from "@/components/BadgeIcon";
 import { MovieBadges, BADGE_DESC_TH, BADGE_DESC_EN } from "@/components/MovieBadges";
 import { computeCardTier, computeEffectTags, TIER_VISUAL } from "@/lib/ranks";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { ChevronLeft, Film, Star, Users, Bookmark, ChevronDown, ChevronUp, Tv, Flag, Loader2, EyeOff, Lock, User, Link2 } from "lucide-react";
-import { ChainCard, PosterCollage, type ChainItem } from "@/components/ChainsSection";
+import { ChevronLeft, Film, Star, Users, Bookmark, ChevronDown, ChevronUp, Tv, Flag, Loader2, EyeOff, Lock, User, Link2, Heart, MessageCircle, Send } from "lucide-react";
+import { ChainCard, PosterCollage, ChainCommentSheet, ChainShareModal, type ChainItem } from "@/components/ChainsSection";
 import { useState, useRef, useEffect } from "react";
 import { cn, fmtCount } from "@/lib/utils";
 import { scrollStore } from "@/lib/scroll-store";
@@ -125,28 +125,73 @@ let _lastMovieId = "";
 
 function MovieDetailChainCard({ chain }: { chain: ChainItem }) {
   const posters = chain.movies.slice(0, 4).map(m => m.posterUrl).filter(Boolean) as string[];
+  const [liked, setLiked] = useState(chain.isLiked ?? false);
+  const [likeCount, setLikeCount] = useState(chain.likeCount ?? 0);
+  const [commentCount, setCommentCount] = useState(chain.commentCount ?? 0);
+  const { user: me } = useAuth();
+  const { t } = useLang();
+  const { toast } = useToast();
+  const [commentOpen, setCommentOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+
+  const handleLike = async (e: React.MouseEvent) => {
+    e.preventDefault(); e.stopPropagation();
+    if (!me) { toast({ title: t.signInToLike, duration: 1500 }); return; }
+    const next = !liked;
+    setLiked(next);
+    setLikeCount(c => next ? c + 1 : Math.max(0, c - 1));
+    try {
+      await fetch(`/api/chains/${chain.id}/like`, { method: next ? "POST" : "DELETE", credentials: "include" });
+    } catch {
+      setLiked(!next);
+      setLikeCount(c => next ? Math.max(0, c - 1) : c + 1);
+    }
+  };
+
   return (
-    <Link href={`/chain/${chain.id}`}>
-      <div className="bg-background rounded-2xl border border-border overflow-hidden active:opacity-75 transition-opacity">
-        <div className="relative" style={{ aspectRatio: "2/3" }}>
-          <PosterCollage posters={posters} />
-          {(chain.movieCount ?? 0) > 0 && (
-            <span className="absolute bottom-1.5 right-1.5 text-[10px] font-black text-white" style={{ textShadow: "0 1px 3px rgba(0,0,0,0.8)" }}>
-              {chain.movieCount}
-            </span>
-          )}
-        </div>
-        <div className="px-2 pt-1.5 pb-2 text-center">
-          <p className="text-[11px] font-bold text-foreground line-clamp-1 leading-tight">{chain.title}</p>
-          {(chain as any).chainCount > 0 && !chain.hideChainCount && (
-            <div className="flex items-center justify-center gap-0.5 mt-0.5">
-              <Link2 className="w-2.5 h-2.5 text-muted-foreground" strokeWidth={2.5} />
-              <span className="text-[10px] text-muted-foreground tabular-nums">{fmtCount((chain as any).chainCount)}</span>
+    <>
+      <div className="bg-background rounded-2xl border border-border overflow-hidden">
+        <Link href={`/chain/${chain.id}`}>
+          <div className="active:opacity-75 transition-opacity">
+            <div className="relative" style={{ aspectRatio: "2/3" }}>
+              <PosterCollage posters={posters} />
+              {chain.isPrivate && (
+                <div className="absolute top-1.5 right-1.5 w-4 h-4 bg-black/50 rounded-full flex items-center justify-center z-10">
+                  <Lock className="w-2.5 h-2.5 text-white/70" />
+                </div>
+              )}
+              {chain.movieCount > 0 && (
+                <span className="absolute bottom-1.5 right-1.5 text-[10px] font-black text-white" style={{ textShadow: "0 1px 3px rgba(0,0,0,0.8)" }}>{chain.movieCount}</span>
+              )}
             </div>
-          )}
+            <div className="px-2 pt-1.5 pb-0.5 text-center">
+              <p className="text-[11px] font-bold text-foreground line-clamp-1 leading-tight">{chain.title}</p>
+              {!chain.hideChainCount && (
+                <div className="flex items-center justify-center gap-0.5 mt-0.5">
+                  <Link2 className="w-2.5 h-2.5 text-muted-foreground" strokeWidth={2.5} />
+                  <span className="text-[10px] text-muted-foreground tabular-nums">{fmtCount(chain.chainCount ?? 0)}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </Link>
+        <div className="flex items-center justify-around px-1 pb-1.5 pt-0.5">
+          <button onClick={handleLike} className="flex items-center gap-1 p-1 active:opacity-50" type="button">
+            <Heart className={cn("w-3.5 h-3.5 transition-colors", liked ? "fill-foreground text-foreground" : "text-muted-foreground")} />
+            {likeCount > 0 && !chain.hideLikes && <span className={cn("text-[9px] tabular-nums leading-none", liked ? "text-foreground" : "text-muted-foreground")}>{fmtCount(likeCount)}</span>}
+          </button>
+          <button onClick={e => { e.preventDefault(); e.stopPropagation(); if (!me) { toast({ title: t.signInToLike, duration: 1500 }); return; } setCommentOpen(true); }} className="flex items-center gap-1 p-1 active:opacity-50" type="button">
+            <MessageCircle className="w-3.5 h-3.5 text-muted-foreground" />
+            {commentCount > 0 && <span className="text-[9px] text-muted-foreground tabular-nums leading-none">{fmtCount(commentCount)}</span>}
+          </button>
+          <button onClick={e => { e.preventDefault(); e.stopPropagation(); if (!me) { toast({ title: t.signInToLike, duration: 1500 }); return; } setShareOpen(true); }} className="p-1 active:opacity-50" type="button">
+            <Send className="w-3.5 h-3.5 text-muted-foreground" />
+          </button>
         </div>
       </div>
-    </Link>
+      {commentOpen && <ChainCommentSheet chainId={chain.id} onClose={() => setCommentOpen(false)} commentCount={commentCount} onCommentAdded={() => setCommentCount(c => c + 1)} onCommentDeleted={() => setCommentCount(c => Math.max(0, c - 1))} />}
+      {shareOpen && <ChainShareModal chain={chain} onClose={() => setShareOpen(false)} />}
+    </>
   );
 }
 
