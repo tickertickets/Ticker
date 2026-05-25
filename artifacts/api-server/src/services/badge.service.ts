@@ -19,7 +19,7 @@ import { nanoid } from "nanoid";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-export const BADGE_MAX_LEVEL = 4; // Lv5 is supporter-only (not XP-based)
+export const BADGE_MAX_LEVEL = 5; // Lv5 is achievable via XP (100 XP at Lv4)
 export const XP_PER_LEVEL = 100;
 
 export const XP_PER_ACTION = {
@@ -276,8 +276,7 @@ export async function setActiveBadge(userId: string, active: ActiveBadge) {
 
   if (active.kind === "ticket") {
     if (badge.level === 0) throw new Error("no_lv_badge");
-    const max = badge.isSupporterApproved ? 5 : badge.level;
-    displayLevel = Math.max(1, Math.min(active.level, max));
+    displayLevel = Math.max(1, Math.min(active.level, badge.level));
     pageBadgeHidden = true;
   } else if (active.kind === "popcorn") {
     if (!badge.isPageVerified) throw new Error("not_verified");
@@ -296,16 +295,14 @@ export async function setActiveBadge(userId: string, active: ActiveBadge) {
 /**
  * Set which badge level to display publicly.
  * level = 0 → hide badge entirely.
- * level = 1–4 → show that specific earned level.
+ * level = 1–5 → show that specific earned level.
  * Clamps to user's current level automatically.
  */
 export async function setDisplayBadgeLevel(userId: string, level: number) {
   const badge = await getBadgeStatus(userId);
   if (!badge || badge.level === 0) throw new Error("no_badge");
 
-  const isSupporterApproved = badge.isSupporterApproved ?? false;
-  const maxAllowed = isSupporterApproved ? 5 : badge.level;
-  const clamped = level <= 0 ? 0 : Math.min(level, maxAllowed);
+  const clamped = level <= 0 ? 0 : Math.min(level, badge.level);
 
   const [updated] = await db
     .update(userBadgeTable)

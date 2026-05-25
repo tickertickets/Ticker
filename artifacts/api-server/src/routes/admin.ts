@@ -1,10 +1,11 @@
 import { Router, type IRouter } from "express";
 import { nanoid } from "nanoid";
 import { db } from "@workspace/db";
-import { usersTable, siteSettingsTable } from "@workspace/db/schema";
-import { inArray, eq } from "drizzle-orm";
+import { usersTable, siteSettingsTable, ticketsTable, chainsTable } from "@workspace/db/schema";
+import { inArray, eq, ilike, or } from "drizzle-orm";
 import { createNotification } from "../services/notify.service";
 import { sendPushToUser } from "../services/push.service";
+import { sendDiscordWebhook } from "../lib/discord";
 
 const router: IRouter = Router();
 
@@ -138,15 +139,144 @@ router.get("/users/search", async (req, res) => {
   const q = String(req.query["q"] ?? "").trim().toLowerCase();
   if (q.length < 2) { res.json({ users: [] }); return; }
 
-  const all = await db.select({
+  const matches = await db.select({
     id: usersTable.id,
     username: usersTable.username,
     displayName: usersTable.displayName,
     avatarUrl: usersTable.avatarUrl,
-  }).from(usersTable);
+    email: usersTable.email,
+    createdAt: usersTable.createdAt,
+  }).from(usersTable)
+    .where(or(
+      ilike(usersTable.username, `%${q}%`),
+      ilike(usersTable.displayName, `%${q}%`),
+    ))
+    .limit(20);
 
-  const matches = all.filter(u => (u.username ?? "").toLowerCase().includes(q)).slice(0, 20);
   res.json({ users: matches });
+});
+
+/**
+ * GET /api/admin/users/:id
+ * Returns detailed info for a single user. Admin only.
+ */
+router.get("/users/:id", async (req, res) => {
+  const userId = req.session?.userId;
+  if (!isAdmin(userId)) { res.status(403).json({ error: "forbidden" }); return; }
+  const { id } = req.params;
+  const rows = await db.select().from(usersTable).where(eq(usersTable.id, id)).limit(1);
+  if (!rows[0]) { res.status(404).json({ error: "not_found" }); return; }
+  res.json({ user: rows[0] });
+});
+
+/**
+ * DELETE /api/admin/tickets/:id
+ * Soft-deletes a ticket (sets deletedAt). Admin only. Sends Discord notification.
+ */
+router.delete("/tickets/:id", async (req, res) => {
+  const adminId = req.session?.userId;
+  if (!isAdmin(adminId)) { res.status(403).json({ error: "forbidden" }); return; }
+  const { id } = req.params;
+
+  const rows = await db.select({
+    id: ticketsTable.id,
+    userId: ticketsTable.userId,
+    movieTitle: ticketsTable.movieTitle,
+  }).from(ticketsTable).where(eq(ticketsTable.id, id)).limit(1);
+
+  if (!rows[0]) { res.status(404).json({ error: "not_found" }); return; }
+
+  await db.update(ticketsTable)
+    .set({ deletedAt: new Date() })
+    .where(eq(ticketsTable.id, id));
+
+  await sendDiscordWebhook("", [{
+    title: "🗑️ Admin ลบ Ticket",
+    color: 0xED4245,
+    fields: [
+      { name: "Ticket ID", value: id, inline: true },
+      { name: "หนัง", value: rows[0].movieTitle ?? "?", inline: true },
+      { name: "User ID", value: rows[0].userId, inline: false },
+      { name: "ลบโดย Admin", value: adminId!, inline: true },
+    ],
+    timestamp: new Date().toISOString(),
+    footer: { text: "Ticker Admin Moderation" },
+  }]).catch(() => {});
+
+  res.json({ ok: true });
+});
+
+/**
+ * DELETE /api/admin/chains/:id
+ * Soft-deletes a chain (sets deletedAt). Admin only. Sends Discord notification.
+ */
+router.delete("/chains/:id", async (req, res) => {
+  const adminId = req.session?.userId;
+  if (!isAdmin(adminId)) { res.status(403).json({ error: "forbidden" }); return; }
+  const { id } = req.params;
+
+  const rows = await db.select({
+    id: chainsTable.id,
+    userId: chainsTable.userId,
+    title: chainsTable.title,
+  }).from(chainsTable).where(eq(chainsTable.id, id)).limit(1);
+
+  if (!rows[0]) { res.status(404).json({ error: "not_found" }); return; }
+
+  await db.update(chainsTable)
+    .set({ deletedAt: new Date() })
+    .where(eq(chainsTable.id, id));
+
+  await sendDiscordWebhook("", [{
+    title: "🗑️ Admin ลบ Chain",
+    color: 0xED4245,
+    fields: [
+      { name: "Chain ID", value: id, inline: true },
+      { name: "ชื่อ Chain", value: rows[0].title ?? "?", inline: true },
+      { name: "User ID", value: rows[0].userId, inline: false },
+      { name: "ลบโดย Admin", value: adminId!, inline: true },
+    ],
+    timestamp: new Date().toISOString(),
+    footer: { text: "Ticker Admin Moderation" },
+  }]).catch(() => {});
+
+  res.json({ ok: true });
+});
+
+/**
+ * POST /api/admin/users/:id/delete-content
+ * Soft-deletes all tickets and chains for a user. Admin only. Sends Discord notification.
+ */
+router.post("/users/:id/delete-content", async (req, res) => {
+  const adminId = req.session?.userId;
+  if (!isAdmin(adminId)) { res.status(403).json({ error: "forbidden" }); return; }
+  const { id } = req.params;
+
+  const userRows = await db.select({ id: usersTable.id, username: usersTable.username })
+    .from(usersTable).where(eq(usersTable.id, id)).limit(1);
+  if (!userRows[0]) { res.status(404).json({ error: "user_not_found" }); return; }
+
+  const now = new Date();
+  const [deletedTickets, deletedChains] = await Promise.all([
+    db.update(ticketsTable).set({ deletedAt: now }).where(eq(ticketsTable.userId, id)),
+    db.update(chainsTable).set({ deletedAt: now }).where(eq(chainsTable.userId, id)),
+  ]);
+
+  await sendDiscordWebhook("", [{
+    title: "🚨 Admin ลบเนื้อหาทั้งหมดของ User",
+    color: 0xFEE75C,
+    fields: [
+      { name: "User ID", value: id, inline: true },
+      { name: "Username", value: `@${userRows[0].username ?? "?"}`, inline: true },
+      { name: "Tickets ที่ลบ", value: String((deletedTickets as unknown as { rowCount?: number })?.rowCount ?? 0), inline: true },
+      { name: "Chains ที่ลบ", value: String((deletedChains as unknown as { rowCount?: number })?.rowCount ?? 0), inline: true },
+      { name: "ดำเนินการโดย", value: adminId!, inline: true },
+    ],
+    timestamp: new Date().toISOString(),
+    footer: { text: "Ticker Admin Moderation" },
+  }]).catch(() => {});
+
+  res.json({ ok: true, userId: id });
 });
 
 export default router;

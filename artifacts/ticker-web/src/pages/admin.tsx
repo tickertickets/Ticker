@@ -1,30 +1,13 @@
 import { useState, useRef, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, CheckCircle, XCircle, Trash2, ExternalLink, Clock, Megaphone, Send, Popcorn, Settings, QrCode, Upload, Flag } from "lucide-react";
+import { ArrowLeft, CheckCircle, XCircle, Trash2, ExternalLink, Clock, Megaphone, Popcorn, Settings, QrCode, Upload, Flag, Users, Search } from "lucide-react";
 import { Loader2 } from "lucide-react";
 import { navBack } from "@/lib/nav-back";
 import { useAuth } from "@/hooks/use-auth";
 
-interface SupporterRequestRow {
-  request: {
-    id: string;
-    userId: string;
-    slipImagePath: string | null;
-    status: "pending" | "approved" | "rejected";
-    createdAt: string;
-    reviewedAt: string | null;
-  };
-  user: {
-    id: string;
-    username: string | null;
-    displayName: string | null;
-    avatarUrl: string | null;
-  };
-}
-
 type FilterStatus = "pending" | "approved" | "rejected" | "all";
-type Tab = "supporter" | "verify" | "broadcast" | "settings" | "reports";
+type Tab = "users" | "verify" | "broadcast" | "settings" | "reports";
 
 class AdminForbiddenError extends Error {
   constructor() { super("forbidden"); }
@@ -49,12 +32,22 @@ const REASON_TH: Record<string, string> = {
 };
 
 function ReportsPanel() {
+  const qc = useQueryClient();
   const { data, isLoading } = useQuery<{ reports: ReportRow[] }>({
     queryKey: ["admin-reports"],
     queryFn: () =>
       fetch("/api/reports/admin", { credentials: "include" })
         .then(r => { if (!r.ok) throw new Error("failed"); return r.json(); }),
     staleTime: 30_000,
+  });
+
+  const deleteTicket = useMutation({
+    mutationFn: (id: string) => fetch(`/api/admin/tickets/${id}`, { method: "DELETE", credentials: "include" }).then(r => { if (!r.ok) throw new Error("failed"); return r.json(); }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-reports"] }),
+  });
+  const deleteChain = useMutation({
+    mutationFn: (id: string) => fetch(`/api/admin/chains/${id}`, { method: "DELETE", credentials: "include" }).then(r => { if (!r.ok) throw new Error("failed"); return r.json(); }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-reports"] }),
   });
 
   const reports = data?.reports ?? [];
@@ -75,7 +68,7 @@ function ReportsPanel() {
       {!isLoading && reports.length > 0 && (
         <div className="divide-y divide-border">
           {reports.map(r => (
-            <div key={r.id} className="px-4 py-3 space-y-1">
+            <div key={r.id} className="px-4 py-3 space-y-2">
               <div className="flex items-center gap-2 min-w-0">
                 <span className={`flex-shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
                   r.reason === "harassment" ? "bg-red-500/20 text-red-400" :
@@ -95,6 +88,29 @@ function ReportsPanel() {
                 {r.reportedUserId && <span className="bg-secondary px-1.5 py-0.5 rounded">User: {r.reportedUserId.slice(0, 8)}</span>}
               </div>
               {r.details && <p className="text-[11px] text-foreground/70 line-clamp-2">{r.details}</p>}
+              {/* Action buttons */}
+              <div className="flex gap-1.5 flex-wrap">
+                {r.ticketId && (
+                  <button
+                    onClick={() => { if (confirm("ลบ Ticket นี้?")) deleteTicket.mutate(r.ticketId!); }}
+                    disabled={deleteTicket.isPending}
+                    className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold text-red-400 bg-red-500/10 hover:bg-red-500/20 active:scale-95 transition-all disabled:opacity-40"
+                  >
+                    {deleteTicket.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                    ลบ Ticket
+                  </button>
+                )}
+                {r.chainId && (
+                  <button
+                    onClick={() => { if (confirm("ลบ Chain นี้?")) deleteChain.mutate(r.chainId!); }}
+                    disabled={deleteChain.isPending}
+                    className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold text-red-400 bg-red-500/10 hover:bg-red-500/20 active:scale-95 transition-all disabled:opacity-40"
+                  >
+                    {deleteChain.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                    ลบ Chain
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -103,23 +119,93 @@ function ReportsPanel() {
   );
 }
 
-function useAdminRequests(status: FilterStatus) {
-  return useQuery<{ requests: SupporterRequestRow[] }>({
-    queryKey: ["admin-supporter-requests", status],
+function UsersPanel() {
+  const [q, setQ] = useState("");
+  const [searchQ, setSearchQ] = useState("");
+  const qc = useQueryClient();
+
+  const { data, isLoading } = useQuery<{ users: Array<{ id: string; username: string | null; displayName: string | null; avatarUrl: string | null; email: string; createdAt: string }> }>({
+    queryKey: ["admin-users-search", searchQ],
     queryFn: () =>
-      fetch(`/api/supporter/admin/requests?status=${status}`, { credentials: "include" }).then(r => {
-        if (r.status === 403) throw new AdminForbiddenError();
-        if (!r.ok) throw new Error(`server_error:${r.status}`);
-        return r.json();
-      }),
-    staleTime: 60_000,
-    retry: (failureCount, err) => {
-      if (err instanceof AdminForbiddenError) return false;
-      return failureCount < 12;
-    },
-    retryDelay: (attemptIndex) => Math.min(3000 + attemptIndex * 2000, 10_000),
-    refetchOnWindowFocus: false,
+      fetch(`/api/admin/users/search?q=${encodeURIComponent(searchQ)}`, { credentials: "include" }).then(r => r.json()),
+    enabled: searchQ.length >= 2,
+    staleTime: 30_000,
   });
+
+  const deleteContent = useMutation({
+    mutationFn: (userId: string) =>
+      fetch(`/api/admin/users/${userId}/delete-content`, { method: "POST", credentials: "include" }).then(r => { if (!r.ok) throw new Error("failed"); return r.json(); }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-users-search"] }),
+  });
+
+  const users = data?.users ?? [];
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Search bar */}
+      <div className="px-4 py-3 border-b border-border">
+        <form onSubmit={e => { e.preventDefault(); setSearchQ(q); }} className="flex gap-2">
+          <div className="flex-1 flex items-center gap-2 bg-secondary rounded-xl px-3 h-10">
+            <Search className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+            <input
+              value={q}
+              onChange={e => setQ(e.target.value)}
+              placeholder="ค้นหา username / ชื่อ..."
+              className="flex-1 bg-transparent text-[13px] text-foreground placeholder:text-muted-foreground outline-none"
+            />
+          </div>
+          <button type="submit" className="h-10 px-4 rounded-xl font-bold text-[12px] bg-foreground text-background hover:opacity-90 active:scale-95 transition-all">
+            ค้นหา
+          </button>
+        </form>
+      </div>
+
+      <div className="flex-1 overflow-y-auto">
+        {searchQ.length < 2 && (
+          <div className="flex flex-col items-center justify-center py-12 gap-2">
+            <Users className="w-8 h-8 text-muted-foreground opacity-30" />
+            <p className="text-[12px] text-muted-foreground">พิมพ์ชื่อผู้ใช้เพื่อค้นหา</p>
+          </div>
+        )}
+        {isLoading && searchQ.length >= 2 && (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+          </div>
+        )}
+        {!isLoading && searchQ.length >= 2 && users.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-12 gap-2">
+            <p className="text-[13px] text-muted-foreground">ไม่พบผู้ใช้</p>
+          </div>
+        )}
+        {!isLoading && users.length > 0 && (
+          <div className="divide-y divide-border">
+            {users.map(u => (
+              <div key={u.id} className="px-4 py-3 space-y-2">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <UserAvatar user={u} />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-[13px] truncate">{u.displayName || u.username || "?"}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">@{u.username ?? "?"} · {u.email}</p>
+                    <p className="text-[10px] text-muted-foreground/60">{fmtDate(u.createdAt)}</p>
+                  </div>
+                </div>
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={() => { if (confirm(`ลบเนื้อหาทั้งหมดของ @${u.username}? (Tickets + Chains)`)) deleteContent.mutate(u.id); }}
+                    disabled={deleteContent.isPending}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-red-400 bg-red-500/10 hover:bg-red-500/20 active:scale-95 transition-all disabled:opacity-40"
+                  >
+                    {deleteContent.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                    ลบเนื้อหาทั้งหมด
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function fmtDate(s: string) {
@@ -380,23 +466,12 @@ function SettingsPanel() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-  const [lv5PriceInput, setLv5PriceInput] = useState("");
-  const [lv5PriceMsg, setLv5PriceMsg] = useState<string | null>(null);
-  const [savingLv5Price, setSavingLv5Price] = useState(false);
 
   const { data, isLoading } = useQuery<{ key: string; value: string | null }>({
     queryKey: ["admin-settings-qr"],
     queryFn: () => fetch("/api/admin/settings/promptpay_qr_url", { credentials: "include" }).then(r => r.json()),
     staleTime: 0,
   });
-
-  const { data: lv5PriceData } = useQuery<{ key: string; value: string | null }>({
-    queryKey: ["admin-settings-badge-lv5-price"],
-    queryFn: () => fetch("/api/admin/settings/badge_lv5_price", { credentials: "include" }).then(r => r.json()),
-    staleTime: 0,
-  });
-
-  const currentLv5Price = lv5PriceData?.value ?? "";
 
   const currentPath = data?.value ?? null;
   const previewUrl = currentPath?.startsWith("/objects/") ? `/api/storage${currentPath}` : currentPath;
@@ -431,69 +506,8 @@ function SettingsPanel() {
     }
   }
 
-  async function handleSaveLv5Price() {
-    const val = lv5PriceInput.trim();
-    if (!val || isNaN(Number(val))) {
-      setLv5PriceMsg("กรุณากรอกราคาที่ถูกต้อง");
-      return;
-    }
-    setSavingLv5Price(true);
-    setLv5PriceMsg(null);
-    try {
-      const res = await fetch("/api/admin/settings", {
-        method: "PUT",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key: "badge_lv5_price", value: val }),
-      });
-      if (!res.ok) throw new Error(`save_failed:${res.status}`);
-      await qc.invalidateQueries({ queryKey: ["admin-settings-badge-lv5-price"] });
-      setLv5PriceMsg("บันทึกราคาสำเร็จ");
-      setLv5PriceInput("");
-    } catch (e: unknown) {
-      setLv5PriceMsg(`ผิดพลาด: ${e instanceof Error ? e.message : "unknown"}`);
-    } finally {
-      setSavingLv5Price(false);
-    }
-  }
-
   return (
     <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
-      {/* Badge Lv5 Price */}
-      <div className="bg-secondary rounded-2xl border border-border p-4 space-y-3">
-        <div className="flex items-center gap-2">
-          <Settings className="w-4 h-4 text-muted-foreground" />
-          <p className="text-[13px] font-bold">ราคา Badge Lv5</p>
-        </div>
-        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-background border border-border">
-          <p className="text-[12px] text-muted-foreground">ราคาปัจจุบัน:</p>
-          <p className="text-[13px] font-bold text-foreground ml-1">
-            {currentLv5Price ? `฿${Number(currentLv5Price).toLocaleString()}` : "ยังไม่ได้ตั้งค่า"}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <input
-            type="number"
-            placeholder="ราคาใหม่ (บาท)"
-            value={lv5PriceInput}
-            onChange={e => setLv5PriceInput(e.target.value)}
-            className="flex-1 h-10 rounded-xl bg-background border border-border px-3 text-sm text-foreground outline-none focus:border-foreground/50 transition-colors"
-          />
-          <button
-            onClick={handleSaveLv5Price}
-            disabled={savingLv5Price || !lv5PriceInput.trim()}
-            className="h-10 px-4 rounded-xl font-bold text-sm bg-foreground text-background hover:opacity-90 active:scale-95 transition-all flex items-center justify-center gap-1.5 disabled:opacity-40"
-          >
-            {savingLv5Price ? <Loader2 className="w-4 h-4 animate-spin" /> : "บันทึก"}
-          </button>
-        </div>
-        {lv5PriceMsg && (
-          <div className={`text-[12px] px-3 py-2 rounded-xl ${lv5PriceMsg.startsWith("ผิด") || lv5PriceMsg.startsWith("กรุณา") ? "bg-red-500/10 text-red-400" : "bg-green-500/10 text-green-400"}`}>
-            {lv5PriceMsg}
-          </div>
-        )}
-      </div>
-
       {/* QR PromptPay */}
       <div className="bg-secondary rounded-2xl border border-border p-4 space-y-3">
         <div className="flex items-center gap-2">
@@ -550,50 +564,18 @@ function SettingsPanel() {
 export default function AdminPanel() {
   const [, navigate] = useLocation();
   const { user } = useAuth();
-  const qc = useQueryClient();
-  const [tab, setTab] = useState<Tab>("supporter");
-  const [filter, setFilter] = useState<FilterStatus>("pending");
+  const [tab, setTab] = useState<Tab>("users");
   const [openImg, setOpenImg] = useState<string | null>(null);
 
-  const { data, isLoading, error } = useAdminRequests(filter);
-
-  const approveMutation = useMutation({
-    mutationFn: (id: string) => fetch(`/api/supporter/admin/requests/${id}/approve`, { method: "POST", credentials: "include" }).then(r => { if (!r.ok) throw new Error("failed"); return r.json(); }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-supporter-requests"] }),
-  });
-  const rejectMutation = useMutation({
-    mutationFn: (id: string) => fetch(`/api/supporter/admin/requests/${id}/reject`, { method: "POST", credentials: "include" }).then(r => { if (!r.ok) throw new Error("failed"); return r.json(); }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-supporter-requests"] }),
-  });
-  const deleteRowMutation = useMutation({
-    mutationFn: (id: string) => fetch(`/api/supporter/admin/requests/${id}`, { method: "DELETE", credentials: "include" }).then(r => { if (!r.ok) throw new Error("failed"); return r.json(); }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-supporter-requests"] }),
-  });
-
-  if (!user || (isLoading && !data)) {
+  if (!user) {
     return (
       <div className="min-h-full flex items-center justify-center">
         <div className="text-center space-y-3">
           <Loader2 className="w-5 h-5 animate-spin text-muted-foreground mx-auto" />
-          {isLoading && <p className="text-[12px] text-muted-foreground">กำลังเชื่อมต่อเซิร์ฟเวอร์…</p>}
         </div>
       </div>
     );
   }
-
-  if (error && !data) {
-    const isForbidden = error instanceof AdminForbiddenError;
-    return (
-      <div className="min-h-full flex items-center justify-center bg-background">
-        <div className="text-center space-y-2">
-          <p className="font-bold text-red-400">{isForbidden ? "ไม่มีสิทธิ์เข้าถึง" : "เชื่อมต่อไม่ได้"}</p>
-          <p className="text-[12px] text-muted-foreground">{isForbidden ? "หน้านี้สำหรับผู้ดูแลระบบเท่านั้น" : "เซิร์ฟเวอร์ไม่ตอบสนอง ลองใหม่อีกครั้ง"}</p>
-        </div>
-      </div>
-    );
-  }
-
-  const requests = data?.requests ?? [];
 
   return (
     <div className="h-full bg-background flex flex-col">
@@ -605,7 +587,7 @@ export default function AdminPanel() {
         <div className="flex-1 min-w-0">
           <h1 className="font-black text-base leading-tight">Admin</h1>
           <p className="text-[11px] text-muted-foreground leading-tight truncate">
-            {tab === "supporter" && "ตรวจสอบคำขอ Supporter Badge"}
+            {tab === "users" && "จัดการผู้ใช้"}
             {tab === "verify" && "ตรวจสอบคำขอ Badge ถังป็อปคอร์น"}
             {tab === "broadcast" && "ส่งประกาศถึงผู้ใช้"}
             {tab === "settings" && "ตั้งค่าระบบ"}
@@ -616,7 +598,7 @@ export default function AdminPanel() {
 
       {/* Section tabs */}
       <div className="flex gap-1 px-4 py-3 border-b border-border overflow-x-auto">
-        {([["supporter", <CheckCircle className="w-3.5 h-3.5" />, "Supporter"], ["verify", <Popcorn className="w-3.5 h-3.5" />, "Verify"], ["broadcast", <Megaphone className="w-3.5 h-3.5" />, "ประกาศ"], ["settings", <Settings className="w-3.5 h-3.5" />, "ตั้งค่า"], ["reports", <Flag className="w-3.5 h-3.5" />, "รายงาน"]] as [Tab, ReactNode, string][]).map(([id, icon, label]) => (
+        {([["users", <Users className="w-3.5 h-3.5" />, "ผู้ใช้"], ["verify", <Popcorn className="w-3.5 h-3.5" />, "Verify"], ["broadcast", <Megaphone className="w-3.5 h-3.5" />, "ประกาศ"], ["settings", <Settings className="w-3.5 h-3.5" />, "ตั้งค่า"], ["reports", <Flag className="w-3.5 h-3.5" />, "รายงาน"]] as [Tab, ReactNode, string][]).map(([id, icon, label]) => (
           <button key={id} onClick={() => setTab(id)} className={`flex-shrink-0 flex-1 h-9 rounded-xl text-[12px] font-bold transition-all flex items-center justify-center gap-1.5 ${tab === id ? "bg-foreground text-background" : "bg-secondary text-muted-foreground"}`}>
             {icon}{label}
           </button>
@@ -632,73 +614,7 @@ export default function AdminPanel() {
       ) : tab === "reports" ? (
         <ReportsPanel />
       ) : (
-        <>
-          <FilterBar filter={filter} setFilter={setFilter} />
-          <div className="flex-1 overflow-y-auto">
-            {isLoading && <div className="flex items-center justify-center py-12"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>}
-            {!isLoading && requests.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-12 gap-2">
-                <Clock className="w-8 h-8 text-muted-foreground opacity-30" />
-                <p className="text-[13px] text-muted-foreground">ไม่มีคำขอ</p>
-              </div>
-            )}
-            {!isLoading && requests.length > 0 && (
-              <div className="divide-y divide-border">
-                {requests.map(({ request, user: u }) => {
-                  const slipUrl = request.slipImagePath?.startsWith("/objects/")
-                    ? `/api/storage${request.slipImagePath}` : request.slipImagePath;
-                  return (
-                    <div key={request.id} className="px-4 py-3 space-y-2.5">
-                      {/* Row 1: avatar · name · chips · delete */}
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <UserAvatar user={u} />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            <p className="font-bold text-[13px] truncate shrink">{u.displayName || u.username}</p>
-                            <span className={`flex-shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${STATUS_PILL[request.status]}`}>{STATUS_TH[request.status]}</span>
-                          </div>
-                          {/* Single-line supplementary info */}
-                          <div className="flex items-center gap-1.5 min-w-0 mt-0.5">
-                            <span className="flex-shrink-0 text-[11px] text-muted-foreground whitespace-nowrap">{fmtDate(request.createdAt)}</span>
-                            {slipUrl && (
-                              <>
-                                <span className="text-muted-foreground/40 flex-shrink-0">·</span>
-                                <button onClick={() => setOpenImg(slipUrl)} className="flex-shrink-0 flex items-center gap-0.5 text-[11px] text-blue-400">
-                                  <ExternalLink className="w-2.5 h-2.5" />สลิป
-                                </button>
-                              </>
-                            )}
-                            {!slipUrl && <><span className="text-muted-foreground/40 flex-shrink-0">·</span><span className="text-[11px] text-muted-foreground/50 flex-shrink-0 italic">ไม่มีสลิป</span></>}
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => { if (confirm("ลบรายการนี้?")) deleteRowMutation.mutate(request.id); }}
-                          disabled={deleteRowMutation.isPending}
-                          className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground/50 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                        >
-                          {deleteRowMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                        </button>
-                      </div>
-                      {/* Row 2: action buttons */}
-                      <div className="flex gap-2">
-                        {request.status === "pending" && (
-                          <>
-                            <button onClick={() => approveMutation.mutate(request.id)} disabled={approveMutation.isPending} className="flex-1 h-8 rounded-xl font-bold text-xs text-white bg-green-600 hover:bg-green-500 active:scale-95 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50">
-                              {approveMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}อนุมัติ
-                            </button>
-                            <button onClick={() => rejectMutation.mutate(request.id)} disabled={rejectMutation.isPending} className="flex-1 h-8 rounded-xl font-bold text-xs text-white bg-red-600 hover:bg-red-500 active:scale-95 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50">
-                              {rejectMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}ปฏิเสธ
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </>
+        <UsersPanel />
       )}
 
       {openImg && (

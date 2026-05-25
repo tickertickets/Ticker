@@ -195,7 +195,7 @@ function DatePickerWheel({
 // ── Main Onboarding ─────────────────────────────────────────────────────────────
 
 export default function Onboarding() {
-  const { user, logout } = useAuth();
+  const { user, isLoading: authLoading, logout } = useAuth();
   const [, navigate] = useLocation();
   const { lang } = useLang();
   const tr = (th: string, en: string) => (lang === "en" ? en : th);
@@ -244,6 +244,13 @@ export default function Onboarding() {
     },
   });
 
+  if (!user && authLoading) return (
+    <div className="flex justify-center" style={{ height: "100dvh", background: "#fff" }}>
+      <div className="flex items-center justify-center w-full max-w-[430px]">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    </div>
+  );
   if (!user) return null;
 
   const usernameValid =

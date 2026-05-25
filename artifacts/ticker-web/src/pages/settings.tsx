@@ -278,12 +278,11 @@ const BADGE_NAMES: Record<number, { en: string; th: string; desc: string }> = {
   2: { en: "Fan", th: "แฟนหนัง", desc: "ติดตามหนังไม่พลาด" },
   3: { en: "Cinephile", th: "ซีเนฟิล", desc: "หลงรักศิลปะภาพยนตร์" },
   4: { en: "Critic", th: "นักวิจารณ์", desc: "เสียงที่เชื่อถือได้" },
-  5: { en: "For Supporter", th: "ผู้สนับสนุน", desc: "สำหรับผู้สนับสนุน Ticker" },
+  5: { en: "Legend", th: "ตำนาน", desc: "สะสม XP จนถึงระดับสูงสุด" },
 };
 
 type BadgeData = {
   level: number;
-  isSupporterApproved?: boolean;
   xpCurrent: number;
   xpFromPosts: number;
   xpFromTags: number;
@@ -315,8 +314,6 @@ function BadgeSection({
   settingDisplay,
   claimError,
   evolveError,
-  onRequestSupporter,
-  supporterStatus,
   onRequestPageVerify,
   pageVerifyStatus,
   isPageVerified,
@@ -333,8 +330,6 @@ function BadgeSection({
   settingDisplay: boolean;
   claimError: string | null;
   evolveError: string | null;
-  onRequestSupporter: () => void;
-  supporterStatus: "pending" | "approved" | "rejected" | null;
   onRequestPageVerify: () => void;
   pageVerifyStatus: "pending" | "approved" | "rejected" | null;
   isPageVerified: boolean;
@@ -343,7 +338,6 @@ function BadgeSection({
 }) {
   const { t } = useLang();
   const level = badge?.level ?? 0;
-  const isSupporterApproved = badge?.isSupporterApproved ?? false;
   const claimed = badge?.claimed ?? false;
 
   // ── Which ticket level is visibly ON ──────────────────────────────────────
@@ -359,8 +353,6 @@ function BadgeSection({
       ? serverDisplayLevel
       : badgeHiddenRaw
       ? 0
-      : isSupporterApproved
-      ? 5
       : level;
 
   // Popcorn is ON when page-verified AND pageBadgeHidden is false
@@ -415,8 +407,6 @@ function BadgeSection({
     } else if (claimed && level > 0) {
       if (serverDisplayLevel != null && serverDisplayLevel > 0) {
         setActiveDot(serverDisplayLevel - 1);
-      } else if (isSupporterApproved) {
-        setActiveDot(4);
       } else {
         setActiveDot(level - 1);
       }
@@ -491,22 +481,19 @@ function BadgeSection({
           const col = BADGE_COLORS[lvl] ?? "#6B7280";
           const grad = BADGE_GRADIENTS[lvl] ?? `linear-gradient(135deg, ${col}80, ${col})`;
           const names = t.badgeNames[lvl] ?? { name: "", desc: "" };
-          const isSupporter = lvl === 5;
-          const isLv5Supporter = isSupporter && isSupporterApproved;
           const isStart = !claimed && lvl === 1;
-          const isCurrent = claimed && lvl === level && !isSupporter;
-          const isEarned = claimed && lvl < level && !isSupporter;
-          const isLocked = !isStart && !isCurrent && !isEarned && !isLv5Supporter;
+          const isCurrent = claimed && lvl === level;
+          const isEarned = claimed && lvl < level;
+          const isLocked = !isStart && !isCurrent && !isEarned;
 
           let statusLabel = "";
           let statusColor = "";
-          if (isLv5Supporter) { statusLabel = t.myLevel; statusColor = col; }
-          else if (isStart) { statusLabel = t.levelStart; statusColor = col; }
+          if (isStart) { statusLabel = t.levelStart; statusColor = col; }
           else if (isCurrent) { statusLabel = t.myLevel; statusColor = col; }
           else if (isEarned) { statusLabel = t.levelEarned; statusColor = "#22c55e"; }
           else { statusLabel = t.levelLocked; statusColor = "#6b7280"; }
 
-          const isActive = isCurrent || isStart || isLv5Supporter;
+          const isActive = isCurrent || isStart;
 
           return (
             <div
@@ -738,61 +725,11 @@ function BadgeSection({
                     </>
                   )}
 
-                  {/* Locked — show target XP (not for supporter tier) */}
-                  {isLocked && !isSupporter && (
+                  {/* Locked — show target XP needed */}
+                  {isLocked && (
                     <p className="text-[10px] text-muted-foreground text-center opacity-50">
                       {t.xpNeededTotal((lvl - 1) * 100)}
                     </p>
-                  )}
-
-                  {/* Supporter Lv5 — current Legend */}
-                  {isLv5Supporter && (
-                    <>
-                      <div className="flex items-center justify-center gap-1.5 py-0.5">
-                        <p className="text-[11px] font-semibold text-center" style={{ color: col }}>
-                          {t.supportThanks}
-                        </p>
-                      </div>
-                      {(() => {
-                        const isOn = openTicketLevel === lvl;
-                        return (
-                          <button
-                            onClick={() => onSetDisplay(isOn ? 0 : lvl)}
-                            disabled={settingDisplay}
-                            className="flex items-center justify-center mx-auto w-9 h-9 rounded-full transition-all active:scale-95 mt-1"
-                            style={{ background: isOn ? `${col}22` : "rgba(128,128,128,0.12)" }}
-                          >
-                            {settingDisplay ? (
-                              <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                            ) : isOn ? (
-                              <Eye className="w-4 h-4" style={{ color: col }} />
-                            ) : (
-                              <EyeOff className="w-4 h-4 text-muted-foreground opacity-60" />
-                            )}
-                          </button>
-                        );
-                      })()}
-                    </>
-                  )}
-
-                  {/* Supporter Lv5 — not yet Legend */}
-                  {isSupporter && !isLv5Supporter && (
-                    <div className="flex flex-col gap-2">
-                      {supporterStatus === "pending" ? (
-                        <div className="rounded-xl p-2.5 text-center" style={{ background: `${col}12`, border: `1px solid ${col}30` }}>
-                          <p className="text-[10px] font-bold" style={{ color: col }}>{t.pendingReview}</p>
-                          <p className="text-[9px] text-muted-foreground mt-0.5">{t.pendingReviewDesc}</p>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={onRequestSupporter}
-                          className="w-full h-9 rounded-xl font-bold text-xs text-white hover:opacity-90 active:scale-95 transition-all flex items-center justify-center gap-1.5"
-                          style={{ background: grad }}
-                        >
-                          {t.supportTicker}
-                        </button>
-                      )}
-                    </div>
                   )}
 
                 </div>
@@ -1219,14 +1156,6 @@ export default function Settings() {
     enabled: !!user,
   });
 
-  const { data: supporterData } = useQuery({
-    queryKey: ["supporter-my-request"],
-    queryFn: () => fetch("/api/supporter/my-request", { credentials: "include" }).then(r => r.json()) as Promise<{ request: { status: "pending" | "approved" | "rejected" } | null }>,
-    enabled: !!user,
-    staleTime: 30_000,
-  });
-  const supporterStatus = supporterData?.request?.status ?? null;
-
   const { data: pageVerifyData } = useQuery({
     queryKey: ["page-verify-my-request"],
     queryFn: () => fetch("/api/page-verify/my-request", { credentials: "include" }).then(r => r.json()) as Promise<{ request: { status: "pending" | "approved" | "rejected" } | null }>,
@@ -1379,8 +1308,6 @@ export default function Settings() {
               settingDisplay={setActiveMutation.isPending}
               claimError={claimBadgeMutation.error?.message ?? null}
               evolveError={evolveBadgeMutation.error?.message ?? null}
-              onRequestSupporter={() => { sessionStorage.setItem("badge_tab", "4"); navigate("/supporter"); }}
-              supporterStatus={supporterStatus}
               onRequestPageVerify={() => { sessionStorage.setItem("badge_tab", "5"); navigate("/page-verify"); }}
               pageVerifyStatus={pageVerifyStatus}
               isPageVerified={isPageVerified}
@@ -1631,7 +1558,7 @@ export default function Settings() {
           </div>
 
           {/* TMDB Attribution */}
-          <div className="px-1 -mt-2 pb-0">
+          <div className="px-1 mt-1 pb-0">
             <a
               href="https://www.themoviedb.org"
               target="_blank"

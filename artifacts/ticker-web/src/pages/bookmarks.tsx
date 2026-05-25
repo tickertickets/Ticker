@@ -2,7 +2,7 @@ import { useGetMyBookmarks } from "@workspace/api-client-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { TicketCard } from "@/components/TicketCard";
 import {
-  Bookmark as BookmarkIcon, Film, ChevronLeft, Ticket as TicketIcon, Link2, BookOpen, User,
+  Bookmark as BookmarkIcon, Film, ChevronLeft, Ticket as TicketIcon, Link2, User,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Link, useLocation } from "wouter";
@@ -14,7 +14,7 @@ import type { ChainItem } from "@/components/ChainsSection";
 import { PosterCollage } from "@/components/ChainsSection";
 import { useLang, displayYear } from "@/lib/i18n";
 
-type Filter = "all" | "movies" | "people" | "tickets" | "chains" | "wiki";
+type Filter = "all" | "movies" | "people" | "tickets" | "chains";
 
 function BookmarkedMovieCard({ movieId, onRemoved }: { movieId: string; onRemoved: () => void }) {
   const [, navigate] = useLocation();
@@ -181,17 +181,6 @@ export default function Bookmarks() {
   });
   const bookmarkedChains = chainBmData?.chains ?? [];
 
-  const { data: wikiBmData, isLoading: wikiBmLoading } = useQuery<{ items: Array<{ wikiPageId: string; title: string; excerpt: string | null; thumbnailUrl: string | null; category: string; lang: string }> }>({
-    queryKey: ["/api/wiki/bookmarks"],
-    queryFn: async () => {
-      const r = await fetch("/api/wiki/bookmarks", { credentials: "include" });
-      if (!r.ok) return { items: [] };
-      return r.json();
-    },
-    enabled: !!user,
-  });
-  const bookmarkedWikiItems = wikiBmData?.items ?? [];
-
   const { data: personBmData, isLoading: personBmLoading } = useQuery<{ personIds: string[] }>({
     queryKey: ["/api/person", "bookmarked"],
     queryFn: async () => {
@@ -217,15 +206,14 @@ export default function Bookmarks() {
     );
   }
 
-  const totalSaved = allTickets.length + bookmarkedMovieIds.length + bookmarkedChains.length + bookmarkedWikiItems.length + bookmarkedPersonIds.length;
+  const totalSaved = allTickets.length + bookmarkedMovieIds.length + bookmarkedChains.length + bookmarkedPersonIds.length;
 
   const showMovies  = filter === "all" || filter === "movies";
   const showPeople  = filter === "all" || filter === "people";
   const showTickets = filter === "all" || filter === "tickets";
   const showChains  = filter === "all" || filter === "chains";
-  const showWiki    = filter === "all" || filter === "wiki";
 
-  const anyLoading = isLoading || movieBmLoading || chainBmLoading || wikiBmLoading || personBmLoading;
+  const anyLoading = isLoading || movieBmLoading || chainBmLoading || personBmLoading;
 
   const FILTERS: { id: Filter; label: string }[] = [
     { id: "all",     label: t.tabAll  },
@@ -233,7 +221,6 @@ export default function Bookmarks() {
     { id: "people",  label: lang === "th" ? "บุคคล" : "People" },
     { id: "tickets", label: "Tickets" },
     { id: "chains",  label: "Chains"  },
-    { id: "wiki",    label: "Wiki"    },
   ];
 
   const pillContainerRef = useRef<HTMLDivElement>(null);
@@ -393,46 +380,6 @@ export default function Bookmarks() {
         </div>
       )}
 
-      {/* Wiki section */}
-      {!error && filter === "wiki" && bookmarkedWikiItems.length === 0 && !anyLoading && (
-        <div className="flex flex-col items-center justify-center py-24 px-6 gap-4 text-center">
-          <div className="w-16 h-16 rounded-3xl bg-secondary flex items-center justify-center">
-            <BookOpen className="w-8 h-8 text-muted-foreground" />
-          </div>
-          <div className="space-y-1">
-            <p className="font-display font-bold text-foreground">ยังไม่มี Wiki ที่บุ๊กมาร์ก</p>
-            <p className="text-sm text-muted-foreground">ค้นหาตัวละครหรือภาพยนตร์แล้วกดบุ๊กมาร์ก</p>
-          </div>
-        </div>
-      )}
-      {bookmarkedWikiItems.length > 0 && showWiki && (
-        <div>
-          <p className="px-4 pt-4 pb-1 text-[11px] font-bold text-muted-foreground tracking-wider">Wiki</p>
-          <div className="divide-y divide-border">
-            {bookmarkedWikiItems.map(item => (
-              <Link key={item.wikiPageId} href={`/wiki/${encodeURIComponent(item.wikiPageId)}?lang=${item.lang ?? "en"}`}>
-                <div className="flex items-center gap-3 px-4 py-3 active:bg-secondary/40 transition-colors cursor-pointer">
-                  <div className="w-10 h-10 rounded-xl overflow-hidden bg-secondary flex-shrink-0 border border-border flex items-center justify-center relative">
-                    <BookOpen className="w-4 h-4 text-muted-foreground" />
-                    {item.thumbnailUrl && (
-                      <img
-                        src={item.thumbnailUrl}
-                        alt={item.title}
-                        className="absolute inset-0 w-full h-full object-cover"
-                        onError={e => { e.currentTarget.style.display = "none"; }}
-                      />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-foreground truncate">{item.title}</p>
-                    {item.excerpt && <p className="text-xs text-muted-foreground truncate">{item.excerpt}</p>}
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
 
     </div>
   );

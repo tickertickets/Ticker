@@ -1008,12 +1008,9 @@ export default function MovieDetail() {
             className="flex overflow-x-auto gap-2.5 pb-1 scrollbar-hide"
             style={{ WebkitOverflowScrolling: "touch", paddingLeft: 20, paddingRight: 20 }}
           >
-            {charsData!.results.map((char) => (
-              <Link
-                key={char.wikidataId}
-                href={`/character/${encodeURIComponent(char.wikidataId)}${navSrclang ? `?srclang=${encodeURIComponent(navSrclang)}` : ""}`}
-                onClick={() => scrollStore.delete(`character-${char.wikidataId}`)}
-              >
+            {charsData!.results.map((char) => {
+              const isClickable = !char.wikidataId.startsWith("cv:");
+              const cardInner = (
                 <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
                   <div className="relative" style={{ aspectRatio: "2/3" }}>
                     {char.imageUrl ? (
@@ -1040,8 +1037,21 @@ export default function MovieDetail() {
                     )}
                   </div>
                 </div>
-              </Link>
-            ))}
+              );
+              return isClickable ? (
+                <Link
+                  key={char.wikidataId}
+                  href={`/character/${encodeURIComponent(char.wikidataId)}${navSrclang ? `?srclang=${encodeURIComponent(navSrclang)}` : ""}`}
+                  onClick={() => scrollStore.delete(`character-${char.wikidataId}`)}
+                >
+                  {cardInner}
+                </Link>
+              ) : (
+                <div key={char.wikidataId}>
+                  {cardInner}
+                </div>
+              );
+            })}
           </div>
         </>
       )}
