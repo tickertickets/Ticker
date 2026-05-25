@@ -90,12 +90,12 @@ export const BADGE_META: Record<number, BadgeMeta> = {
   },
   5: {
     level: 5,
-    name: "Auteur",
-    nameTH: "ออเตอร์",
+    name: "Connoisseur",
+    nameTH: "เซียนหนัง",
     color: "#EC4899",
     gradient: "linear-gradient(135deg, #FDF4FF 0%, #F0ABFC 20%, #A78BFA 40%, #67E8F9 60%, #86EFAC 80%, #FDE68A 100%)",
-    description: "A true auteur. Cinema bends to your vision.",
-    descriptionTH: "ออเตอร์ตัวจริง ภาพยนตร์คือแสงสว่างในจิตใจ",
+    description: "Your taste in film is unmatched.",
+    descriptionTH: "เซียนหนังตัวจริง ไม่มีใครเทียบรสนิยม",
   },
 };
 

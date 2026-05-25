@@ -972,7 +972,7 @@ export default function MovieDetail() {
       {/* ── Related Chains — standalone ── */}
       {(() => {
         const visibleChains = (movieChainsData?.chains ?? []).filter(
-          chain => !chain.isPrivate && !(chain.user as any)?.isPrivate
+          chain => chain.mode !== "hunt" && !chain.isPrivate && !(chain.user as any)?.isPrivate
         );
         return visibleChains.length > 0 ? (
           <div className="px-5 pt-4">

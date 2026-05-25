@@ -1993,11 +1993,6 @@ export default function Settings() {
           })()}
         </div>
       )}
-      <p className="text-[11px] text-muted-foreground text-center px-6 pt-3 pb-5 leading-relaxed">
-        {lang === "th"
-          ? "ความคิดเห็น การรีวิว และการให้คะแนนทั้งหมดบน Ticker เป็นความรับผิดชอบของผู้ใช้แต่ละคน Ticker และผู้พัฒนาขอไม่รับผิดชอบต่อเนื้อหาที่ผู้ใช้สร้างขึ้นซึ่งอยู่นอกเหนือการควบคุมของเรา"
-          : "All reviews, ratings, and opinions on Ticker are solely those of the individual users. Ticker and its developers are not responsible for user-generated content beyond our reasonable control."}
-      </p>
     </div>
   );
 }

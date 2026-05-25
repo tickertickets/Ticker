@@ -42,10 +42,10 @@ const BADGE_META: Record<number, BadgeMeta> = {
   },
   5: {
     // Holographic pastel rainbow — like the main holographic ticket in the ref
-    level: 5, name: "Auteur", nameTH: "ออเตอร์",
+    level: 5, name: "Connoisseur", nameTH: "เซียนหนัง",
     mainColor: "#c0b0e8", lightColor: "#eee8ff", darkColor: "#483070",
     outlineColor: "#1c0840", glowColor: "rgba(180,160,230,0.80)",
-    description: "A true auteur. Cinema is your vision.", descriptionTH: "ออเตอร์ตัวจริง ภาพยนตร์คือแสงสว่างในจิตใจ",
+    description: "Your taste in film is unmatched.", descriptionTH: "เซียนหนังตัวจริง ไม่มีใครเทียบรสนิยม",
   },
 };
 
