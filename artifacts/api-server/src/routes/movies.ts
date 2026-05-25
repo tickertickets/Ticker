@@ -1740,29 +1740,23 @@ router.get(
       const collectionId = movieData.belongs_to_collection.id;
       const collectionName = movieData.belongs_to_collection.name;
 
-      const [collectionData, recData, simData] = await Promise.all([
-        tmdbFetch<{
-          parts?: Array<{
-            id: number;
-            title?: string;
-            poster_path?: string | null;
-            release_date?: string;
-            order?: number;
-          }>;
-        }>(`/collection/${collectionId}`, { language: lang }),
-        tmdbFetch<{
-          results?: Array<{ id: number; title?: string; poster_path?: string | null; release_date?: string }>;
-        }>(`/movie/${tmdbId}/recommendations`, { language: lang, page: "1" }).catch(() => ({ results: [] as Array<{ id: number; title?: string; poster_path?: string | null; release_date?: string }> })),
-        tmdbFetch<{
-          results?: Array<{ id: number; title?: string; poster_path?: string | null; release_date?: string }>;
-        }>(`/movie/${tmdbId}/similar`, { language: lang, page: "1" }).catch(() => ({ results: [] as Array<{ id: number; title?: string; poster_path?: string | null; release_date?: string }> })),
-      ]);
+      const collectionData = await tmdbFetch<{
+        parts?: Array<{
+          id: number;
+          title?: string;
+          poster_path?: string | null;
+          release_date?: string;
+          order?: number;
+        }>;
+      }>(`/collection/${collectionId}`, { language: lang });
 
       const rawParts = collectionData.parts ?? [];
 
-      // Collection parts — use TMDB's `order` field (story/canonical order).
+      // Collection parts only — use TMDB's `order` field (story/canonical order).
       // TMDB returns parts sorted by release date but the `order` field holds
       // the in-universe position (e.g. Star Wars Ep I = order 0, Ep IV = order 3).
+      // We do NOT add recommendations/similar as fake "spinoffs" because those are
+      // just generic suggestions and have no franchise relation to this collection.
       const movies = rawParts
         .map((p, idx) => ({
           imdbId: `tmdb:${p.id}`,
@@ -1777,27 +1771,7 @@ router.get(
         }))
         .filter(p => p.title);
 
-      // Add recommended + similar movies not already in collection as spinoffs
-      const collectionTmdbIds = new Set([...rawParts.map(p => p.id), tmdbId]);
-      const seenSpinoffIds = new Set(collectionTmdbIds);
-      const spinoffSources: Array<{ id: number; title?: string; poster_path?: string | null; release_date?: string }> = [];
-      for (const s of [...(recData.results ?? []), ...(simData.results ?? [])]) {
-        if (!seenSpinoffIds.has(s.id) && s.title) { seenSpinoffIds.add(s.id); spinoffSources.push(s); }
-      }
-      const spinoffs = spinoffSources.slice(0, 15)
-        .map((s, idx) => ({
-          imdbId: `tmdb:${s.id}`,
-          tmdbId: s.id,
-          title: s.title ?? "",
-          year: (s.release_date ?? "").slice(0, 4) || null,
-          releaseDate: s.release_date ?? null,
-          posterUrl: s.poster_path ? posterUrl(s.poster_path) : null,
-          isCurrent: false,
-          collectionIndex: rawParts.length + idx,
-          isSpinoff: true,
-        }));
-
-      res.json({ movies: [...movies, ...spinoffs], collectionName });
+      res.json({ movies, collectionName });
     } catch {
       res.json({ movies: [], collectionName: null });
     }

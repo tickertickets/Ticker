@@ -5,7 +5,7 @@ import { BadgeIcon } from "@/components/BadgeIcon";
 import { MovieBadges, BADGE_DESC_TH, BADGE_DESC_EN } from "@/components/MovieBadges";
 import { computeCardTier, computeEffectTags, TIER_VISUAL } from "@/lib/ranks";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { ChevronLeft, Film, Star, Users, Bookmark, ChevronDown, ChevronUp, Tv, Flag, Loader2, EyeOff, Lock, User, Link2, Heart, MessageCircle, Send } from "lucide-react";
+import { ChevronLeft, Film, Star, Users, Bookmark, ChevronDown, ChevronUp, Tv, Flag, Loader2, EyeOff, Lock, User, Link2, Heart, MessageCircle, Send, Search } from "lucide-react";
 import { ChainCard, PosterCollage, ChainCommentSheet, ChainShareModal, type ChainItem } from "@/components/ChainsSection";
 import { useState, useRef, useEffect } from "react";
 import { cn, fmtCount } from "@/lib/utils";
@@ -124,7 +124,8 @@ function Avatar({ user, size = "sm" }: {
 let _lastMovieId = "";
 
 function MovieDetailChainCard({ chain }: { chain: ChainItem }) {
-  const posters = chain.movies.slice(0, 4).map(m => m.posterUrl).filter(Boolean) as string[];
+  const isHunt = chain.mode === "hunt";
+  const posters = isHunt ? [] : chain.movies.slice(0, 4).map(m => m.posterUrl).filter(Boolean) as string[];
   const [liked, setLiked] = useState(chain.isLiked ?? false);
   const [likeCount, setLikeCount] = useState(chain.likeCount ?? 0);
   const [commentCount, setCommentCount] = useState(chain.commentCount ?? 0);
@@ -133,6 +134,10 @@ function MovieDetailChainCard({ chain }: { chain: ChainItem }) {
   const { toast } = useToast();
   const [commentOpen, setCommentOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+
+  useEffect(() => { setLiked(chain.isLiked ?? false); }, [chain.isLiked]);
+  useEffect(() => { setLikeCount(chain.likeCount ?? 0); }, [chain.likeCount]);
+  useEffect(() => { setCommentCount(chain.commentCount ?? 0); }, [chain.commentCount]);
 
   const handleLike = async (e: React.MouseEvent) => {
     e.preventDefault(); e.stopPropagation();
@@ -154,7 +159,13 @@ function MovieDetailChainCard({ chain }: { chain: ChainItem }) {
         <Link href={`/chain/${chain.id}`}>
           <div className="active:opacity-75 transition-opacity">
             <div className="relative" style={{ aspectRatio: "2/3" }}>
-              <PosterCollage posters={posters} />
+              {isHunt ? (
+                <div className="hunt-cover-bg absolute inset-0 flex items-center justify-center">
+                  <Search className="hunt-cover-icon w-8 h-8" />
+                </div>
+              ) : (
+                <PosterCollage posters={posters} />
+              )}
               {chain.isPrivate && (
                 <div className="absolute top-1.5 right-1.5 w-4 h-4 bg-black/50 rounded-full flex items-center justify-center z-10">
                   <Lock className="w-2.5 h-2.5 text-white/70" />
@@ -182,7 +193,7 @@ function MovieDetailChainCard({ chain }: { chain: ChainItem }) {
           </button>
           <button onClick={e => { e.preventDefault(); e.stopPropagation(); if (!me) { toast({ title: t.signInToLike, duration: 1500 }); return; } setCommentOpen(true); }} className="flex items-center gap-1 p-1 active:opacity-50" type="button">
             <MessageCircle className="w-3.5 h-3.5 text-muted-foreground" />
-            {commentCount > 0 && <span className="text-[9px] text-muted-foreground tabular-nums leading-none">{fmtCount(commentCount)}</span>}
+            {commentCount > 0 && !(chain as any).hideComments && <span className="text-[9px] text-muted-foreground tabular-nums leading-none">{fmtCount(commentCount)}</span>}
           </button>
           <button onClick={e => { e.preventDefault(); e.stopPropagation(); if (!me) { toast({ title: t.signInToLike, duration: 1500 }); return; } setShareOpen(true); }} className="p-1 active:opacity-50" type="button">
             <Send className="w-3.5 h-3.5 text-muted-foreground" />
@@ -959,19 +970,24 @@ export default function MovieDetail() {
       )}
 
       {/* ── Related Chains — standalone ── */}
-      {(movieChainsData?.chains ?? []).length > 0 && (
-        <div className="px-5 pt-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Link2 className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-            <p className="text-xs font-semibold text-muted-foreground flex-1">{"Chains"}</p>
+      {(() => {
+        const visibleChains = (movieChainsData?.chains ?? []).filter(
+          chain => !chain.isPrivate && !(chain.user as any)?.isPrivate
+        );
+        return visibleChains.length > 0 ? (
+          <div className="px-5 pt-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Link2 className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+              <p className="text-xs font-semibold text-muted-foreground flex-1">{"Chains"}</p>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {visibleChains.map(chain => (
+                <MovieDetailChainCard key={chain.id} chain={chain} />
+              ))}
+            </div>
           </div>
-          <div className="grid grid-cols-3 gap-2">
-            {(movieChainsData?.chains ?? []).map(chain => (
-              <MovieDetailChainCard key={chain.id} chain={chain} />
-            ))}
-          </div>
-        </div>
-      )}
+        ) : null;
+      })()}
 
       {/* ── Episode ratings — standalone (TV shows only, before Details) ── */}
       {isTvShow && seasonsData && seasonsData.seasons.length > 0 && (
@@ -1038,71 +1054,8 @@ export default function MovieDetail() {
         </div>
       )}
 
-      {/* ── Characters ── */}
-      {(charsData?.results ?? []).length > 0 && (
-        <>
-          <div className="mx-5 border-t border-border my-4" />
-          <div className="px-5 mb-2 flex items-center gap-2">
-            <User className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-            <p className="text-xs font-semibold text-muted-foreground flex-1">
-              {lang === "th" ? "ตัวละคร" : "Characters"}
-            </p>
-          </div>
-          <div
-            ref={charScrollRef}
-            className="flex overflow-x-auto gap-2.5 pb-1 scrollbar-hide"
-            style={{ WebkitOverflowScrolling: "touch", paddingLeft: 20, paddingRight: 20 }}
-          >
-            {charsData!.results.map((char) => {
-              const isClickable = !char.wikidataId.startsWith("cv:");
-              const cardInner = (
-                <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
-                  <div className="relative" style={{ aspectRatio: "2/3" }}>
-                    {char.imageUrl ? (
-                      <img
-                        src={char.imageUrl}
-                        alt={char.name}
-                        className="w-full h-full object-cover object-top"
-                        loading="eager"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-zinc-900">
-                        <User className="w-4 h-4 text-muted-foreground opacity-30" />
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
-                    <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">
-                      {char.name}
-                    </p>
-                    {char.alias && (
-                      <p className="text-[8px] text-muted-foreground mt-0.5 truncate">
-                        {char.alias}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              );
-              return isClickable ? (
-                <Link
-                  key={char.wikidataId}
-                  href={`/character/${encodeURIComponent(char.wikidataId)}${navSrclang ? `?srclang=${encodeURIComponent(navSrclang)}` : ""}`}
-                  onClick={() => scrollStore.delete(`character-${char.wikidataId}`)}
-                >
-                  {cardInner}
-                </Link>
-              ) : (
-                <div key={char.wikidataId}>
-                  {cardInner}
-                </div>
-              );
-            })}
-          </div>
-        </>
-      )}
-
-      {/* ── Details — single collapsible (cast, directors, collection, spinoffs) ── */}
-      {((creditsData?.cast ?? []).length > 0 || (creditsData?.directors ?? []).length > 0 || ((collectionData?.movies ?? []).length > 0)) && (
+      {/* ── Details — single collapsible (characters, cast, directors, collection, spinoffs) ── */}
+      {((charsData?.results ?? []).length > 0 || (creditsData?.cast ?? []).length > 0 || (creditsData?.directors ?? []).length > 0 || ((collectionData?.movies ?? []).length > 0)) && (
         <div className="px-5 pt-4">
           <button
             className="w-full flex items-center gap-2 text-left"
@@ -1116,6 +1069,69 @@ export default function MovieDetail() {
           </button>
           <div style={{ display: "grid", gridTemplateRows: showDetails ? "1fr" : "0fr", transition: "grid-template-rows 0.25s ease" }}>
             <div style={{ overflow: "hidden" }}>
+
+              {/* Characters — shown first inside Details */}
+              {(charsData?.results ?? []).length > 0 && (
+                <>
+                  <div className="border-t border-border mt-3 mb-2" />
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <User className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                    <p className="text-xs font-semibold text-muted-foreground flex-1">
+                      {lang === "th" ? "ตัวละคร" : "Characters"}
+                    </p>
+                  </div>
+                  <div
+                    ref={charScrollRef}
+                    className="flex overflow-x-auto gap-2.5 pb-1 scrollbar-hide"
+                    style={{ WebkitOverflowScrolling: "touch", marginLeft: -20, marginRight: -20, paddingLeft: 20, paddingRight: 20 }}
+                  >
+                    {charsData!.results.map((char) => {
+                      const isClickable = !char.wikidataId.startsWith("cv:");
+                      const cardInner = (
+                        <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
+                          <div className="relative" style={{ aspectRatio: "2/3" }}>
+                            {char.imageUrl ? (
+                              <img
+                                src={char.imageUrl}
+                                alt={char.name}
+                                className="w-full h-full object-cover object-top"
+                                loading="eager"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center bg-zinc-900">
+                                <User className="w-4 h-4 text-muted-foreground opacity-30" />
+                              </div>
+                            )}
+                          </div>
+                          <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
+                            <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">
+                              {char.name}
+                            </p>
+                            {char.alias && (
+                              <p className="text-[8px] text-muted-foreground mt-0.5 truncate">
+                                {char.alias}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                      return isClickable ? (
+                        <Link
+                          key={char.wikidataId}
+                          href={`/character/${encodeURIComponent(char.wikidataId)}${navSrclang ? `?srclang=${encodeURIComponent(navSrclang)}` : ""}`}
+                          onClick={() => scrollStore.delete(`character-${char.wikidataId}`)}
+                        >
+                          {cardInner}
+                        </Link>
+                      ) : (
+                        <div key={char.wikidataId}>
+                          {cardInner}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
 
               {/* Collection & Spinoffs */}
               {collectionData && collectionData.movies.length > 0 && (() => {
@@ -1272,21 +1288,26 @@ export default function MovieDetail() {
 
 
       {/* ── Ticker Community section ── */}
-      {(community.length >= 5 || (ratingsData && ((ratingsData.totalStars ?? 0) >= 5 || (ratingsData.totalStars ?? 0) <= -1))) && (
+      {((ratingsData?.total ?? 0) >= 1 || community.length >= 1) && (
       <>
       <div className="mx-5 my-6 border-t border-border" />
 
       <div className="px-5">
         <h3 className="font-display font-bold text-base text-foreground mb-4">{t.tickerCommunity}</h3>
 
-        {/* Ratings summary — shown when threshold is met, independent of ticket count */}
-        {ratingsData && ((ratingsData.totalStars ?? 0) >= 5 || (ratingsData.totalStars ?? 0) <= -1) && (
+        {/* Ratings summary — shown from 1 rater; avg for 1-99, total for 100+ */}
+        {ratingsData && (ratingsData.total ?? 0) >= 1 && (
           <div className="flex flex-col items-center gap-2 mb-6">
             {(() => {
-              const n = ratingsData.totalStars ?? 0;
-              const isNeg = n < 0;
-              const abs = Math.abs(n);
-              const fmt = fmtCount(abs);
+              const total = ratingsData.total ?? 0;
+              const totalStars = ratingsData.totalStars ?? 0;
+              const isNeg = totalStars < 0;
+              let fmt: string;
+              if (total >= 100) {
+                fmt = fmtCount(Math.abs(totalStars));
+              } else {
+                fmt = Math.abs(totalStars / total).toFixed(1);
+              }
               return (
                 <>
                   <Star className={`w-10 h-10 ${isNeg ? "fill-green-500 text-green-500" : "fill-amber-400 text-amber-400"}`} />

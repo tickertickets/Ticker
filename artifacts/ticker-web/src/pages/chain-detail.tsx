@@ -437,7 +437,7 @@ export default function ChainDetail() {
     <div className="flex flex-col overflow-hidden h-full">
 
       {/* ── Header ── */}
-      <div className="flex-shrink-0 bg-background border-b border-border">
+      <div className="flex-shrink-0 bg-background border-b border-border" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
         <div className="relative flex items-center justify-center px-4 py-4">
           <button
             onClick={() => navBack(navigate)}
