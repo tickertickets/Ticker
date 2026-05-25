@@ -139,6 +139,7 @@ export interface Strings {
   alreadyAccepted: string;
   errSeatTaken: string;
   errDuplicateMovie: string;
+  errDuplicateMovieInTrash?: string;
   errGeneric: string;
   errChooseSeat: string;
   errGiveRating: string;
@@ -648,16 +649,16 @@ const TH: Strings = {
   earnedBadge: "ได้รับแล้ว",
   // Supporter page
   supporterPageTitle: "สนับสนุน Ticker",
-  supporterPageSubtitle: "รับ Supporter Badge Lv5",
+  supporterPageSubtitle: "รับ Legend Badge Lv5 สีรุ้ง",
   pendingStatus: "รอการตรวจสอบ",
   approvedStatus: "อนุมัติแล้ว! คุณเป็น Supporter",
   rejectedStatus: "ไม่ผ่านการตรวจสอบ",
   pendingStatusDesc: "ส่งสลิปแล้ว กำลังรอผู้ดูแลระบบตรวจสอบ",
-  approvedStatusDesc: "Supporter Badge Lv5 ถูก Unlock แล้ว ไปที่ Settings > Badge ได้เลย",
+  approvedStatusDesc: "Legend Badge Lv5 (Rainbow) ถูก Unlock แล้ว ไปที่ Settings > Badge ได้เลย",
   rejectedStatusDesc: "กรุณาติดต่อผู้ดูแลระบบเพื่อสอบถามเพิ่มเติม",
-  supporterBadgeDesc: "Badge พิเศษสำหรับผู้สนับสนุน Ticker",
+  supporterBadgeDesc: "Legend Badge Lv5 สีรุ้งพิเศษสำหรับผู้สนับสนุน Ticker",
   supporterBenefits: [
-    "Supporter Badge Lv5 สีรุ้ง แสดงในโปรไฟล์",
+    "Legend Badge Lv5 สีรุ้ง แสดงในโปรไฟล์",
     "ไม่กระทบ Badge Lv1-4 ที่มีอยู่",
     "สนับสนุนการพัฒนา Ticker ต่อไป",
   ],
@@ -705,7 +706,7 @@ const TH: Strings = {
     2: { name: "แฟนหนัง", desc: "ติดตามหนังไม่พลาด" },
     3: { name: "ซีเนฟิล", desc: "หลงรักศิลปะภาพยนตร์" },
     4: { name: "นักวิจารณ์", desc: "เสียงที่เชื่อถือได้" },
-    5: { name: "ผู้สนับสนุน", desc: "สำหรับผู้สนับสนุน Ticker" },
+    5: { name: "ตำนาน", desc: "ตำนานแห่งวงการหนัง" },
   },
   // Chat
   chatTitle: "ข้อความ",
@@ -756,6 +757,7 @@ const TH: Strings = {
   alreadyAccepted: "ยอมรับแล้ว",
   errSeatTaken: "เลขที่นั่งนี้ถูกเลือกไปแล้ว กรุณาเลือกใหม่",
   errDuplicateMovie: "คุณโพสต์หนังเรื่องนี้ไปแล้ว",
+  errDuplicateMovieInTrash: "หนังเรื่องนี้อยู่ในถังขยะ ลบถาวรก่อนแล้วโพสต์ใหม่ได้เลย",
   errGeneric: "เกิดข้อผิดพลาด กรุณาลองใหม่",
   errChooseSeat: "กรุณาเลือกที่นั่ง",
   errGiveRating: "กรุณาให้คะแนน",
@@ -1236,16 +1238,16 @@ const EN: Strings = {
   earnedBadge: "Earned",
   // Supporter page
   supporterPageTitle: "Support Ticker",
-  supporterPageSubtitle: "Get Supporter Badge Lv5",
+  supporterPageSubtitle: "Get Rainbow Legend Badge Lv5",
   pendingStatus: "Pending Review",
   approvedStatus: "Approved! You're a Supporter",
   rejectedStatus: "Not Approved",
   pendingStatusDesc: "Slip submitted — waiting for admin review",
-  approvedStatusDesc: "Supporter Badge Lv5 is unlocked. Go to Settings > Badge",
+  approvedStatusDesc: "Legend Badge Lv5 (Rainbow) is unlocked. Go to Settings > Badge",
   rejectedStatusDesc: "Please contact an admin for more information",
-  supporterBadgeDesc: "Special badge for Ticker supporters",
+  supporterBadgeDesc: "Special rainbow Legend Badge Lv5 for Ticker supporters",
   supporterBenefits: [
-    "Rainbow Supporter Badge Lv5 shown on your profile",
+    "Rainbow Legend Badge Lv5 shown on your profile",
     "Doesn't affect existing Badge Lv1–4",
     "Supports Ticker's ongoing development",
   ],
@@ -1293,7 +1295,7 @@ const EN: Strings = {
     2: { name: "Fan",        desc: "Never misses a movie" },
     3: { name: "Cinephile",  desc: "In love with the art of cinema" },
     4: { name: "Critic",     desc: "A trusted voice" },
-    5: { name: "Supporter",  desc: "Supports Ticker" },
+    5: { name: "Legend",     desc: "A true legend of cinema" },
   },
   // Chat
   chatTitle: "Messages",
@@ -1344,6 +1346,7 @@ const EN: Strings = {
   alreadyAccepted: "Accepted",
   errSeatTaken: "This seat is already taken, please choose another",
   errDuplicateMovie: "You've already posted this movie",
+  errDuplicateMovieInTrash: "This movie is in trash — purge it first, then you can repost",
   errGeneric: "Something went wrong, please try again",
   errChooseSeat: "Please choose a seat",
   errGiveRating: "Please give a rating",

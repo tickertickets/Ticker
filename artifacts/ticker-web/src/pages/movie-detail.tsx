@@ -138,7 +138,7 @@ function MovieDetailChainCard({ chain }: { chain: ChainItem }) {
         </div>
         <div className="px-2 pt-1.5 pb-2 text-center">
           <p className="text-[11px] font-bold text-foreground line-clamp-1 leading-tight">{chain.title}</p>
-          {(chain as any).chainCount > 0 && (
+          {(chain as any).chainCount > 0 && !chain.hideChainCount && (
             <div className="flex items-center justify-center gap-0.5 mt-0.5">
               <Link2 className="w-2.5 h-2.5 text-muted-foreground" strokeWidth={2.5} />
               <span className="text-[10px] text-muted-foreground tabular-nums">{fmtCount((chain as any).chainCount)}</span>

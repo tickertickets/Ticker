@@ -5,7 +5,7 @@ import { scrollOnceStore } from "@/lib/scroll-store";
 import { useRoute, Link, useLocation } from "wouter";
 import { navBack } from "@/lib/nav-back";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, Link2, Play, Film, Check, X, Plus, Search, Loader2, Users, Pencil, MessageCircle, Send, Trash2, CornerDownRight, Flag } from "lucide-react";
+import { ChevronLeft, Link2, Play, Film, Check, X, Plus, Search, Loader2, Users, Pencil, MessageCircle, MessagesSquare, Send, Trash2, CornerDownRight, Flag } from "lucide-react";
 import { ReportSheet } from "@/components/ReportSheet";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
@@ -438,7 +438,10 @@ export default function ChainDetail() {
 
       {/* ── Header ── */}
       <div className="sticky top-0 z-30 bg-background border-b border-border">
-        <div className="relative flex items-center justify-center h-14 px-4">
+        <div
+          className="relative flex items-center justify-center px-4"
+          style={{ paddingTop: "max(16px, env(safe-area-inset-top, 0px))", paddingBottom: "12px" }}
+        >
           <button
             onClick={() => navBack(navigate)}
             className="absolute left-4 w-9 h-9 rounded-full bg-secondary flex items-center justify-center"
@@ -933,7 +936,7 @@ export default function ChainDetail() {
           return (
             <div className="mt-2 pt-5 border-t border-border">
               <div className="flex items-center gap-2 mb-4">
-                <MessageCircle className="w-4 h-4 text-muted-foreground" />
+                <MessagesSquare className="w-4 h-4 text-muted-foreground" />
                 <h3 className="font-display font-bold text-sm text-foreground">
                   ความคิดเห็น{chainComments.length > 0 ? ` (${chainComments.length})` : ""}
                 </h3>
@@ -966,36 +969,29 @@ export default function ChainDetail() {
                       <button onClick={() => setChainReplyingTo(null)} className="ml-auto text-muted-foreground hover:text-foreground text-xs">✕</button>
                     </div>
                   )}
-                  <div className="flex gap-2 items-end">
-                    <div className="w-8 h-8 rounded-lg overflow-hidden bg-secondary border border-border flex-shrink-0 flex items-center justify-center">
+                  <div className="flex items-center gap-2 py-1">
+                    <div className="w-8 h-8 rounded-lg bg-secondary border border-border flex-shrink-0 overflow-hidden flex items-center justify-center">
                       {user.avatarUrl
                         ? <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" />
                         : <span className="text-xs font-bold text-foreground">{(user.displayName ?? user.username ?? "?")?.[0]?.toUpperCase()}</span>}
                     </div>
-                    <div className="flex-1 flex items-end gap-2 bg-secondary border border-border rounded-2xl px-3 py-2">
-                      <textarea
-                        className="flex-1 text-sm bg-transparent focus:outline-none placeholder:text-muted-foreground resize-none max-h-20 min-h-[20px] leading-snug"
-                        placeholder={chainReplyingTo ? `ตอบ @${chainReplyingTo.username}...` : "เขียนความคิดเห็น..."}
-                        value={chainCommentText}
-                        rows={1}
-                        maxLength={500}
-                        onChange={e => {
-                          setChainCommentText(e.target.value);
-                          e.currentTarget.style.height = "auto";
-                          e.currentTarget.style.height = `${Math.min(e.currentTarget.scrollHeight, 80)}px`;
-                        }}
-                        onKeyDown={e => {
-                          if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submitChainComment(); }
-                        }}
-                      />
-                      <button
-                        onClick={submitChainComment}
-                        disabled={!chainCommentText.trim() || chainCommentSubmitting}
-                        className="w-8 h-8 rounded-full bg-foreground text-background flex items-center justify-center flex-shrink-0 disabled:opacity-40 active:opacity-70 transition-opacity"
-                      >
-                        {chainCommentSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                      </button>
-                    </div>
+                    <input
+                      className="flex-1 h-8 bg-secondary rounded-2xl px-3.5 text-sm text-foreground placeholder:text-muted-foreground outline-none"
+                      placeholder={chainReplyingTo ? `ตอบ @${chainReplyingTo.username}…` : "เขียนความคิดเห็น..."}
+                      value={chainCommentText}
+                      maxLength={500}
+                      onChange={e => setChainCommentText(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submitChainComment(); }
+                      }}
+                    />
+                    <button
+                      onClick={submitChainComment}
+                      disabled={!chainCommentText.trim() || chainCommentSubmitting}
+                      className="flex-shrink-0 w-9 h-9 bg-foreground text-background rounded-full flex items-center justify-center disabled:opacity-30 transition-opacity"
+                    >
+                      {chainCommentSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                    </button>
                   </div>
                 </div>
               ) : (

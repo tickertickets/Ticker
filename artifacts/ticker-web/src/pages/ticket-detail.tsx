@@ -376,16 +376,14 @@ export default function TicketDetail() {
   return (
     <div className="flex flex-col overflow-hidden h-full">
       {/* Header */}
-      <div className="z-30 bg-background border-b border-border px-4 py-4 flex items-center gap-3 flex-shrink-0">
+      <div className="z-30 bg-background border-b border-border px-4 py-4 flex items-center gap-3 flex-shrink-0 relative">
         <button
-          className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center"
+          className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center flex-shrink-0"
           onClick={() => navBack(navigate, `/profile/${ticket.user?.username}`)}
         >
           <ChevronLeft className="w-5 h-5 text-foreground" />
         </button>
-        <div className="flex-1 flex justify-center">
-          <h1 className="font-display font-bold text-xl tracking-tight text-foreground">Ticker</h1>
-        </div>
+        <h1 className="absolute left-0 right-0 text-center font-display font-bold text-xl tracking-tight text-foreground pointer-events-none">Ticker</h1>
         <div className="flex items-center gap-1">
           <button
             onClick={() => {

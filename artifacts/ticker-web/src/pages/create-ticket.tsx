@@ -659,12 +659,12 @@ export default function CreateTicket() {
     setSubmitError("");
     // Fresh-fetch trash list at submit time to catch stale cache
     try {
-      const trashRes = await fetch("/api/tickets/trash/list", { credentials: "include" });
+      const trashRes = await fetch("/api/tickets/trash/list", { credentials: "include", cache: "no-store" });
       if (trashRes.ok) {
         const trashJson = await trashRes.json() as { tickets: Array<{ imdbId: string }> };
         const isTVShow = selectedMovieId.startsWith("tmdb_tv:");
         if (!isTVShow && trashJson.tickets?.some(t => t.imdbId === selectedMovieId)) {
-          setSubmitError(t.errDuplicateMovie);
+          setSubmitError(t.errDuplicateMovieInTrash ?? t.errDuplicateMovie);
           return;
         }
       }
