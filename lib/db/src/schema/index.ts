@@ -16,3 +16,4 @@ export * from "./userSessions";
 export * from "./drafts";
 export * from "./siteSettings";
 export * from "./wiki";
+export * from "./movieFollows";

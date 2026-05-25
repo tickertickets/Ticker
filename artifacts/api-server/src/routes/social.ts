@@ -5,13 +5,18 @@ import {
   usersTable, likesTable, commentsTable, bookmarksTable, followsTable,
   reportsTable, ticketsTable, notificationsTable, ticketReactionsTable,
 } from "@workspace/db/schema";
-import { eq, and, desc, count } from "drizzle-orm";
+import { eq, and, desc, count, inArray } from "drizzle-orm";
 import { sanitize } from "../lib/sanitize";
 import { nanoid } from "nanoid";
 import { buildTicket } from "./tickets";
 import { emitTicketLiked, emitCommentNew, emitCommentDeleted } from "../lib/socket";
 
 const router: IRouter = Router();
+
+function extractMentions(text: string): string[] {
+  const matches = text.match(/@([a-zA-Z0-9_]{1,30})/g) ?? [];
+  return [...new Set(matches.map(m => m.slice(1).toLowerCase()))];
+}
 
 const REACTION_TYPES_VALID = ["heart", "fire", "lightning", "sparkle", "popcorn"] as const;
 type ReactType = (typeof REACTION_TYPES_VALID)[number];
@@ -262,6 +267,22 @@ router.post("/:ticketId/comments", async (req, res) => {
       }
     } catch { /* best-effort */ }
   }
+
+  // @mention notifications (best-effort)
+  try {
+    const mentioned = extractMentions(clean);
+    if (mentioned.length > 0) {
+      const mentionedUsers = await db.select({ id: usersTable.id })
+        .from(usersTable)
+        .where(inArray(usersTable.username, mentioned));
+      const alreadyNotified = new Set([ticket?.userId, currentUserId].filter(Boolean) as string[]);
+      for (const u of mentionedUsers) {
+        if (!alreadyNotified.has(u.id)) {
+          await createNotification({ id: nanoid(), userId: u.id, fromUserId: currentUserId, type: "mention", ticketId, message: "mentioned you", isRead: false });
+        }
+      }
+    }
+  } catch { /* best-effort */ }
 
   const [comment] = await db.select().from(commentsTable).where(eq(commentsTable.id, id)).limit(1);
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, currentUserId)).limit(1);

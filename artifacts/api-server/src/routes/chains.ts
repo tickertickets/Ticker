@@ -1550,6 +1550,11 @@ router.delete("/:chainId/comments/:commentId", async (req, res) => {
 });
 
 // ── POST /chains/:chainId/comments ────────────────────────────────────────────
+function extractMentions(text: string): string[] {
+  const matches = text.match(/@([a-zA-Z0-9_]{1,30})/g) ?? [];
+  return [...new Set(matches.map(m => m.slice(1).toLowerCase()))];
+}
+
 router.post("/:chainId/comments", async (req, res) => {
   const currentUserId = req.session?.userId;
   if (!currentUserId) { res.status(401).json({ error: "unauthorized" }); return; }
@@ -1598,6 +1603,19 @@ router.post("/:chainId/comments", async (req, res) => {
           chainId,
           message: "replied to your comment",
         });
+      }
+    }
+    // @mention notifications
+    const mentioned = extractMentions(sanitized);
+    if (mentioned.length > 0) {
+      const mentionedUsers = await db.select({ id: usersTable.id })
+        .from(usersTable)
+        .where(inArray(usersTable.username, mentioned));
+      const alreadyNotified = new Set([chain?.userId, currentUserId].filter(Boolean) as string[]);
+      for (const u of mentionedUsers) {
+        if (!alreadyNotified.has(u.id)) {
+          await createNotification({ id: nanoid(), userId: u.id, fromUserId: currentUserId, type: "mention", chainId, message: "mentioned you", isRead: false });
+        }
       }
     }
   } catch { /* best-effort */ }

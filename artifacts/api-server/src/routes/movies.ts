@@ -25,6 +25,7 @@ import {
   chainBookmarksTable,
   chainRunsTable,
   chainCommentsTable,
+  movieFollowsTable,
 } from "@workspace/db/schema";
 import { eq, desc, count, max, and, inArray, isNull } from "drizzle-orm";
 import { asyncHandler } from "../middlewares/error-handler";
@@ -3184,5 +3185,41 @@ router.get(
     res.json({ cast, directors, isVoiceCast });
   }),
 );
+
+// ── GET /movies/:movieId/follow — check follow status ─────────────────────────
+router.get("/:movieId/follow", async (req, res) => {
+  const currentUserId = req.session?.userId;
+  if (!currentUserId) { res.json({ following: false }); return; }
+  const rawId = String(req.params["movieId"]);
+  const tmdbId = rawId.startsWith("tmdb:") ? parseInt(rawId.slice(5), 10) : parseInt(rawId, 10);
+  if (isNaN(tmdbId)) { res.json({ following: false }); return; }
+  const [row] = await db.select().from(movieFollowsTable)
+    .where(and(eq(movieFollowsTable.userId, currentUserId), eq(movieFollowsTable.tmdbId, tmdbId)))
+    .limit(1);
+  res.json({ following: !!row });
+});
+
+// ── POST /movies/:movieId/follow — follow a movie ─────────────────────────────
+router.post("/:movieId/follow", async (req, res) => {
+  const currentUserId = req.session?.userId;
+  if (!currentUserId) { res.status(401).json({ error: "unauthorized" }); return; }
+  const rawId = String(req.params["movieId"]);
+  const tmdbId = rawId.startsWith("tmdb:") ? parseInt(rawId.slice(5), 10) : parseInt(rawId, 10);
+  if (isNaN(tmdbId)) { res.status(400).json({ error: "bad_request" }); return; }
+  await db.insert(movieFollowsTable).values({ userId: currentUserId, tmdbId }).onConflictDoNothing();
+  res.json({ following: true });
+});
+
+// ── DELETE /movies/:movieId/follow — unfollow a movie ────────────────────────
+router.delete("/:movieId/follow", async (req, res) => {
+  const currentUserId = req.session?.userId;
+  if (!currentUserId) { res.status(401).json({ error: "unauthorized" }); return; }
+  const rawId = String(req.params["movieId"]);
+  const tmdbId = rawId.startsWith("tmdb:") ? parseInt(rawId.slice(5), 10) : parseInt(rawId, 10);
+  if (isNaN(tmdbId)) { res.status(400).json({ error: "bad_request" }); return; }
+  await db.delete(movieFollowsTable)
+    .where(and(eq(movieFollowsTable.userId, currentUserId), eq(movieFollowsTable.tmdbId, tmdbId)));
+  res.json({ following: false });
+});
 
 export default router;

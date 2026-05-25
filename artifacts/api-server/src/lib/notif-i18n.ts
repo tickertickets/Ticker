@@ -60,8 +60,10 @@ export function pushTitleFor(opts: { lang: Lang; type: string; senderName: strin
     case "chain_comment_reply": return th ? `${name} ตอบกลับคอมเมนต์ Chain ของคุณ` : `${name} replied to your Chain comment`;
     case "wiki_comment":        return th ? `${name} คอมเมนต์ใน Wiki` : `${name} commented on Wiki`;
     case "wiki_comment_reply":  return th ? `${name} ตอบกลับคอมเมนต์ Wiki ของคุณ` : `${name} replied to your Wiki comment`;
-    case "admin_message":     return "Ticker";
-    default:                  return "Ticker";
+    case "mention":             return th ? `${name} แท็กคุณในคอมเมนต์` : `${name} mentioned you`;
+    case "movie_sequel":        return "Ticker";
+    case "admin_message":       return "Ticker";
+    default:                    return "Ticker";
   }
 }
 
@@ -91,6 +93,8 @@ export function pushBodyFor(opts: { lang: Lang; type: string }): string | null {
     case "chain_comment_reply": return th ? "ตอบกลับคอมเมนต์ Chain ของคุณ" : "replied to your Chain comment";
     case "wiki_comment":        return th ? "คอมเมนต์ใน Wiki" : "commented on Wiki";
     case "wiki_comment_reply":  return th ? "ตอบกลับคอมเมนต์ Wiki ของคุณ" : "replied to your Wiki comment";
+    case "mention":             return th ? "แท็กคุณในคอมเมนต์" : "mentioned you in a comment";
+    case "movie_sequel":        return th ? "มีภาคใหม่ที่คุณอาจสนใจ" : "A new title you may be interested in";
     default: return null; // caller falls back to DB prose (admin_message etc.)
   }
 }

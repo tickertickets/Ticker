@@ -27,6 +27,8 @@ export const notificationTypeEnum = pgEnum("notification_type", [
   "chain_comment_reply",
   "wiki_comment",
   "wiki_comment_reply",
+  "mention",
+  "movie_sequel",
 ]);
 
 export const notificationsTable = pgTable("notifications", {

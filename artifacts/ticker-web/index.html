@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" translate="no">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, viewport-fit=cover" />
@@ -36,8 +36,20 @@
     <meta name="twitter:title" content="Ticker — Movie Social Platform" />
     <meta name="twitter:description" content="Log the films you love as Tickets, build Chains with your crew, and discover what's worth watching. Join Ticker — your movie community." />
 
-    <!-- Prevent browser auto-translation -->
-    <meta name="google" content="notranslate" />
+    <!-- Prevent browser auto-translation in PWA/standalone mode only -->
+    <script>
+      (function () {
+        if (
+          window.matchMedia("(display-mode: standalone)").matches ||
+          window.navigator.standalone === true
+        ) {
+          document.documentElement.setAttribute("translate", "no");
+          var m = document.createElement("meta");
+          m.name = "google"; m.content = "notranslate";
+          document.head.appendChild(m);
+        }
+      })();
+    </script>
 
     <!-- Google Search Console verification -->
     <meta name="google-site-verification" content="eRrNlnK3-oXxOmqJFMtLSgmQF0aSD__hFBmlk1XydhA" />

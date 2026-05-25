@@ -5,7 +5,7 @@ import { BadgeIcon } from "@/components/BadgeIcon";
 import { MovieBadges, BADGE_DESC_TH, BADGE_DESC_EN } from "@/components/MovieBadges";
 import { computeCardTier, computeEffectTags, TIER_VISUAL } from "@/lib/ranks";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { ChevronLeft, Film, Star, Users, Bookmark, ChevronDown, ChevronUp, Tv, Flag, Loader2, EyeOff, Lock, User, Link2, Heart, MessageCircle, Send, Search } from "lucide-react";
+import { ChevronLeft, Film, Star, Users, Bookmark, ChevronDown, ChevronUp, Tv, Flag, Loader2, EyeOff, Lock, User, Link2, Heart, MessageCircle, Send, Search, Bell, BellOff } from "lucide-react";
 import { ChainCard, PosterCollage, ChainCommentSheet, ChainShareModal, type ChainItem } from "@/components/ChainsSection";
 import { useState, useRef, useEffect } from "react";
 import { cn, fmtCount } from "@/lib/utils";
@@ -475,6 +475,30 @@ export default function MovieDetail() {
     staleTime: 1000 * 60 * 30,
   });
 
+  // ── Movie follow state ────────────────────────────────────────────────────
+  const { data: followData } = useQuery<{ following: boolean }>({
+    queryKey: ["/api/movies", movieId, "follow"],
+    queryFn: async () => {
+      const res = await fetch(`/api/movies/${encodeURIComponent(movieId)}/follow`);
+      if (!res.ok) return { following: false };
+      return res.json();
+    },
+    enabled: !!movieId && !!user,
+  });
+  const isFollowingMovie = followData?.following ?? false;
+  const followMutation = useMutation({
+    mutationFn: async (follow: boolean) => {
+      const res = await fetch(`/api/movies/${encodeURIComponent(movieId)}/follow`, {
+        method: follow ? "POST" : "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    onSuccess: (data) => {
+      qc.setQueryData(["/api/movies", movieId, "follow"], data);
+    },
+  });
+
   // Until the user toggles, show the original title/synopsis exactly as before.
   // After toggling, follow detailLang; while the new language is loading, keep
   // the previous title visible so the heading never goes blank.
@@ -815,48 +839,71 @@ export default function MovieDetail() {
         <div className="absolute bottom-0 inset-x-0 px-5 pb-5 space-y-1.5">
           <div className="flex items-start gap-2">
             <h1 className="font-display font-bold text-2xl text-foreground leading-tight flex-1">{displayTitle}</h1>
-            {/* In-page EN/TH toggle — same pill style as pre-login home.
-                Affects ONLY title + synopsis on this page. */}
-            <button
-              type="button"
-              onClick={() => {
-                setDetailLang(detailLang === "en" ? "th" : "en");
-                setUserToggled(true);
-              }}
-              aria-label="Toggle language"
-              className="relative inline-flex items-center select-none shrink-0 mt-1"
-              style={{
-                background: "#e5e5ea",
-                border: "1px solid #d1d1d6",
-                borderRadius: 999,
-                padding: 2,
-                height: 28,
-                width: 64,
-              }}
-            >
-              <span
-                aria-hidden
-                className="absolute top-0.5 bottom-0.5 rounded-full transition-transform duration-200 ease-out"
-                style={{
-                  background: "#111",
-                  width: 30,
-                  left: 2,
-                  transform: detailLang === "en" ? "translateX(0)" : "translateX(30px)",
+            {/* In-page EN/TH toggle + Follow button — stacked column */}
+            <div className="flex flex-col items-end gap-1.5 shrink-0 mt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setDetailLang(detailLang === "en" ? "th" : "en");
+                  setUserToggled(true);
                 }}
-              />
-              <span
-                className="relative z-10 flex-1 text-center text-[11px] font-bold tracking-wide"
-                style={{ color: detailLang === "en" ? "#fff" : "#888" }}
+                aria-label="Toggle language"
+                className="relative inline-flex items-center select-none"
+                style={{
+                  background: "#e5e5ea",
+                  border: "1px solid #d1d1d6",
+                  borderRadius: 999,
+                  padding: 2,
+                  height: 28,
+                  width: 64,
+                }}
               >
-                EN
-              </span>
-              <span
-                className="relative z-10 flex-1 text-center text-[11px] font-bold tracking-wide"
-                style={{ color: detailLang === "th" ? "#fff" : "#888" }}
-              >
-                TH
-              </span>
-            </button>
+                <span
+                  aria-hidden
+                  className="absolute top-0.5 bottom-0.5 rounded-full transition-transform duration-200 ease-out"
+                  style={{
+                    background: "#111",
+                    width: 30,
+                    left: 2,
+                    transform: detailLang === "en" ? "translateX(0)" : "translateX(30px)",
+                  }}
+                />
+                <span
+                  className="relative z-10 flex-1 text-center text-[11px] font-bold tracking-wide"
+                  style={{ color: detailLang === "en" ? "#fff" : "#888" }}
+                >
+                  EN
+                </span>
+                <span
+                  className="relative z-10 flex-1 text-center text-[11px] font-bold tracking-wide"
+                  style={{ color: detailLang === "th" ? "#fff" : "#888" }}
+                >
+                  TH
+                </span>
+              </button>
+              {user && (
+                <button
+                  type="button"
+                  onClick={() => followMutation.mutate(!isFollowingMovie)}
+                  disabled={followMutation.isPending}
+                  aria-label={isFollowingMovie ? "Unfollow movie" : "Follow movie"}
+                  className="flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-all active:scale-95"
+                  style={{
+                    background: isFollowingMovie ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.08)",
+                    border: "1px solid",
+                    borderColor: isFollowingMovie ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.25)",
+                    color: isFollowingMovie ? "#fff" : "rgba(255,255,255,0.7)",
+                    width: 64,
+                    justifyContent: "center",
+                  }}
+                >
+                  {isFollowingMovie
+                    ? <><BellOff className="w-3 h-3 shrink-0" /><span>{lang === "th" ? "แจ้งเตือน" : "Notif"}</span></>
+                    : <><Bell className="w-3 h-3 shrink-0" /><span>{lang === "th" ? "ติดตาม" : "Follow"}</span></>
+                  }
+                </button>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             {movie.year && <span className="text-sm text-muted-foreground">{displayYear(movie.year, lang)}</span>}
