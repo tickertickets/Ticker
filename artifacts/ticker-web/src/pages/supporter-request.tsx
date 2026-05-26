@@ -174,7 +174,7 @@ export default function SupporterRequest() {
             <div className="rounded-2xl bg-secondary border border-border p-4 space-y-3">
               <div className="flex items-center gap-2">
                 <Ticket className="w-5 h-5 text-pink-400" strokeWidth={2} />
-                <p className="font-bold text-sm">Legend Badge Lv5 (Rainbow)</p>
+                <p className="font-bold text-sm">Connoisseur Badge Lv5 (Rainbow)</p>
               </div>
               <div
                 className="rounded-xl p-3 text-center"

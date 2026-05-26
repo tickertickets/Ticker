@@ -278,7 +278,7 @@ const BADGE_NAMES: Record<number, { en: string; th: string; desc: string }> = {
   2: { en: "Fan", th: "แฟนหนัง", desc: "ติดตามหนังไม่พลาด" },
   3: { en: "Cinephile", th: "ซีเนฟิล", desc: "หลงรักศิลปะภาพยนตร์" },
   4: { en: "Critic", th: "นักวิจารณ์", desc: "เสียงที่เชื่อถือได้" },
-  5: { en: "Legend", th: "ตำนาน", desc: "สะสม XP จนถึงระดับสูงสุด" },
+  5: { en: "Connoisseur", th: "เซียนหนัง", desc: "เซียนหนังตัวจริง ไม่มีใครเทียบรสนิยม" },
 };
 
 type BadgeData = {
