@@ -1,6 +1,9 @@
 import { Router } from "express";
 import { asyncHandler } from "../middlewares/error-handler";
 import { tmdbFetch, posterUrl } from "../lib/tmdb-client";
+import { db } from "@workspace/db";
+import { characterCacheTable } from "@workspace/db/schema";
+import { eq } from "drizzle-orm";
 import {
   getAniListMediaWithChars,
   getAniListCharacterById,
@@ -727,6 +730,24 @@ router.get(
       return res.json({ results: cached.results });
     }
 
+    // Check persistent DB cache (survives server restarts)
+    try {
+      const dbRow = await db
+        .select()
+        .from(characterCacheTable)
+        .where(eq(characterCacheTable.tmdbId, tmdbId))
+        .limit(1);
+      if (dbRow.length > 0) {
+        const row = dbRow[0];
+        const ageMs = Date.now() - new Date(row.cachedAt).getTime();
+        if (ageMs < CACHE_TTL) {
+          const results = row.results as CharResult[];
+          BY_MOVIE_CACHE.set(tmdbId, { results, ts: Date.now() - ageMs });
+          return res.json({ results });
+        }
+      }
+    } catch { /* ignore DB errors — fall through to live fetch */ }
+
     let characterEntries: Array<{ name: string }> = [];
     let movieTitle = "";
     let originalLanguage = "";
@@ -921,6 +942,14 @@ router.get(
     }
 
     BY_MOVIE_CACHE.set(tmdbId, { results, ts: Date.now() });
+    // Persist to DB cache (fire-and-forget — don't block the response)
+    db.insert(characterCacheTable)
+      .values({ tmdbId, results: results as unknown as unknown[], cachedAt: new Date() })
+      .onConflictDoUpdate({
+        target: characterCacheTable.tmdbId,
+        set: { results: results as unknown as unknown[], cachedAt: new Date() },
+      })
+      .catch(() => { /* ignore */ });
     return res.json({ results });
   }),
 );

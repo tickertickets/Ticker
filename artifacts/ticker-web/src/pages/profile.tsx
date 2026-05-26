@@ -1655,10 +1655,10 @@ export default function Profile() {
             </button>
             {activeTab === "chain" && (
               <>
-                <button onClick={() => handleSubTabChange("created")} className={cn("text-sm font-semibold px-3 py-1.5 rounded-xl transition-colors", chainSubTab === "created" ? "bg-foreground text-background" : "text-muted-foreground")}>
+                <button onClick={() => handleSubTabChange("created")} className={cn("text-sm font-semibold px-3 py-1.5 rounded-xl transition-colors", chainSubTab === "created" ? "bg-foreground text-background" : "bg-secondary text-foreground/60")}>
                   {t.chainSubTabCreated}
                 </button>
-                <button onClick={() => handleSubTabChange("played")} className={cn("text-sm font-semibold px-3 py-1.5 rounded-xl transition-colors", chainSubTab === "played" ? "bg-foreground text-background" : "text-muted-foreground")}>
+                <button onClick={() => handleSubTabChange("played")} className={cn("text-sm font-semibold px-3 py-1.5 rounded-xl transition-colors", chainSubTab === "played" ? "bg-foreground text-background" : "bg-secondary text-foreground/60")}>
                   {t.chainSubTabPlayed}
                 </button>
               </>

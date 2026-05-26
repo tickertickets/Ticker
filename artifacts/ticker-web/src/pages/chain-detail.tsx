@@ -437,8 +437,7 @@ export default function ChainDetail() {
     <div className="flex flex-col overflow-hidden h-full">
 
       {/* ── Header ── */}
-      <div className="flex-shrink-0 bg-background border-b border-border" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
-        <div className="relative flex items-center justify-center px-4 py-4">
+      <div className="flex-shrink-0 bg-background border-b border-border relative flex items-center justify-center px-4" style={{ paddingTop: "max(1rem, env(safe-area-inset-top, 0px))", paddingBottom: "1rem" }}>
           <button
             onClick={() => navBack(navigate)}
             className="absolute left-4 w-9 h-9 rounded-full bg-secondary flex items-center justify-center"
@@ -455,7 +454,6 @@ export default function ChainDetail() {
               <Flag className="w-4 h-4 text-muted-foreground" />
             </button>
           )}
-        </div>
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto overscroll-y-none">

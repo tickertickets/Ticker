@@ -6,6 +6,7 @@ import { ChevronLeft, Film, User, Loader2, Flag, Send } from "lucide-react";
 import { useLang, displayYear } from "@/lib/i18n";
 import { scrollStore } from "@/lib/scroll-store";
 import { usePageScroll } from "@/hooks/use-page-scroll";
+import { IS_PWA } from "@/lib/utils";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -313,7 +314,7 @@ export default function CharacterDetail() {
             {/* Bio text */}
             {hasBioContent && (
               <div className="px-5 pt-4 pb-2">
-                <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-line">
+                <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-line" translate={IS_PWA ? "no" : "yes"}>
                   {bioText}
                 </p>
               </div>

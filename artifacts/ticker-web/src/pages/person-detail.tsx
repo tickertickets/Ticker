@@ -8,7 +8,7 @@ import { computeCardTier, computeEffectTags, type ScoreInput } from "@/lib/ranks
 import { MovieBadges } from "@/components/MovieBadges";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
+import { cn, IS_PWA } from "@/lib/utils";
 import { scrollStore } from "@/lib/scroll-store";
 import { usePageScroll } from "@/hooks/use-page-scroll";
 
@@ -319,7 +319,7 @@ export default function PersonDetail() {
                 )}
                 {/* Bio */}
                 {bio && (
-                  <p className="text-sm text-foreground/80 leading-relaxed">
+                  <p className="text-sm text-foreground/80 leading-relaxed" translate={IS_PWA ? "no" : "yes"}>
                     {bioShown}
                     {!bioExpanded && showBioToggle && (
                       <>

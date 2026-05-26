@@ -3,6 +3,12 @@ import { twMerge } from "tailwind-merge";
 import type { ReactNode } from "react";
 import { createElement } from "react";
 
+/** True when running as an installed PWA (standalone/fullscreen).
+ *  Set synchronously before React mounts via index.html inline script. */
+export const IS_PWA = typeof document !== "undefined"
+  ? document.documentElement.getAttribute("data-browser") !== "1"
+  : true;
+
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }

@@ -17,3 +17,4 @@ export * from "./drafts";
 export * from "./siteSettings";
 export * from "./wiki";
 export * from "./movieFollows";
+export * from "./characterCache";

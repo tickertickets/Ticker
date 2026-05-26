@@ -8,7 +8,7 @@ import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { ChevronLeft, Film, Star, Users, Bookmark, ChevronDown, ChevronUp, Tv, Flag, Loader2, EyeOff, Lock, User, Link2, Heart, MessageCircle, Send, Search, Bell, BellOff } from "lucide-react";
 import { ChainCard, PosterCollage, ChainCommentSheet, ChainShareModal, type ChainItem } from "@/components/ChainsSection";
 import { useState, useRef, useEffect } from "react";
-import { cn, fmtCount } from "@/lib/utils";
+import { cn, fmtCount, IS_PWA } from "@/lib/utils";
 import { scrollStore } from "@/lib/scroll-store";
 import { useLang, displayYear } from "@/lib/i18n";
 import { localizeGenreIds } from "@/lib/tmdb-genres";
@@ -175,14 +175,12 @@ function MovieDetailChainCard({ chain }: { chain: ChainItem }) {
                 <span className="absolute bottom-1.5 right-1.5 text-[10px] font-black text-white" style={{ textShadow: "0 1px 3px rgba(0,0,0,0.8)" }}>{chain.movieCount}</span>
               )}
             </div>
-            <div className="px-2 pt-1.5 pb-0.5 text-center">
-              <p className="text-[11px] font-bold text-foreground line-clamp-1 leading-tight">{chain.title}</p>
-              {!chain.hideChainCount && (
-                <div className="flex items-center justify-center gap-0.5 mt-0.5">
-                  <Link2 className="w-2.5 h-2.5 text-muted-foreground" strokeWidth={2.5} />
-                  <span className="text-[10px] text-muted-foreground tabular-nums">{fmtCount(chain.chainCount ?? 0)}</span>
-                </div>
-              )}
+            <div className="px-2 pt-1.5 pb-0.5 text-center" style={{ minHeight: 38 }}>
+              <p className="text-[11px] font-bold text-foreground line-clamp-2 leading-tight">{chain.title}</p>
+              <div className="flex items-center justify-center gap-0.5 mt-0.5" style={{ visibility: chain.hideChainCount ? "hidden" : "visible" }}>
+                <Link2 className="w-2.5 h-2.5 text-muted-foreground" strokeWidth={2.5} />
+                <span className="text-[10px] text-muted-foreground tabular-nums">{fmtCount(chain.chainCount ?? 0)}</span>
+              </div>
             </div>
           </div>
         </Link>
@@ -557,6 +555,7 @@ export default function MovieDetail() {
     },
     enabled: !!movieId,
     staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: true,
   });
 
   const { data: videosData } = useQuery<{ trailerKey: string | null; trailerName: string | null }>({
@@ -961,7 +960,7 @@ export default function MovieDetail() {
           </div>
         )}
 
-        {displayPlot && <p className="text-sm text-foreground leading-relaxed">{displayPlot}</p>}
+        {displayPlot && <p className="text-sm text-foreground leading-relaxed" translate={IS_PWA ? "no" : "yes"}>{displayPlot}</p>}
 
         {/* ── Trailer embed ── */}
         {videosData?.trailerKey && (
@@ -1335,15 +1334,15 @@ export default function MovieDetail() {
 
 
       {/* ── Ticker Community section ── */}
-      {((ratingsData?.total ?? 0) >= 1 || community.length >= 1) && (
+      {((ratingsData?.total ?? 0) >= 5 || community.length >= 5) && (
       <>
       <div className="mx-5 my-6 border-t border-border" />
 
       <div className="px-5">
         <h3 className="font-display font-bold text-base text-foreground mb-4">{t.tickerCommunity}</h3>
 
-        {/* Ratings summary — shown from 1 rater; avg for 1-99, total for 100+ */}
-        {ratingsData && (ratingsData.total ?? 0) >= 1 && (
+        {/* Ratings summary — shown from 5 raters; avg for 5-99, total for 100+ */}
+        {ratingsData && (ratingsData.total ?? 0) >= 5 && (
           <div className="flex flex-col items-center gap-2 mb-6">
             {(() => {
               const total = ratingsData.total ?? 0;
