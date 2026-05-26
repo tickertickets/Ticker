@@ -302,6 +302,7 @@ function AppRoutes() {
               <Route path="/login"             component={AuthLogin} />
               <Route path="/ticket/:id"        component={TicketDetail} />
               <Route path="/profile/:username" component={Profile} />
+              <Route path="/@:username">{(p: Record<string,string>) => <Redirect to={`/profile/${p.username}`} />}</Route>
               <Route path="/chain/:id"         component={ChainDetail} />
               <Route path="/person/:personId"  component={PersonDetail} />
               <Route path="/character/:wikidataId" component={CharacterDetail} />
@@ -355,6 +356,7 @@ function AppRoutes() {
             <Route path="/ticket/:id/edit"   component={EditTicket} />
             <Route path="/ticket/:id"        component={TicketDetail} />
             <Route path="/profile/:username" component={Profile} />
+            <Route path="/@:username">{(p: Record<string,string>) => <Redirect to={`/profile/${p.username}`} />}</Route>
             <Route path="/bookmarks"         component={Bookmarks} />
             <Route path="/notifications"     component={Notifications} />
             <Route path="/settings"          component={Settings} />

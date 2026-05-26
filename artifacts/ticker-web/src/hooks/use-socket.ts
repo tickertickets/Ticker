@@ -243,6 +243,32 @@ export function useSocketWikiUpdates(wikiPageId: string | undefined, displayLang
   }, [wikiPageId, displayLang, qc]);
 }
 
+/**
+ * Joins a chain's WebSocket room and refetches the chain query whenever
+ * the server emits chain:updated (e.g. privacy toggle, title edit).
+ */
+export function useSocketChainUpdates(chainId: string | undefined) {
+  const qc = useQueryClient();
+
+  useEffect(() => {
+    if (!chainId) return;
+    const socket = getSocket();
+
+    socket.emit("chain:join", chainId);
+
+    const handleChainUpdated = () => {
+      qc.invalidateQueries({ queryKey: ["/api/chains", chainId] });
+    };
+
+    socket.on("chain:updated", handleChainUpdated);
+
+    return () => {
+      socket.emit("chain:leave", chainId);
+      socket.off("chain:updated", handleChainUpdated);
+    };
+  }, [chainId, qc]);
+}
+
 export function useSocketTicketUpdates(ticketId: string | undefined) {
   const qc = useQueryClient();
 

@@ -25,15 +25,20 @@
 
 const _stack: string[] = [];
 
+// Set true by navBack so the next navPush knows the stack was already fixed
+// and should NOT apply the penultimate-match heuristic (which causes
+// forward navigation to the same path to incorrectly pop the stack).
+let _backNavPending = false;
+
 /**
  * เรียกทุกครั้งที่ location เปลี่ยน (จาก App.tsx useEffect)
- * ถ้า path ใหม่ตรงกับรายการก่อนหน้า (penultimate) แสดงว่าเป็นการกด back
- * (device back button / popstate) → pop แทน push เพื่อให้ stack ถูกต้อง
  */
 export function navPush(path: string) {
-  // ตรวจว่าเป็น back navigation (path ใหม่ = entry ก่อน current)
-  if (_stack.length >= 2 && _stack[_stack.length - 2] === path) {
-    _stack.pop();
+  if (_backNavPending) {
+    // navBack already popped the stack; just ensure no duplicate at top
+    _backNavPending = false;
+    if (_stack[_stack.length - 1] === path) return;
+    _stack.push(path);
     return;
   }
   // ไม่บันทึกซ้ำ
@@ -55,6 +60,7 @@ export function navBack(
 ) {
   // Pop current page
   _stack.pop();
+  _backNavPending = true;
   const prev = _stack[_stack.length - 1] ?? fallback;
   navigate(prev, { replace: true });
 }

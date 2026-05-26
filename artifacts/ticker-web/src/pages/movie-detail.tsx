@@ -245,17 +245,32 @@ export default function MovieDetail() {
       [collectionScrollRef, `movie-${movieId}-collection-x`],
       [spinoffsScrollRef,   `movie-${movieId}-spinoffs-x`],
     ];
-    // Restore saved positions with a brief delay so the DOM is ready
-    const tid = setTimeout(() => {
+    const liveCleanups: Array<() => void> = [];
+
+    // Attach live scroll listeners and restore saved positions
+    const attachAndRestore = () => {
       rows.forEach(([ref, key]) => {
         const el = ref.current;
+        if (!el) return;
+        // Restore
         const saved = scrollStore.get(key);
-        if (el && saved != null) el.scrollLeft = saved;
+        if (saved != null) el.scrollLeft = saved;
+        // Live save
+        const onScroll = () => scrollStore.set(key, el.scrollLeft);
+        el.addEventListener("scroll", onScroll, { passive: true });
+        liveCleanups.push(() => {
+          el.removeEventListener("scroll", onScroll);
+          scrollStore.set(key, el.scrollLeft);
+        });
       });
-    }, 100);
-    // Save on unmount
+    };
+
+    const tid = setTimeout(attachAndRestore, 80);
+
+    // Save on unmount (catches refs that were live at unmount time)
     return () => {
       clearTimeout(tid);
+      liveCleanups.forEach(fn => fn());
       rows.forEach(([ref, key]) => {
         const el = ref.current;
         if (el) scrollStore.set(key, el.scrollLeft);
@@ -1132,7 +1147,7 @@ export default function MovieDetail() {
                     style={{ WebkitOverflowScrolling: "touch", marginLeft: -20, marginRight: -20, paddingLeft: 20, paddingRight: 20 }}
                   >
                     {charsData!.results.map((char) => {
-                      const isClickable = !char.wikidataId.startsWith("cv:");
+                      const isClickable = true;
                       const cardInner = (
                         <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
                           <div className="relative" style={{ aspectRatio: "2/3" }}>
@@ -1336,7 +1351,7 @@ export default function MovieDetail() {
       {/* ── Ticker Community section ── */}
       {((ratingsData?.total ?? 0) >= 5 || community.length >= 5) && (
       <>
-      <div className="mx-5 my-6 border-t border-border" />
+      <div className="mx-5 my-4 border-t border-border" />
 
       <div className="px-5">
         <h3 className="font-display font-bold text-base text-foreground mb-4">{t.tickerCommunity}</h3>

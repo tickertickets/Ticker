@@ -1,4 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useCallback, useRef } from "react";
+import { useSocketChainUpdates } from "@/hooks/use-socket";
 import { useLang, displayYear } from "@/lib/i18n";
 import { ExpandableText } from "@/components/ExpandableText";
 import { scrollOnceStore } from "@/lib/scroll-store";
@@ -267,8 +268,10 @@ export default function ChainDetail() {
       return res.json();
     },
     enabled: !!chainId,
-    refetchInterval: 30000,
+    refetchInterval: 60000,
   });
+
+  useSocketChainUpdates(chainId);
 
   type ChainComment = {
     id: string;
@@ -437,14 +440,14 @@ export default function ChainDetail() {
     <div className="flex flex-col overflow-hidden h-full">
 
       {/* ── Header ── */}
-      <div className="flex-shrink-0 bg-background border-b border-border relative flex items-center justify-center px-4" style={{ paddingTop: "max(1rem, env(safe-area-inset-top, 0px))", paddingBottom: "1rem" }}>
+      <div className="flex-shrink-0 bg-background border-b border-border relative flex items-center justify-center px-4" style={{ paddingTop: "max(1.25rem, env(safe-area-inset-top, 0px))", paddingBottom: "1.25rem" }}>
           <button
             onClick={() => navBack(navigate)}
             className="absolute left-4 w-9 h-9 rounded-full bg-secondary flex items-center justify-center"
           >
             <ChevronLeft className="w-5 h-5 text-foreground" />
           </button>
-          <h1 className="font-display font-bold text-sm text-foreground truncate max-w-[240px]">{chain.title}</h1>
+          <h1 className="font-display font-bold text-base text-foreground truncate max-w-[240px]">{chain.title}</h1>
           {user && !isOwner && (
             <button
               onClick={() => setReportChainOpen(true)}

@@ -962,8 +962,11 @@ router.patch("/:chainId/privacy", async (req, res) => {
     .where(and(eq(chainsTable.id, chainId), isNull(chainsTable.deletedAt))).limit(1);
   if (!chain) { res.status(404).json({ error: "not_found" }); return; }
   if (chain.userId !== currentUserId) { res.status(403).json({ error: "forbidden" }); return; }
-  await db.update(chainsTable).set({ isPrivate: !chain.isPrivate }).where(eq(chainsTable.id, chainId));
-  res.json({ success: true, isPrivate: !chain.isPrivate });
+  const newIsPrivate = !chain.isPrivate;
+  await db.update(chainsTable).set({ isPrivate: newIsPrivate }).where(eq(chainsTable.id, chainId));
+  const { emitChainUpdated } = await import("../lib/socket");
+  emitChainUpdated(chainId, { isPrivate: newIsPrivate });
+  res.json({ success: true, isPrivate: newIsPrivate });
 });
 
 // ── PATCH /chains/:chainId/hide-comments — toggle hideComments ────────────────

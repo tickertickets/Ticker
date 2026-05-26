@@ -985,8 +985,8 @@ function ProfileChainCard({
                 <span className="absolute bottom-1.5 right-1.5 text-[10px] font-black text-white" style={{ textShadow: "0 1px 3px rgba(0,0,0,0.8)" }}>{chain.movieCount}</span>
               )}
             </div>
-            <div className="px-2 pt-1.5 pb-0.5 text-center">
-              <p className="text-[11px] font-bold text-foreground line-clamp-1 leading-tight">{chain.title}</p>
+            <div className="px-2 pt-1.5 pb-0.5 text-center" style={{ minHeight: 38 }}>
+              <p className="text-[11px] font-bold text-foreground line-clamp-2 leading-tight">{chain.title}</p>
               {!chain.hideChainCount && (
                 <div className="flex items-center justify-center gap-0.5 mt-0.5">
                   <Link2 className="w-2.5 h-2.5 text-muted-foreground" strokeWidth={2.5} />

@@ -30,6 +30,16 @@ export function initSocket(httpServer: HTTPServer): SocketIOServer {
       socket.leave(`ticket:${ticketId}`);
     });
 
+    socket.on("chain:join", (chainId: string) => {
+      if (typeof chainId === "string" && chainId.length < 128) {
+        socket.join(`chain:${chainId}`);
+      }
+    });
+
+    socket.on("chain:leave", (chainId: string) => {
+      socket.leave(`chain:${chainId}`);
+    });
+
     socket.on("wiki:join", (wikiPageId: string) => {
       if (typeof wikiPageId === "string" && wikiPageId.length < 256) {
         socket.join(`wiki:${wikiPageId}`);
@@ -93,6 +103,10 @@ export function emitFollowChanged(opts: { followerId: string; followingId: strin
   const payload = { followerId: opts.followerId, followingId: opts.followingId };
   io.to(`user:${opts.followerId}`).emit("follow:changed", payload);
   io.to(`user:${opts.followingId}`).emit("follow:changed", payload);
+}
+
+export function emitChainUpdated(chainId: string, payload: Record<string, unknown> = {}): void {
+  io?.to(`chain:${chainId}`).emit("chain:updated", { chainId, ...payload });
 }
 
 export function emitWikiLiked(wikiPageId: string, likeCount: number): void {
