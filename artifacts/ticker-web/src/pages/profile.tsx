@@ -1496,7 +1496,7 @@ export default function Profile() {
               <button
                 className="w-9 h-9 flex items-center justify-center active:opacity-70"
                 onClick={async () => {
-                  const url = `${window.location.origin}/profile/${profile.username}`;
+                  const url = `${window.location.origin}/@${profile.username}`;
                   try { await navigator.clipboard.writeText(url); }
                   catch {
                     const el = document.createElement("textarea");

@@ -5,7 +5,7 @@ import { BadgeIcon } from "@/components/BadgeIcon";
 import { MovieBadges, BADGE_DESC_TH, BADGE_DESC_EN } from "@/components/MovieBadges";
 import { computeCardTier, computeEffectTags, TIER_VISUAL } from "@/lib/ranks";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { ChevronLeft, Film, Star, Users, Bookmark, ChevronDown, ChevronUp, Tv, Flag, Loader2, EyeOff, Lock, User, Link2, Heart, MessageCircle, Send, Search, Bell, BellOff } from "lucide-react";
+import { ChevronLeft, Film, Star, Users, Bookmark, ChevronDown, ChevronUp, Tv, Flag, Loader2, EyeOff, Lock, User, Link2, Heart, MessageCircle, Send, Search, Bell, BellOff, Info, Layers, GitBranch } from "lucide-react";
 import { ChainCard, PosterCollage, ChainCommentSheet, ChainShareModal, type ChainItem } from "@/components/ChainsSection";
 import { useState, useRef, useEffect } from "react";
 import { cn, fmtCount, IS_PWA } from "@/lib/utils";
@@ -175,7 +175,7 @@ function MovieDetailChainCard({ chain }: { chain: ChainItem }) {
                 <span className="absolute bottom-1.5 right-1.5 text-[10px] font-black text-white" style={{ textShadow: "0 1px 3px rgba(0,0,0,0.8)" }}>{chain.movieCount}</span>
               )}
             </div>
-            <div className="px-2 pt-1.5 pb-0.5 text-center" style={{ minHeight: 38 }}>
+            <div className="px-2 pt-1.5 pb-0.5 text-center h-[38px] overflow-hidden flex flex-col justify-start">
               <p className="text-[11px] font-bold text-foreground line-clamp-2 leading-tight">{chain.title}</p>
               <div className="flex items-center justify-center gap-0.5 mt-0.5" style={{ visibility: chain.hideChainCount ? "hidden" : "visible" }}>
                 <Link2 className="w-2.5 h-2.5 text-muted-foreground" strokeWidth={2.5} />
@@ -226,7 +226,7 @@ export default function MovieDetail() {
   const badgePopupRef = useRef<HTMLDivElement>(null);
   const [expandedSeason, setExpandedSeason] = useState<number | null>(null);
   const episodeRatingsRef = useRef<HTMLDivElement>(null);
-  const [showDetails, setShowDetails] = useState(false);
+  const [showDetails, setShowDetails] = useState(() => (scrollStore.get(`movie-${movieId}-details`) ?? 0) === 1);
   const [showCollection, setShowCollection] = useState(false);
   const [showSpinoffs, setShowSpinoffs] = useState(false);
 
@@ -303,6 +303,11 @@ export default function MovieDetail() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [movieId]);
 
+  // Persist showDetails open/closed state per-movie so back navigation restores it.
+  useEffect(() => {
+    scrollStore.set(`movie-${movieId}-details`, showDetails ? 1 : 0);
+  }, [showDetails, movieId]);
+
   // FORCE-TOP: only reset scroll when navigating to a DIFFERENT movie within
   // the same component lifetime. On first mount we leave the stored position
   // intact so the RESTORE effect can scroll back to where the user was.
@@ -314,6 +319,8 @@ export default function MovieDetail() {
     if (prev && prev !== movieId) {
       if (scrollRef.current) scrollRef.current.scrollTop = 0;
       scrollStore.delete(`movie-${movieId}`);
+      // Restore showDetails for the new movie (or default false)
+      setShowDetails((scrollStore.get(`movie-${movieId}-details`) ?? 0) === 1);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [movieId]);
@@ -569,7 +576,8 @@ export default function MovieDetail() {
       return res.json();
     },
     enabled: !!movieId,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
+    refetchInterval: 20_000,
     refetchOnWindowFocus: true,
   });
 
@@ -1067,50 +1075,57 @@ export default function MovieDetail() {
                 : <ChevronDown className="w-4 h-4 text-muted-foreground" />
               }
             </button>
-            {expandedSeason !== null && seasonsData.seasons.length > 0 && (
-              <div className="space-y-0 divide-y divide-border">
-                {seasonsData.seasons.map((season) => (
-                  <div key={season.seasonNumber}>
-                    <button
-                      onClick={() => setExpandedSeason(v => v === season.seasonNumber ? null : season.seasonNumber)}
-                      className="w-full flex items-center justify-between px-4 py-3 bg-background hover:bg-muted/40 transition-colors text-sm font-semibold text-foreground"
-                    >
-                      <span>{season.name}</span>
-                      {expandedSeason === season.seasonNumber
-                        ? <ChevronUp className="w-4 h-4 text-muted-foreground" />
-                        : <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                      }
-                    </button>
-                    {expandedSeason === season.seasonNumber && (
-                      <div className="space-y-0 divide-y divide-border">
-                        {season.episodes.map((ep) => (
-                          <div key={ep.episodeNumber} className="py-2.5 px-3 bg-background space-y-0.5">
-                            <div className="flex items-start justify-between">
-                              <div className="flex items-start gap-2 min-w-0 flex-1">
-                                <span className="font-mono text-xs text-muted-foreground shrink-0 pt-0.5">
-                                  E{String(ep.episodeNumber).padStart(2, "0")}
-                                </span>
-                                <span className="text-xs font-semibold text-foreground leading-tight">{ep.name}</span>
-                              </div>
-                              <div className="flex items-center gap-1 shrink-0 ml-3">
-                                {ep.rating !== null && ep.rating > 0 ? (
-                                  <>
-                                    <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                                    <span className="text-xs font-semibold text-foreground">{ep.rating.toFixed(1)}</span>
-                                  </>
-                                ) : (
-                                  <span className="text-xs text-muted-foreground">—</span>
-                                )}
-                              </div>
+            {/* Smooth open/close via grid-template-rows transition */}
+            <div style={{ display: "grid", gridTemplateRows: expandedSeason !== null ? "1fr" : "0fr", transition: "grid-template-rows 0.25s ease" }}>
+              <div style={{ overflow: "hidden" }}>
+                {seasonsData.seasons.length > 0 && (
+                  <div className="space-y-0 divide-y divide-border">
+                    {seasonsData.seasons.map((season) => (
+                      <div key={season.seasonNumber}>
+                        <button
+                          onClick={() => setExpandedSeason(v => v === season.seasonNumber ? null : season.seasonNumber)}
+                          className="w-full flex items-center justify-between px-4 py-3 bg-background hover:bg-muted/40 transition-colors text-sm font-semibold text-foreground"
+                        >
+                          <span>{season.name}</span>
+                          {expandedSeason === season.seasonNumber
+                            ? <ChevronUp className="w-4 h-4 text-muted-foreground" />
+                            : <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                          }
+                        </button>
+                        <div style={{ display: "grid", gridTemplateRows: expandedSeason === season.seasonNumber ? "1fr" : "0fr", transition: "grid-template-rows 0.25s ease" }}>
+                          <div style={{ overflow: "hidden" }}>
+                            <div className="space-y-0 divide-y divide-border">
+                              {season.episodes.map((ep) => (
+                                <div key={ep.episodeNumber} className="py-2.5 px-3 bg-background space-y-0.5">
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex items-start gap-2 min-w-0 flex-1">
+                                      <span className="font-mono text-xs text-muted-foreground shrink-0 pt-0.5">
+                                        E{String(ep.episodeNumber).padStart(2, "0")}
+                                      </span>
+                                      <span className="text-xs font-semibold text-foreground leading-tight">{ep.name}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1 shrink-0 ml-3">
+                                      {ep.rating !== null && ep.rating > 0 ? (
+                                        <>
+                                          <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                                          <span className="text-xs font-semibold text-foreground">{ep.rating.toFixed(1)}</span>
+                                        </>
+                                      ) : (
+                                        <span className="text-xs text-muted-foreground">—</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
                             </div>
                           </div>
-                        ))}
+                        </div>
                       </div>
-                    )}
+                    ))}
                   </div>
-                ))}
+                )}
               </div>
-            )}
+            </div>
           </div>
         </div>
       )}
@@ -1122,7 +1137,7 @@ export default function MovieDetail() {
             className="w-full flex items-center gap-2 text-left"
             onClick={(e) => { const b = e.currentTarget; setShowDetails(v => { const next = !v; if (next) { setShowCollection(true); setShowSpinoffs(true); setTimeout(() => { const c = scrollRef.current; if (c) { const r = b.getBoundingClientRect(), cr = c.getBoundingClientRect(); c.scrollTo({ top: Math.max(0, c.scrollTop + r.top - cr.top - 8), behavior: "smooth" }); } }, 280); } return next; }); }}
           >
-            <Film className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+            <Info className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
             <h3 className="text-xs font-semibold text-muted-foreground tracking-wide flex-1">{lang === "th" ? "รายละเอียด" : "Details"}</h3>
             {showDetails
               ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
@@ -1131,7 +1146,29 @@ export default function MovieDetail() {
           <div style={{ display: "grid", gridTemplateRows: showDetails ? "1fr" : "0fr", transition: "grid-template-rows 0.25s ease" }}>
             <div style={{ overflow: "hidden" }}>
 
-              {/* Characters — shown first inside Details */}
+              {/* Characters — shown first inside Details; show skeleton while loading */}
+              {!charsData && showDetails && (
+                <>
+                  <div className="border-t border-border mt-3 mb-2" />
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <User className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                    <p className="text-xs font-semibold text-muted-foreground flex-1">
+                      {lang === "th" ? "ตัวละคร" : "Characters"}
+                    </p>
+                  </div>
+                  <div className="flex gap-2.5 overflow-hidden pb-1" style={{ marginLeft: -20, marginRight: -20, paddingLeft: 20, paddingRight: 20 }}>
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <div key={i} className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border animate-pulse">
+                        <div className="w-full bg-muted/60" style={{ aspectRatio: "2/3" }} />
+                        <div className="p-1.5 pb-2 h-[44px]">
+                          <div className="h-2.5 bg-muted/60 rounded w-4/5 mb-1.5" />
+                          <div className="h-2 bg-muted/40 rounded w-3/5" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
               {(charsData?.results ?? []).length > 0 && (
                 <>
                   <div className="border-t border-border mt-3 mb-2" />
@@ -1213,7 +1250,7 @@ export default function MovieDetail() {
                     {mainMovies.length > 0 && (
                       <div className="mt-3">
                         <div className="w-full flex items-center gap-2 py-1">
-                          <Film className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                          <Layers className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                           <p className="text-xs font-semibold text-muted-foreground flex-1">
                             {collectionData.collectionName ?? (lang === "th" ? "ภาคทั้งหมด" : "All Parts")}
                           </p>
@@ -1250,7 +1287,7 @@ export default function MovieDetail() {
                     {spinoffMovies.length > 0 && (
                       <div className="mt-3">
                         <div className="w-full flex items-center gap-2 py-1">
-                          <Film className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                          <GitBranch className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                           <p className="text-xs font-semibold text-muted-foreground flex-1">
                             {lang === "th" ? "ภาคเสริม" : "Spinoffs"}
                           </p>
