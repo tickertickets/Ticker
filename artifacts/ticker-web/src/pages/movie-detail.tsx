@@ -320,7 +320,11 @@ export default function MovieDetail() {
       // Save the PREVIOUS movie's showDetails state (ref holds the real current value)
       scrollStore.set(`movie-${prev}-details`, showDetailsRef.current ? 1 : 0);
       if (scrollRef.current) scrollRef.current.scrollTop = 0;
-      scrollStore.delete(`movie-${movieId}`);
+      // NOTE: do NOT delete movie-${movieId} here — that wipes the stored scroll
+      // position when the user navigates BACK to a previously-visited movie
+      // (e.g. pressing back through a collection/spinoff chain).
+      // Forward-navigation fresh-starts are handled by goToMovie() and
+      // PersonMovieCard's onClick which explicitly delete before navigating.
       // Restore showDetails for the newly entered movie (default false)
       setShowDetails((scrollStore.get(`movie-${movieId}-details`) ?? 0) === 1);
     }
@@ -1071,17 +1075,15 @@ export default function MovieDetail() {
                 const btn = e.currentTarget;
                 setExpandedSeason(v => {
                   const next = v === null ? (seasonsData.seasons[0]?.seasonNumber ?? null) : null;
-                  if (next !== null) {
-                    // Auto-scroll so the episode ratings panel is in view after it opens
-                    setTimeout(() => {
-                      const c = scrollRef.current;
-                      if (c) {
-                        const r = btn.getBoundingClientRect();
-                        const cr = c.getBoundingClientRect();
-                        c.scrollTo({ top: Math.max(0, c.scrollTop + r.top - cr.top - 8), behavior: "smooth" });
-                      }
-                    }, 280);
-                  }
+                  // Scroll button into view on BOTH open and close, after animation completes
+                  setTimeout(() => {
+                    const c = scrollRef.current;
+                    if (c) {
+                      const r = btn.getBoundingClientRect();
+                      const cr = c.getBoundingClientRect();
+                      c.scrollTo({ top: Math.max(0, c.scrollTop + r.top - cr.top - 8), behavior: "smooth" });
+                    }
+                  }, 360);
                   return next;
                 });
               }}
@@ -1097,7 +1099,7 @@ export default function MovieDetail() {
               }
             </button>
             {/* Smooth open/close — min-height:0 on inner div is critical for 0fr collapse */}
-            <div style={{ display: "grid", gridTemplateRows: expandedSeason !== null ? "1fr" : "0fr", transition: "grid-template-rows 0.3s ease" }}>
+            <div style={{ display: "grid", gridTemplateRows: expandedSeason !== null ? "1fr" : "0fr", transition: "grid-template-rows 0.35s cubic-bezier(0.4, 0, 0.2, 1)" }}>
               <div style={{ overflow: "hidden", minHeight: 0 }}>
                 {seasonsData.seasons.length > 0 && (
                   <div className="space-y-0 divide-y divide-border">
@@ -1113,7 +1115,7 @@ export default function MovieDetail() {
                             : <ChevronDown className="w-4 h-4 text-muted-foreground" />
                           }
                         </button>
-                        <div style={{ display: "grid", gridTemplateRows: expandedSeason === season.seasonNumber ? "1fr" : "0fr", transition: "grid-template-rows 0.3s ease" }}>
+                        <div style={{ display: "grid", gridTemplateRows: expandedSeason === season.seasonNumber ? "1fr" : "0fr", transition: "grid-template-rows 0.35s cubic-bezier(0.4, 0, 0.2, 1)" }}>
                           <div style={{ overflow: "hidden", minHeight: 0 }}>
                             <div className="space-y-0 divide-y divide-border">
                               {season.episodes.map((ep) => (
@@ -1156,7 +1158,7 @@ export default function MovieDetail() {
         <div className="px-5 pt-4">
           <button
             className="w-full flex items-center gap-2 text-left"
-            onClick={(e) => { const b = e.currentTarget; setShowDetails(v => { const next = !v; if (next) { setShowCollection(true); setShowSpinoffs(true); setTimeout(() => { const c = scrollRef.current; if (c) { const r = b.getBoundingClientRect(), cr = c.getBoundingClientRect(); c.scrollTo({ top: Math.max(0, c.scrollTop + r.top - cr.top - 8), behavior: "smooth" }); } }, 280); } return next; }); }}
+            onClick={(e) => { const b = e.currentTarget; setShowDetails(v => { const next = !v; if (next) { setShowCollection(true); setShowSpinoffs(true); } setTimeout(() => { const c = scrollRef.current; if (c) { const r = b.getBoundingClientRect(), cr = c.getBoundingClientRect(); c.scrollTo({ top: Math.max(0, c.scrollTop + r.top - cr.top - 8), behavior: "smooth" }); } }, 360); return next; }); }}
           >
             <Info className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
             <h3 className="text-xs font-semibold text-muted-foreground tracking-wide flex-1">{lang === "th" ? "รายละเอียด" : "Details"}</h3>
@@ -1164,10 +1166,10 @@ export default function MovieDetail() {
               ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
               : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />}
           </button>
-          <div style={{ display: "grid", gridTemplateRows: showDetails ? "1fr" : "0fr", transition: "grid-template-rows 0.3s ease" }}>
+          <div style={{ display: "grid", gridTemplateRows: showDetails ? "1fr" : "0fr", transition: "grid-template-rows 0.35s cubic-bezier(0.4, 0, 0.2, 1)" }}>
             <div style={{ overflow: "hidden", minHeight: 0 }}>
 
-              {/* ── Characters: show header+space immediately from cast; spinner while AniList loads ── */}
+              {/* ── Characters: skeleton cards with spinner while AniList/CV loads ── */}
               {(creditsData && ((creditsData.cast ?? []).some(p => p.character && p.character.trim()) || (charsData?.results ?? []).length > 0)) && (
                 <>
                   <div className="border-t border-border mt-3 mb-2" />
@@ -1176,31 +1178,33 @@ export default function MovieDetail() {
                     <p className="text-xs font-semibold text-muted-foreground flex-1">
                       {lang === "th" ? "ตัวละคร" : "Characters"}
                     </p>
-                    {!charsData && (
-                      <Loader2 className="w-3 h-3 text-muted-foreground animate-spin flex-shrink-0" />
-                    )}
                   </div>
                   <div
                     ref={charScrollRef}
                     className="flex overflow-x-auto gap-2.5 pb-1 scrollbar-hide"
                     style={{ WebkitOverflowScrolling: "touch", marginLeft: -20, marginRight: -20, paddingLeft: 20, paddingRight: 20 }}
                   >
-                    {(() => {
-                      // AniList characters (better images, linkable to profile)
-                      const aniChars = charsData?.results ?? [];
-                      const aniNames = new Set(aniChars.map(c => c.name.toLowerCase()));
-                      // Cast fill-ins: characters from TMDB cast not already in aniChars
-                      const castFillIns = (creditsData?.cast ?? [])
-                        .filter(p => p.character && p.character.trim() && !aniNames.has(p.character.trim().toLowerCase()))
-                        .map(p => ({
-                          name: p.character!.trim(),
-                          wikidataId: `cast:${p.id}`,
-                          imageUrl: p.profileUrl,
-                          alias: p.name,
-                        }));
-                      const allChars = [...aniChars, ...castFillIns];
-                      return allChars.map((char) => {
-                        const isClickable = char.wikidataId.startsWith("al:");
+                    {!charsData ? (
+                      // Loading: one skeleton card per cast character (max 8), spinner inside each
+                      (creditsData.cast ?? [])
+                        .filter(p => p.character && p.character.trim())
+                        .slice(0, 8)
+                        .map((_p, i) => (
+                          <div key={i} className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border">
+                            <div className="relative flex items-center justify-center bg-zinc-900" style={{ aspectRatio: "2/3" }}>
+                              <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" />
+                            </div>
+                            <div className="p-1.5 pb-2 h-[44px]">
+                              <div className="h-2 rounded bg-muted/50 animate-pulse mb-1.5" />
+                              <div className="h-2 rounded bg-muted/30 animate-pulse w-2/3" />
+                            </div>
+                          </div>
+                        ))
+                    ) : (
+                      // Loaded: show only AniList/CV matched characters (no actor-photo fill-ins)
+                      (charsData.results ?? []).map((char) => {
+                        // al: = direct AniList match, alm: = lazy AniList, cv: = Comic Vine — all linkable
+                        const isClickable = !char.wikidataId.startsWith("cast:");
                         const cardInner = (
                           <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
                             <div className="relative" style={{ aspectRatio: "2/3" }}>
@@ -1214,7 +1218,6 @@ export default function MovieDetail() {
                             </div>
                             <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
                               <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{char.name}</p>
-                              {char.alias && <p className="text-[8px] text-muted-foreground mt-0.5 truncate">{char.alias}</p>}
                             </div>
                           </div>
                         );
@@ -1229,8 +1232,8 @@ export default function MovieDetail() {
                         ) : (
                           <div key={char.wikidataId}>{cardInner}</div>
                         );
-                      });
-                    })()}
+                      })
+                    )}
                   </div>
                 </>
               )}

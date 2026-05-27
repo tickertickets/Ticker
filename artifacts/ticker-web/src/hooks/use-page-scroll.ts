@@ -4,15 +4,9 @@ import { scrollStore, scrollNoSave } from "@/lib/scroll-store";
 /**
  * usePageScroll — เก็บและกู้คืน scroll position ระดับหน้า
  *
- * หลักการ:
- * - ใช้ key คงที่ต่อ element (key ห้ามเปลี่ยนระหว่างที่ component mounted)
- * - สำหรับ tabs ภายในหน้า ให้ใช้ CSS display toggle แทน (ดู home.tsx, search.tsx)
- * - restore ด้วย single RAF (content มาก่อน scroll event)
- * - save ทุกครั้งที่ scroll + cleanup unmount
- *
- * FIX: ใช้ lastScrollTop variable แทนการอ่าน el.scrollTop ตอน cleanup
- * เพราะ element อาจถูก detach ออกจาก DOM ก่อน cleanup จะรัน
- * ทำให้ el.scrollTop = 0 และ overwrite ค่าที่ถูกต้อง
+ * ใช้ ResizeObserver-based retry เพื่อรองรับกรณีที่ content โหลดหลัง mount
+ * (เช่น PersonDetail / CharacterDetail ที่ staleTime: 0)
+ * และรองรับการกู้คืน scroll position ที่ถูกต้องแม้ content ยังไม่ full height
  */
 export function usePageScroll(key: string) {
   const ref = useRef<HTMLDivElement>(null);
@@ -24,21 +18,52 @@ export function usePageScroll(key: string) {
     if (!el) return;
 
     const k = keyRef.current;
-    const saved = scrollStore.get(k) ?? 0;
+    const target = scrollStore.get(k) ?? 0;
+    let lastScrollTop = target;
+    let restorationDone = target <= 0;
+    let lastProgrammatic = 0;
 
-    // Cache last known scrollTop in a closure variable — reading el.scrollTop
-    // after the element is detached from the DOM returns 0 in many browsers,
-    // which would overwrite a correctly-saved position in the cleanup function.
-    let lastScrollTop = saved;
-
-    let rafId = requestAnimationFrame(() => {
-      if (el.isConnected && saved > 0) {
-        el.scrollTop = saved;
-        // Only update if the browser honored it — if clamped to 0,
-        // keep lastScrollTop as `saved` so cleanup preserves the correct target.
-        if (el.scrollTop > 0) lastScrollTop = el.scrollTop;
+    // ResizeObserver-based retry: re-attempt scroll whenever scrollHeight grows
+    // (images, data, etc. arriving after first render)
+    const attempt = () => {
+      if (restorationDone) return;
+      if (!el.isConnected) return;
+      if (el.scrollHeight < target + el.clientHeight * 0.5) return;
+      lastProgrammatic = Date.now();
+      el.scrollTop = target;
+      if (el.scrollTop >= target - 5) {
+        restorationDone = true;
+        ro.disconnect();
+        el.removeEventListener("scroll", onUserScroll);
       }
-    });
+    };
+
+    // If the user scrolls manually before restoration finishes, abort
+    const onUserScroll = () => {
+      if (Date.now() - lastProgrammatic > 50 && !restorationDone) {
+        restorationDone = true;
+        ro.disconnect();
+        el.removeEventListener("scroll", onUserScroll);
+      }
+    };
+
+    const ro = new ResizeObserver(attempt);
+
+    if (!restorationDone) {
+      ro.observe(el);
+      el.addEventListener("scroll", onUserScroll, { passive: true });
+      // Try immediately, then after content has had time to render
+      requestAnimationFrame(attempt);
+      const t1 = setTimeout(attempt, 100);
+      const t2 = setTimeout(() => {
+        attempt();
+        restorationDone = true;
+        ro.disconnect();
+        el.removeEventListener("scroll", onUserScroll);
+      }, 800);
+      // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+      t1; t2; // keep references alive
+    }
 
     const onScroll = () => {
       lastScrollTop = el.scrollTop;
@@ -48,20 +73,19 @@ export function usePageScroll(key: string) {
     el.addEventListener("scroll", onScroll, { passive: true });
 
     return () => {
-      cancelAnimationFrame(rafId);
+      restorationDone = true;
+      ro.disconnect();
       el.removeEventListener("scroll", onScroll);
+      el.removeEventListener("scroll", onUserScroll);
       const k = keyRef.current;
       if (scrollNoSave.has(k)) {
-        // User explicitly navigated away — delete saved position so next entry starts at top.
         scrollStore.delete(k);
         scrollNoSave.delete(k);
       } else {
-        // Use cached lastScrollTop — NOT el.scrollTop — because the element
-        // may already be detached from the DOM when cleanup runs.
         scrollStore.set(k, lastScrollTop);
       }
     };
-  }, []); // mount/unmount เท่านั้น — key คงที่ต่อ element
+  }, []); // mount/unmount only — key is stable per element
 
   return ref;
 }

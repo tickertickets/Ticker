@@ -406,19 +406,27 @@ export default function Home() {
     container.scrollTo({ left: target, behavior: "smooth" });
   }, [tab]);
 
-  // Scroll hide/show on active tab scroll
+  // Scroll hide/show on active tab scroll — Instagram-style: require ~60px upward scroll to reveal
   useEffect(() => {
     const el = refMap[tab]?.current;
     if (!el) return;
     let lastY = scrollStore.get(`home-${tab}`) ?? el.scrollTop;
+    let scrollUpDelta = 0;
+    const SHOW_THRESHOLD = 60;
     const onScroll = () => {
       const y = el.scrollTop;
       if (y <= 0) {
         setHeaderHidden(false);
+        scrollUpDelta = 0;
       } else if (y > lastY && y > headerH) {
         setHeaderHidden(true);
+        scrollUpDelta = 0;
       } else if (y < lastY) {
-        setHeaderHidden(false);
+        scrollUpDelta += lastY - y;
+        if (scrollUpDelta >= SHOW_THRESHOLD) {
+          setHeaderHidden(false);
+          scrollUpDelta = 0;
+        }
       }
       lastY = y;
     };
@@ -509,7 +517,7 @@ export default function Home() {
   const triggerRefresh = () => {
     const el = refMap[tab]?.current;
     if (el) {
-      el.scrollTop = 0;
+      el.scrollTo({ top: 0, behavior: "smooth" });
       scrollStore.set(`home-${tab}`, 0);
     }
     setHeaderHidden(false);

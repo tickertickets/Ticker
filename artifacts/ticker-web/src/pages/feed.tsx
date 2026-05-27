@@ -180,15 +180,23 @@ export default function Feed() {
     const saved = scrollStore.get("feed") ?? 0;
     let lastY = saved;
     if (saved > 0) requestAnimationFrame(() => { if (el.isConnected) el.scrollTop = saved; });
+    let scrollUpDelta = 0;
+    const SHOW_THRESHOLD = 60;
     const onScroll = () => {
       const y = el.scrollTop;
       scrollStore.set("feed", y);
       if (y <= 0) {
         setHeaderHidden(false);
+        scrollUpDelta = 0;
       } else if (y > lastY && y > headerH) {
         setHeaderHidden(true);
+        scrollUpDelta = 0;
       } else if (y < lastY) {
-        setHeaderHidden(false);
+        scrollUpDelta += lastY - y;
+        if (scrollUpDelta >= SHOW_THRESHOLD) {
+          setHeaderHidden(false);
+          scrollUpDelta = 0;
+        }
       }
       lastY = y;
     };
