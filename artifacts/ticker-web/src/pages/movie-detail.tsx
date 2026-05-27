@@ -1167,8 +1167,8 @@ export default function MovieDetail() {
           <div style={{ display: "grid", gridTemplateRows: showDetails ? "1fr" : "0fr", transition: "grid-template-rows 0.3s ease" }}>
             <div style={{ overflow: "hidden", minHeight: 0 }}>
 
-              {/* Characters — shown first inside Details; show skeleton while loading */}
-              {!charsData && showDetails && (
+              {/* ── Characters: show header+space immediately from cast; spinner while AniList loads ── */}
+              {(creditsData && ((creditsData.cast ?? []).some(p => p.character && p.character.trim()) || (charsData?.results ?? []).length > 0)) && (
                 <>
                   <div className="border-t border-border mt-3 mb-2" />
                   <div className="flex items-center gap-2 mb-1.5">
@@ -1176,78 +1176,61 @@ export default function MovieDetail() {
                     <p className="text-xs font-semibold text-muted-foreground flex-1">
                       {lang === "th" ? "ตัวละคร" : "Characters"}
                     </p>
-                  </div>
-                  <div className="flex gap-2.5 overflow-hidden pb-1" style={{ marginLeft: -20, marginRight: -20, paddingLeft: 20, paddingRight: 20 }}>
-                    {Array.from({ length: 5 }).map((_, i) => (
-                      <div key={i} className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border animate-pulse">
-                        <div className="w-full bg-muted/60" style={{ aspectRatio: "2/3" }} />
-                        <div className="p-1.5 pb-2 h-[44px]">
-                          <div className="h-2.5 bg-muted/60 rounded w-4/5 mb-1.5" />
-                          <div className="h-2 bg-muted/40 rounded w-3/5" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-              {(charsData?.results ?? []).length > 0 && (
-                <>
-                  <div className="border-t border-border mt-3 mb-2" />
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <User className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                    <p className="text-xs font-semibold text-muted-foreground flex-1">
-                      {lang === "th" ? "ตัวละคร" : "Characters"}
-                    </p>
+                    {!charsData && (
+                      <Loader2 className="w-3 h-3 text-muted-foreground animate-spin flex-shrink-0" />
+                    )}
                   </div>
                   <div
                     ref={charScrollRef}
                     className="flex overflow-x-auto gap-2.5 pb-1 scrollbar-hide"
                     style={{ WebkitOverflowScrolling: "touch", marginLeft: -20, marginRight: -20, paddingLeft: 20, paddingRight: 20 }}
                   >
-                    {charsData!.results.map((char) => {
-                      const isClickable = char.wikidataId.startsWith("al:");
-                      const cardInner = (
-                        <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
-                          <div className="relative" style={{ aspectRatio: "2/3" }}>
-                            {char.imageUrl ? (
-                              <img
-                                src={char.imageUrl}
-                                alt={char.name}
-                                className="w-full h-full object-cover object-top"
-                                loading="eager"
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center bg-zinc-900">
-                                <User className="w-4 h-4 text-muted-foreground opacity-30" />
-                              </div>
-                            )}
+                    {(() => {
+                      // AniList characters (better images, linkable to profile)
+                      const aniChars = charsData?.results ?? [];
+                      const aniNames = new Set(aniChars.map(c => c.name.toLowerCase()));
+                      // Cast fill-ins: characters from TMDB cast not already in aniChars
+                      const castFillIns = (creditsData?.cast ?? [])
+                        .filter(p => p.character && p.character.trim() && !aniNames.has(p.character.trim().toLowerCase()))
+                        .map(p => ({
+                          name: p.character!.trim(),
+                          wikidataId: `cast:${p.id}`,
+                          imageUrl: p.profileUrl,
+                          alias: p.name,
+                        }));
+                      const allChars = [...aniChars, ...castFillIns];
+                      return allChars.map((char) => {
+                        const isClickable = char.wikidataId.startsWith("al:");
+                        const cardInner = (
+                          <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
+                            <div className="relative" style={{ aspectRatio: "2/3" }}>
+                              {char.imageUrl ? (
+                                <img src={char.imageUrl} alt={char.name} className="w-full h-full object-cover object-top" loading="eager" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center bg-zinc-900">
+                                  <User className="w-4 h-4 text-muted-foreground opacity-30" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
+                              <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{char.name}</p>
+                              {char.alias && <p className="text-[8px] text-muted-foreground mt-0.5 truncate">{char.alias}</p>}
+                            </div>
                           </div>
-                          <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
-                            <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">
-                              {char.name}
-                            </p>
-                            {char.alias && (
-                              <p className="text-[8px] text-muted-foreground mt-0.5 truncate">
-                                {char.alias}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      );
-                      return isClickable ? (
-                        <Link
-                          key={char.wikidataId}
-                          href={`/character/${encodeURIComponent(char.wikidataId)}${navSrclang ? `?srclang=${encodeURIComponent(navSrclang)}` : ""}`}
-                          onClick={() => scrollStore.delete(`character-${char.wikidataId}`)}
-                        >
-                          {cardInner}
-                        </Link>
-                      ) : (
-                        <div key={char.wikidataId}>
-                          {cardInner}
-                        </div>
-                      );
-                    })}
+                        );
+                        return isClickable ? (
+                          <Link
+                            key={char.wikidataId}
+                            href={`/character/${encodeURIComponent(char.wikidataId)}${navSrclang ? `?srclang=${encodeURIComponent(navSrclang)}` : ""}`}
+                            onClick={() => scrollStore.delete(`character-${char.wikidataId}`)}
+                          >
+                            {cardInner}
+                          </Link>
+                        ) : (
+                          <div key={char.wikidataId}>{cardInner}</div>
+                        );
+                      });
+                    })()}
                   </div>
                 </>
               )}

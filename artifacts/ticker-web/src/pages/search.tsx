@@ -409,11 +409,27 @@ export default function Search() {
     return () => { obs.disconnect(); clearTimeout(tid); };
   }, []);
 
+  // Accumulate upward scroll — bar only reappears after scrolling up 40 px
+  const scrollUpDeltaRef = useRef(0);
+  const SHOW_THRESHOLD = 40;
+
   // Header auto-hide on scroll
   const handleScrollChange = useCallback((y: number, lastY: number) => {
-    if (y <= 0) setHeaderHidden(false);
-    else if (y > lastY && y > headerH) setHeaderHidden(true);
-    else if (y < lastY) setHeaderHidden(false);
+    const delta = y - lastY;
+    if (y <= 0) {
+      setHeaderHidden(false);
+      scrollUpDeltaRef.current = 0;
+    } else if (delta > 0) {
+      // Scrolling down (reading further) — reset accumulator, hide after header height
+      scrollUpDeltaRef.current = 0;
+      if (y > headerH) setHeaderHidden(true);
+    } else if (delta < 0) {
+      // Scrolling up — accumulate; only show bar once threshold is reached
+      scrollUpDeltaRef.current += Math.abs(delta);
+      if (scrollUpDeltaRef.current >= SHOW_THRESHOLD) {
+        setHeaderHidden(false);
+      }
+    }
   }, [headerH]);
 
   // Scroll listener for search results overlay
