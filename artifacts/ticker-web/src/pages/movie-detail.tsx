@@ -303,10 +303,10 @@ export default function MovieDetail() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [movieId]);
 
-  // Persist showDetails open/closed state per-movie so back navigation restores it.
-  useEffect(() => {
-    scrollStore.set(`movie-${movieId}-details`, showDetails ? 1 : 0);
-  }, [showDetails, movieId]);
+  // Keep a ref always in sync with the current showDetails so the transition
+  // effect below can read the PREVIOUS movie's value (not the stale closure value).
+  const showDetailsRef = useRef(showDetails);
+  showDetailsRef.current = showDetails;
 
   // FORCE-TOP: only reset scroll when navigating to a DIFFERENT movie within
   // the same component lifetime. On first mount we leave the stored position
@@ -317,9 +317,11 @@ export default function MovieDetail() {
     prevMovieIdRef.current = movieId;
     // First mount: prev is "" — do NOT delete the stored position.
     if (prev && prev !== movieId) {
+      // Save the PREVIOUS movie's showDetails state (ref holds the real current value)
+      scrollStore.set(`movie-${prev}-details`, showDetailsRef.current ? 1 : 0);
       if (scrollRef.current) scrollRef.current.scrollTop = 0;
       scrollStore.delete(`movie-${movieId}`);
-      // Restore showDetails for the new movie (or default false)
+      // Restore showDetails for the newly entered movie (default false)
       setShowDetails((scrollStore.get(`movie-${movieId}-details`) ?? 0) === 1);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -609,6 +611,7 @@ export default function MovieDetail() {
     wikidataId: string;
     imageUrl: string | null;
     alias: string | null;
+    source?: string;
   };
   const { data: charsData } = useQuery<{ results: CharResult[] }>({
     queryKey: ["/api/character/by-movie", movieId],
@@ -621,6 +624,7 @@ export default function MovieDetail() {
     },
     enabled: !!movieId,
     staleTime: 60 * 60 * 1000,
+    gcTime: 4 * 60 * 60 * 1000,
   });
 
   const collectionMovieCount = (collectionData?.movies ?? []).filter(m => !m.isSpinoff).length;
@@ -1063,7 +1067,24 @@ export default function MovieDetail() {
         <div ref={episodeRatingsRef} className="px-5 pt-4">
           <div className="rounded-2xl border border-border overflow-hidden">
             <button
-              onClick={() => setExpandedSeason(v => v === null ? seasonsData.seasons[0]?.seasonNumber ?? null : null)}
+              onClick={(e) => {
+                const btn = e.currentTarget;
+                setExpandedSeason(v => {
+                  const next = v === null ? (seasonsData.seasons[0]?.seasonNumber ?? null) : null;
+                  if (next !== null) {
+                    // Auto-scroll so the episode ratings panel is in view after it opens
+                    setTimeout(() => {
+                      const c = scrollRef.current;
+                      if (c) {
+                        const r = btn.getBoundingClientRect();
+                        const cr = c.getBoundingClientRect();
+                        c.scrollTo({ top: Math.max(0, c.scrollTop + r.top - cr.top - 8), behavior: "smooth" });
+                      }
+                    }, 280);
+                  }
+                  return next;
+                });
+              }}
               className="w-full flex items-center justify-between px-4 py-3 bg-secondary hover:bg-muted/60 transition-colors text-sm font-semibold text-foreground"
             >
               <div className="flex items-center gap-2">
@@ -1075,9 +1096,9 @@ export default function MovieDetail() {
                 : <ChevronDown className="w-4 h-4 text-muted-foreground" />
               }
             </button>
-            {/* Smooth open/close via grid-template-rows transition */}
-            <div style={{ display: "grid", gridTemplateRows: expandedSeason !== null ? "1fr" : "0fr", transition: "grid-template-rows 0.25s ease" }}>
-              <div style={{ overflow: "hidden" }}>
+            {/* Smooth open/close — min-height:0 on inner div is critical for 0fr collapse */}
+            <div style={{ display: "grid", gridTemplateRows: expandedSeason !== null ? "1fr" : "0fr", transition: "grid-template-rows 0.3s ease" }}>
+              <div style={{ overflow: "hidden", minHeight: 0 }}>
                 {seasonsData.seasons.length > 0 && (
                   <div className="space-y-0 divide-y divide-border">
                     {seasonsData.seasons.map((season) => (
@@ -1092,8 +1113,8 @@ export default function MovieDetail() {
                             : <ChevronDown className="w-4 h-4 text-muted-foreground" />
                           }
                         </button>
-                        <div style={{ display: "grid", gridTemplateRows: expandedSeason === season.seasonNumber ? "1fr" : "0fr", transition: "grid-template-rows 0.25s ease" }}>
-                          <div style={{ overflow: "hidden" }}>
+                        <div style={{ display: "grid", gridTemplateRows: expandedSeason === season.seasonNumber ? "1fr" : "0fr", transition: "grid-template-rows 0.3s ease" }}>
+                          <div style={{ overflow: "hidden", minHeight: 0 }}>
                             <div className="space-y-0 divide-y divide-border">
                               {season.episodes.map((ep) => (
                                 <div key={ep.episodeNumber} className="py-2.5 px-3 bg-background space-y-0.5">
@@ -1143,8 +1164,8 @@ export default function MovieDetail() {
               ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
               : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />}
           </button>
-          <div style={{ display: "grid", gridTemplateRows: showDetails ? "1fr" : "0fr", transition: "grid-template-rows 0.25s ease" }}>
-            <div style={{ overflow: "hidden" }}>
+          <div style={{ display: "grid", gridTemplateRows: showDetails ? "1fr" : "0fr", transition: "grid-template-rows 0.3s ease" }}>
+            <div style={{ overflow: "hidden", minHeight: 0 }}>
 
               {/* Characters — shown first inside Details; show skeleton while loading */}
               {!charsData && showDetails && (
@@ -1184,7 +1205,7 @@ export default function MovieDetail() {
                     style={{ WebkitOverflowScrolling: "touch", marginLeft: -20, marginRight: -20, paddingLeft: 20, paddingRight: 20 }}
                   >
                     {charsData!.results.map((char) => {
-                      const isClickable = true;
+                      const isClickable = char.wikidataId.startsWith("al:");
                       const cardInner = (
                         <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
                           <div className="relative" style={{ aspectRatio: "2/3" }}>
