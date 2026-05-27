@@ -319,13 +319,14 @@ export default function MovieDetail() {
     if (prev && prev !== movieId) {
       // Save the PREVIOUS movie's showDetails state (ref holds the real current value)
       scrollStore.set(`movie-${prev}-details`, showDetailsRef.current ? 1 : 0);
-      if (scrollRef.current) scrollRef.current.scrollTop = 0;
-      // NOTE: do NOT delete movie-${movieId} here — that wipes the stored scroll
-      // position when the user navigates BACK to a previously-visited movie
-      // (e.g. pressing back through a collection/spinoff chain).
-      // Forward-navigation fresh-starts are handled by goToMovie() and
-      // PersonMovieCard's onClick which explicitly delete before navigating.
-      // Restore showDetails for the newly entered movie (default false)
+      // Use the saved scroll position directly:
+      //   • Forward navigation (goToMovie / PersonMovieCard): caller deletes the entry
+      //     → savedPos = 0 → reset to top (correct fresh start).
+      //   • Back navigation (navBack / browser back): entry is preserved
+      //     → savedPos > 0 → restore immediately, no flicker, RESTORE effect retries
+      //     if content isn't loaded yet.
+      const _savedPos = scrollStore.get(`movie-${movieId}`) ?? 0;
+      if (scrollRef.current) scrollRef.current.scrollTop = _savedPos;
       setShowDetails((scrollStore.get(`movie-${movieId}-details`) ?? 0) === 1);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -765,7 +766,7 @@ export default function MovieDetail() {
   const navSrclang = srclang;
 
   return (
-    <div ref={scrollRef} className="h-full overflow-y-auto overscroll-y-none">
+    <div ref={scrollRef} className="h-full overflow-y-auto overscroll-y-none" style={{ overflowAnchor: "none" }}>
 
       {/* ── Hero poster — full 2:3 ratio ── */}
       <div className="relative w-full overflow-hidden">
@@ -1099,7 +1100,7 @@ export default function MovieDetail() {
               }
             </button>
             {/* Smooth open/close — min-height:0 on inner div is critical for 0fr collapse */}
-            <div style={{ display: "grid", gridTemplateRows: expandedSeason !== null ? "1fr" : "0fr", transition: "grid-template-rows 0.35s cubic-bezier(0.4, 0, 0.2, 1)" }}>
+            <div style={{ display: "grid", gridTemplateRows: expandedSeason !== null ? "1fr" : "0fr", transition: "grid-template-rows 0.4s cubic-bezier(0.4, 0, 0.2, 1)", overflowAnchor: "none" }}>
               <div style={{ overflow: "hidden", minHeight: 0 }}>
                 {seasonsData.seasons.length > 0 && (
                   <div className="space-y-0 divide-y divide-border">
@@ -1115,7 +1116,7 @@ export default function MovieDetail() {
                             : <ChevronDown className="w-4 h-4 text-muted-foreground" />
                           }
                         </button>
-                        <div style={{ display: "grid", gridTemplateRows: expandedSeason === season.seasonNumber ? "1fr" : "0fr", transition: "grid-template-rows 0.35s cubic-bezier(0.4, 0, 0.2, 1)" }}>
+                        <div style={{ display: "grid", gridTemplateRows: expandedSeason === season.seasonNumber ? "1fr" : "0fr", transition: "grid-template-rows 0.4s cubic-bezier(0.4, 0, 0.2, 1)", overflowAnchor: "none" }}>
                           <div style={{ overflow: "hidden", minHeight: 0 }}>
                             <div className="space-y-0 divide-y divide-border">
                               {season.episodes.map((ep) => (
@@ -1166,7 +1167,7 @@ export default function MovieDetail() {
               ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
               : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />}
           </button>
-          <div style={{ display: "grid", gridTemplateRows: showDetails ? "1fr" : "0fr", transition: "grid-template-rows 0.35s cubic-bezier(0.4, 0, 0.2, 1)" }}>
+          <div style={{ display: "grid", gridTemplateRows: showDetails ? "1fr" : "0fr", transition: "grid-template-rows 0.4s cubic-bezier(0.4, 0, 0.2, 1)", overflowAnchor: "none" }}>
             <div style={{ overflow: "hidden", minHeight: 0 }}>
 
               {/* ── Characters: skeleton cards with spinner while AniList/CV loads ── */}

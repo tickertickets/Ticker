@@ -524,7 +524,9 @@ export async function getAniListCharacterById(id: number): Promise<AniListCharDe
 
   const c = data?.Character;
   if (!c) {
-    charDetailCache.set(id, { detail: null, ts: Date.now() });
+    // Cache null for only 5 minutes — prevents hammering a temporarily-down API
+    // while still allowing recovery without a server restart.
+    charDetailCache.set(id, { detail: null, ts: Date.now() - CACHE_TTL + 5 * 60 * 1000 });
     return null;
   }
 

@@ -709,7 +709,7 @@ async function buildCvDetailResponse(cvId: number, now: number) {
     description: fullDescription.trim(),
     structuredInfo: [] as StructuredInfoEntry[],
     imageUrl: cvDetail.image?.super_url ?? cvDetail.image?.medium_url ?? null,
-    filmography,
+    filmography: [] as FilmographyEntry[],
     source: "comicvine" as const,
     sourceUrl: cvDetail.site_detail_url ?? `https://comicvine.gamespot.com/character/4005-${cvId}/`,
   };

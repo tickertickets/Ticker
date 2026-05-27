@@ -210,7 +210,10 @@ export function cvNameMatches(
   const matches = (name: string) => {
     const n = norm(name);
     const s = stripThe(name);
-    return n === q || s === qStrip || n === qStrip || s === q;
+    // Exact match OR name begins with "query " (handles "Peter Parker (Earth-616)"
+    // matching query "Peter Parker", or "Spider-Man (Peter Parker)" matching "Spider-Man")
+    return n === q || s === qStrip || n === qStrip || s === q
+      || n.startsWith(q + " ") || s.startsWith(qStrip + " ");
   };
 
   if (matches(result.name)) return true;
