@@ -427,6 +427,8 @@ export default function Home() {
           setHeaderHidden(false);
           scrollUpDelta = 0;
         }
+      } else {
+        // y === lastY (no movement) — do nothing, preserve delta
       }
       lastY = y;
     };

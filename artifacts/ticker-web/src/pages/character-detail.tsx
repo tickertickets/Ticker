@@ -64,7 +64,7 @@ function FilmCard({ film, navSrclang }: { film: CharFilm; navSrclang: string }) 
     : "#";
 
   return (
-    <Link href={href} onClick={() => film.imdbId && scrollStore.delete(`movie-${film.imdbId}`)}>
+    <Link href={href} onClick={() => { if (film.imdbId) { scrollStore.delete(`movie-${film.imdbId}`); scrollStore.delete(`movie-${film.imdbId}-details`); } }}>
       <div
         className="relative rounded-xl overflow-hidden bg-zinc-900 border border-border w-full"
         style={{ aspectRatio: "2/3" }}

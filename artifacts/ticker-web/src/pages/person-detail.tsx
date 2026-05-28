@@ -66,7 +66,7 @@ function PersonMovieCard({ movie, navSrclang }: { movie: PersonMovie; navSrclang
     : `/movie/${encodeURIComponent(movie.imdbId)}`;
 
   return (
-    <Link href={href} onClick={() => scrollStore.delete(`movie-${movie.imdbId}`)}>
+    <Link href={href} onClick={() => { scrollStore.delete(`movie-${movie.imdbId}`); scrollStore.delete(`movie-${movie.imdbId}-details`); }}>
       <div
         className="relative rounded-xl overflow-hidden bg-zinc-900 border border-border shimmer-no-border w-full"
         style={{ aspectRatio: "2/3" }}

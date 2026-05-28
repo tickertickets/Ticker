@@ -1234,13 +1234,31 @@ export default function MovieDetail() {
                           </div>
                         ))
                     ) : (charsData.results ?? []).length === 0 ? (
-                      <p className="text-xs text-muted-foreground py-2 px-1">
-                        {lang === "th" ? "เรื่องนี้ไม่มีข้อมูลตัวละคร" : "No character data available"}
-                      </p>
+                      // No AniList/CV matches — show TMDB cast as non-clickable fallback cards
+                      (creditsData?.cast ?? [])
+                        .filter(p => p.character && p.character.trim())
+                        .slice(0, 15)
+                        .map((p, i) => (
+                          <div key={i} className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border">
+                            <div className="relative" style={{ aspectRatio: "2/3" }}>
+                              {p.profileUrl ? (
+                                <img src={p.profileUrl} alt={p.character} className="w-full h-full object-cover object-top" loading="eager" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center bg-zinc-900">
+                                  <User className="w-4 h-4 text-muted-foreground opacity-30" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="p-1.5 pb-2 min-h-[44px] overflow-hidden">
+                              <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{p.character?.split("/")[0]?.trim()}</p>
+                            </div>
+                          </div>
+                        ))
                     ) : (
-                      // Loaded: show only AniList/CV matched characters (no actor-photo fill-ins)
+                      // Loaded: show AniList/CV matched characters
                       (charsData.results ?? []).map((char) => {
-                        // al: = direct AniList match, alm: = lazy AniList, cv: = Comic Vine — all linkable
+                        // al: = direct AniList match, alm: = lazy AniList, cv: = Comic Vine — all clickable
+                        // cast: = TMDB-only fallback stub — non-clickable
                         const isClickable = !char.wikidataId.startsWith("cast:");
                         const cardInner = (
                           <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
@@ -1286,8 +1304,14 @@ export default function MovieDetail() {
                   return a.releaseDate.localeCompare(b.releaseDate);
                 });
                 const goToMovie = (targetImdbId: string) => {
+                  // Save current movie's scroll position before navigating away
+                  if (scrollRef.current) {
+                    scrollStore.set(`movie-${movieId}`, scrollRef.current.scrollTop);
+                    scrollStore.set(`movie-${movieId}-details`, showDetails ? 1 : 0);
+                  }
+                  // Target movie should always start fresh at top
                   scrollStore.delete(`movie-${targetImdbId}`);
-                  if (scrollRef.current) scrollRef.current.scrollTop = 0;
+                  scrollStore.delete(`movie-${targetImdbId}-details`);
                 };
                 return (
                   <>

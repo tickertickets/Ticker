@@ -420,14 +420,15 @@ export default function Search() {
       setHeaderHidden(false);
       scrollUpDeltaRef.current = 0;
     } else if (delta > 0) {
-      // Scrolling down (reading further) — reset accumulator, hide after header height
-      scrollUpDeltaRef.current = 0;
+      // Scrolling down — hide header and reset upward accumulator
       if (y > headerH) setHeaderHidden(true);
+      scrollUpDeltaRef.current = 0;
     } else if (delta < 0) {
       // Scrolling up — accumulate; only show bar once threshold is reached
       scrollUpDeltaRef.current += Math.abs(delta);
       if (scrollUpDeltaRef.current >= SHOW_THRESHOLD) {
         setHeaderHidden(false);
+        scrollUpDeltaRef.current = 0;
       }
     }
   }, [headerH]);

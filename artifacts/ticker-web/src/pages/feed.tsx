@@ -197,6 +197,8 @@ export default function Feed() {
           setHeaderHidden(false);
           scrollUpDelta = 0;
         }
+      } else {
+        // y === lastY — no movement
       }
       lastY = y;
     };

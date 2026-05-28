@@ -680,7 +680,8 @@ router.get(
       }
     } catch { /* ignore DB errors — fall through to live fetch */ }
 
-    let characterEntries: Array<{ name: string; altName: string | null }> = [];
+    const PROFILE_BASE = "https://image.tmdb.org/t/p/w185";
+    let characterEntries: Array<{ name: string; altName: string | null; profilePath: string | null }> = [];
     let movieTitle = "";
     let originalLanguage = "";
     let genreIds: number[] = [];
@@ -694,7 +695,7 @@ router.get(
         hasFranchise = true;
         const tvId = tmdbId.replace("tmdb_tv:", "");
         const [credits, tvInfo] = await Promise.all([
-          tmdbFetch<{ cast?: Array<{ character?: string; roles?: Array<{ character?: string }> }> }>(
+          tmdbFetch<{ cast?: Array<{ character?: string; roles?: Array<{ character?: string }>; profile_path?: string | null }> }>(
             `/tv/${tvId}/aggregate_credits`,
           ).catch(() => ({ cast: [] })),
           tmdbFetch<TvInfoShape>(`/tv/${tvId}`).catch((): TvInfoShape => ({})),
@@ -708,7 +709,7 @@ router.get(
             .map(c => {
               const raw = c.roles?.[0]?.character ?? c.character ?? "";
               const parts = raw.split("/");
-              return { name: cleanCharacterName(parts[0] ?? ""), altName: parts[1] ? cleanCharacterName(parts[1]) : null };
+              return { name: cleanCharacterName(parts[0] ?? ""), altName: parts[1] ? cleanCharacterName(parts[1]) : null, profilePath: c.profile_path ?? null };
             })
             .filter(e => {
               if (e.name.length <= 1 || isBlockedCharacterName(e.name)) return false;
@@ -737,7 +738,7 @@ router.get(
             isTvSeries = true;
             hasFranchise = true;
             const [credits, tvInfo] = await Promise.all([
-              tmdbFetch<{ cast?: Array<{ character?: string; roles?: Array<{ character?: string }> }> }>(
+              tmdbFetch<{ cast?: Array<{ character?: string; roles?: Array<{ character?: string }>; profile_path?: string | null }> }>(
                 `/tv/${tvHit.id}/aggregate_credits`,
               ).catch(() => ({ cast: [] })),
               tmdbFetch<TvInfoShape>(`/tv/${tvHit.id}`).catch((): TvInfoShape => ({})),
@@ -751,7 +752,7 @@ router.get(
                 .map(c => {
                   const raw = c.roles?.[0]?.character ?? c.character ?? "";
                   const parts = raw.split("/");
-                  return { name: cleanCharacterName(parts[0] ?? ""), altName: parts[1] ? cleanCharacterName(parts[1]) : null };
+                  return { name: cleanCharacterName(parts[0] ?? ""), altName: parts[1] ? cleanCharacterName(parts[1]) : null, profilePath: c.profile_path ?? null };
                 })
                 .filter(e => {
                   if (e.name.length <= 1 || isBlockedCharacterName(e.name)) return false;
@@ -769,7 +770,7 @@ router.get(
 
         if (movieNumId && !isTvSeries) {
           const [credits, movieInfo] = await Promise.all([
-            tmdbFetch<{ cast?: Array<{ character?: string }> }>(
+            tmdbFetch<{ cast?: Array<{ character?: string; profile_path?: string | null }> }>(
               `/movie/${movieNumId}/credits`,
             ).catch(() => ({ cast: [] })),
             tmdbFetch<MovieInfoShape>(`/movie/${movieNumId}`).catch((): MovieInfoShape => ({})),
@@ -785,7 +786,7 @@ router.get(
               .map(c => {
                 const raw = c.character ?? "";
                 const parts = raw.split("/");
-                return { name: cleanCharacterName(parts[0] ?? ""), altName: parts[1] ? cleanCharacterName(parts[1]) : null };
+                return { name: cleanCharacterName(parts[0] ?? ""), altName: parts[1] ? cleanCharacterName(parts[1]) : null, profilePath: c.profile_path ?? null };
               })
               .filter(e => {
                 if (e.name.length <= 1 || isBlockedCharacterName(e.name)) return false;
@@ -853,11 +854,13 @@ router.get(
         } else if (anilistMediaId) {
           // Unmatched in pre-fetched list — encode media ID for validated lazy fetch
           // `alm:mediaId:charName` tells the detail handler to search within that specific media
+          // Use actor profile photo as placeholder image until the character detail page loads
+          const actorThumb = entry.profilePath ? `${PROFILE_BASE}${entry.profilePath}` : null;
           results.push({
             name: entry.name,
             wikidataId: `alm:${anilistMediaId}:${encodeURIComponent(entry.name)}`,
             description: "",
-            imageUrl: null,
+            imageUrl: actorThumb,
             alias: null,
             source: "anilist",
           });
