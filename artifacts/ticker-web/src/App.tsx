@@ -224,7 +224,7 @@ function AppRoutes() {
     const movieId = extractMovieId(location);
     if (movieId) {
       setBgMovieId(movieId);
-    } else if (!/^\/ticket\//.test(location)) {
+    } else if (!/^\/ticket\//.test(location) && !/^\/(?:person|character|wiki)\//.test(location)) {
       setBgMovieId(null);
     }
   }, [location]);
@@ -273,7 +273,8 @@ function AppRoutes() {
     const guestSubPageOpen = !isGuestTab;
 
     const isOnGuestMoviePage   = extractMovieId(location) !== null;
-    const showGuestMovieLayer  = bgMovieId !== null && isOnGuestMoviePage;
+    const isOnGuestStackPage   = /^\/(?:person|character|wiki)\//.test(location);
+    const showGuestMovieLayer  = bgMovieId !== null && (isOnGuestMoviePage || isOnGuestStackPage);
     const showGuestSubPage     = guestSubPageOpen && !isOnGuestMoviePage;
 
     return (
@@ -322,9 +323,10 @@ function AppRoutes() {
   const activeTab = isTabPath(location) ? location : "/";
   const subPageOpen = !isTabPath(location);
 
-  const isOnMoviePage  = extractMovieId(location) !== null;
-  const isOnTicketPage = /^\/ticket\/[^/]+$/.test(location);
-  const showMovieLayer   = bgMovieId !== null && (isOnMoviePage || isOnTicketPage);
+  const isOnMoviePage      = extractMovieId(location) !== null;
+  const isOnTicketPage     = /^\/ticket\/[^/]+$/.test(location);
+  const isOnMovieStackPage = /^\/(?:person|character|wiki)\//.test(location);
+  const showMovieLayer   = bgMovieId !== null && (isOnMoviePage || isOnTicketPage || isOnMovieStackPage);
   const movieLayerActive = isOnMoviePage;
   const showOtherSubPage = subPageOpen && !isOnMoviePage;
 

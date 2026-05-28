@@ -220,16 +220,17 @@ function matchAniListChar(tmdbName: string, anilistChars: AniListChar[]): AniLis
     }
   }
   // 5. Single-component match (TMDB has only one word, ≥ 4 chars)
-  //    Matches if that word exactly equals one word in a 2-word AniList name.
-  //    e.g. "Sukuna" → "Ryomen Sukuna", "Gojo" → "Satoru Gojo"
+  //    Matches if that word exactly equals one word in a multi-word AniList name.
+  //    e.g. "Sukuna" → "Ryomen Sukuna", "Gojo" → "Satoru Gojo",
+  //         "Chopper" → "Tony Tony Chopper"
   if (tmdbWords.length === 1 && tmdbWords[0]!.length >= 4) {
     const q      = tmdbWords[0]!;
     const qRom   = tmdbRomaji;
     for (const ac of anilistChars) {
       const acW    = normalize(ac.name).split(/\s+/).filter(w => w.length > 1);
       const acWRom = normalizeRomaji(ac.name).split(/\s+/).filter(w => w.length > 1);
-      if (acW.length === 2   && acW.includes(q))    return ac;
-      if (acWRom.length === 2 && acWRom.includes(qRom)) return ac;
+      if (acW.length >= 2   && acW.includes(q))    return ac;
+      if (acWRom.length >= 2 && acWRom.includes(qRom)) return ac;
     }
   }
   return null;
@@ -536,7 +537,7 @@ function characterBelongsToFranchise(
  * Each character causes at most 2 CV API calls (search + detail), both cached.
  */
 async function lookupComicVineForMovie(
-  characterNames: string[],
+  characterEntries: Array<{ name: string; altName: string | null }>,
   movieTitle: string,
   franchiseName: string | null,
 ): Promise<Map<string, { id: number; name: string; imageUrl: string | null; sourceUrl: string }>> {
@@ -548,38 +549,47 @@ async function lookupComicVineForMovie(
   // because their title words (e.g. "wars", "maul") are used as validation terms.
   const threshold = franchiseName ? 0.65 : 0.4;
 
+  // Try one candidate (search result) against the franchise validation.
+  const tryCvCandidate = async (
+    storeKey: string,
+    searchName: string,
+  ): Promise<boolean> => {
+    const searchResults = await searchComicVineCharacters(searchName, 5);
+    const candidates = searchResults.filter(r => cvNameMatches(r, searchName));
+    for (const candidate of candidates) {
+      const detail = await getComicVineCharacterById(candidate.id).catch(() => null);
+      if (!detail) continue;
+      const hasImage = !!(detail.image?.super_url || detail.image?.medium_url);
+      const hasDesc  = !!(detail.deck || detail.description);
+      if (!hasImage && !hasDesc) continue;
+      if (!characterBelongsToFranchise(detail.volume_credits, terms.validation, threshold)) continue;
+      resultMap.set(storeKey, {
+        id:        detail.id,
+        name:      detail.name,
+        imageUrl:  detail.image?.super_url ?? detail.image?.medium_url ?? null,
+        sourceUrl: detail.site_detail_url ?? `https://comicvine.gamespot.com/character/4005-${detail.id}/`,
+      });
+      return true;
+    }
+    return false;
+  };
+
   // Process in batches of 5 to avoid overwhelming the CV API with concurrent requests.
   const BATCH = 5;
-  for (let i = 0; i < characterNames.length; i += BATCH) {
-    const batch = characterNames.slice(i, i + BATCH);
+  for (let i = 0; i < characterEntries.length; i += BATCH) {
+    const batch = characterEntries.slice(i, i + BATCH);
     await Promise.allSettled(
-      batch.map(async (charName) => {
+      batch.map(async ({ name: charName, altName }) => {
         if (charName.trim().length < 3) return;
         try {
-          // Search CV for this character name
-          const searchResults = await searchComicVineCharacters(charName, 5);
-          // Take the first result whose name/alias matches
-          const match = searchResults.find(r => cvNameMatches(r, charName));
-          if (!match) return;
-
-          // Fetch full detail (search results may lack volume_credits / description)
-          const detail = await getComicVineCharacterById(match.id).catch(() => null);
-          if (!detail) return;
-
-          // Require at least an image or description — rejects empty placeholder stubs
-          const hasImage = !!(detail.image?.super_url || detail.image?.medium_url);
-          const hasDesc  = !!(detail.deck || detail.description);
-          if (!hasImage && !hasDesc) return;
-
-          // Validate the character belongs to this movie's franchise / source material
-          if (!characterBelongsToFranchise(detail.volume_credits, terms.validation, threshold)) return;
-
-          resultMap.set(charName, {
-            id:        detail.id,
-            name:      detail.name,
-            imageUrl:  detail.image?.super_url ?? detail.image?.medium_url ?? null,
-            sourceUrl: detail.site_detail_url ?? `https://comicvine.gamespot.com/character/4005-${detail.id}/`,
-          });
+          // Try primary name first; if not found and altName exists, try that too.
+          // This handles cases like "Peter Parker / Spider-Man" where the CV character
+          // is stored under "Spider-Man" (not found by real_name search) — we try
+          // "Spider-Man" as the altName and succeed.
+          const found = await tryCvCandidate(charName, charName);
+          if (!found && altName && altName.trim().length >= 3 && altName !== charName) {
+            await tryCvCandidate(charName, altName);
+          }
         } catch { /* ignore — character simply won't be included */ }
       }),
     );
@@ -670,7 +680,7 @@ router.get(
       }
     } catch { /* ignore DB errors — fall through to live fetch */ }
 
-    let characterEntries: Array<{ name: string }> = [];
+    let characterEntries: Array<{ name: string; altName: string | null }> = [];
     let movieTitle = "";
     let originalLanguage = "";
     let genreIds: number[] = [];
@@ -695,7 +705,11 @@ router.get(
         {
           const seen = new Set<string>();
           characterEntries = (credits.cast ?? [])
-            .map(c => ({ name: cleanCharacterName(c.roles?.[0]?.character ?? c.character ?? "") }))
+            .map(c => {
+              const raw = c.roles?.[0]?.character ?? c.character ?? "";
+              const parts = raw.split("/");
+              return { name: cleanCharacterName(parts[0] ?? ""), altName: parts[1] ? cleanCharacterName(parts[1]) : null };
+            })
             .filter(e => {
               if (e.name.length <= 1 || isBlockedCharacterName(e.name)) return false;
               const k = e.name.toLowerCase();
@@ -703,7 +717,7 @@ router.get(
               seen.add(k);
               return true;
             })
-            .slice(0, 20);
+            .slice(0, 30);
         }
 
       } else {
@@ -734,7 +748,11 @@ router.get(
             {
               const seen = new Set<string>();
               characterEntries = (credits.cast ?? [])
-                .map(c => ({ name: cleanCharacterName(c.roles?.[0]?.character ?? c.character ?? "") }))
+                .map(c => {
+                  const raw = c.roles?.[0]?.character ?? c.character ?? "";
+                  const parts = raw.split("/");
+                  return { name: cleanCharacterName(parts[0] ?? ""), altName: parts[1] ? cleanCharacterName(parts[1]) : null };
+                })
                 .filter(e => {
                   if (e.name.length <= 1 || isBlockedCharacterName(e.name)) return false;
                   const k = e.name.toLowerCase();
@@ -742,7 +760,7 @@ router.get(
                   seen.add(k);
                   return true;
                 })
-                .slice(0, 20);
+                .slice(0, 30);
             }
           } else if (movieHit) {
             movieNumId = String(movieHit.id);
@@ -764,7 +782,11 @@ router.get(
           {
             const seen = new Set<string>();
             characterEntries = (credits.cast ?? [])
-              .map(c => ({ name: cleanCharacterName(c.character ?? "") }))
+              .map(c => {
+                const raw = c.character ?? "";
+                const parts = raw.split("/");
+                return { name: cleanCharacterName(parts[0] ?? ""), altName: parts[1] ? cleanCharacterName(parts[1]) : null };
+              })
               .filter(e => {
                 if (e.name.length <= 1 || isBlockedCharacterName(e.name)) return false;
                 const k = e.name.toLowerCase();
@@ -772,7 +794,7 @@ router.get(
                 seen.add(k);
                 return true;
               })
-              .slice(0, 20);
+              .slice(0, 25);
           }
         }
       }
@@ -804,7 +826,7 @@ router.get(
     let cvLookup = new Map<string, { id: number; name: string; imageUrl: string | null; sourceUrl: string }>();
     if (!anime) {
       cvLookup = await lookupComicVineForMovie(
-        characterEntries.map(e => e.name),
+        characterEntries,
         movieTitle,
         franchiseName,
       );
@@ -815,7 +837,8 @@ router.get(
 
     for (const entry of characterEntries) {
       if (anime) {
-        const alMatch = matchAniListChar(entry.name, anilistChars);
+        const alMatch = matchAniListChar(entry.name, anilistChars)
+          ?? (entry.altName ? matchAniListChar(entry.altName, anilistChars) : null);
         if (alMatch) {
           // Confirmed match within the specific anime
           results.push({

@@ -186,7 +186,7 @@ const CHARS_QUERY = `
     Media(search: $title, type: ANIME) {
       id
       title { english romaji }
-      characters(sort: FAVOURITES_DESC, page: 1, perPage: 50) {
+      characters(sort: FAVOURITES_DESC, page: 1, perPage: 100) {
         nodes {
           id
           name { full alternative native }
@@ -203,7 +203,7 @@ const CHARS_BY_ID_QUERY = `
     Media(id: $id, type: ANIME) {
       id
       title { english romaji }
-      characters(sort: FAVOURITES_DESC, page: 1, perPage: 80) {
+      characters(sort: FAVOURITES_DESC, page: 1, perPage: 150) {
         nodes {
           id
           name { full alternative native }

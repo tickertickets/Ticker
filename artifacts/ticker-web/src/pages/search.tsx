@@ -411,7 +411,7 @@ export default function Search() {
 
   // Accumulate upward scroll — bar only reappears after scrolling up 40 px
   const scrollUpDeltaRef = useRef(0);
-  const SHOW_THRESHOLD = 40;
+  const SHOW_THRESHOLD = 150;
 
   // Header auto-hide on scroll
   const handleScrollChange = useCallback((y: number, lastY: number) => {
