@@ -15,13 +15,10 @@ import {
 } from "../lib/anilist";
 import {
   searchComicVineCharacters,
-  searchComicVineVolumes,
-  getCvVolumeCharacters,
   getComicVineCharacterById,
   cleanCvDescription,
   cvNameMatches,
   type VolumeCredit,
-  type ComicVineVolume,
 } from "../lib/comicvine";
 
 const router = Router();
@@ -480,6 +477,21 @@ function buildFranchiseTerms(movieTitle: string, franchiseName: string | null): 
   const base = movieTitle.replace(/[:\-–—].+$/, "").trim();
   if (base && base !== movieTitle) add(base, [validation]);
 
+  // For movies WITHOUT a TMDB franchise, also add individual title words (≥4 chars)
+  // as validation terms.  This is essential for standalone films like
+  // "Star Wars Maul Shadow Lord" where the full title doesn't match any CV volume,
+  // but individual words like "wars" or "maul" do match "Star Wars" or "Darth Maul".
+  if (!franchiseName) {
+    const STOP = new Set(["the", "and", "for", "from", "with", "into", "this", "that",
+                          "last", "over", "dark", "rise", "fall", "true", "real"]);
+    movieTitle
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter(w => w.length >= 4 && !STOP.has(w))
+      .forEach(w => add(w, [validation]));
+  }
+
   return {
     volumeSearch: [...volumeSearch],
     validation:   [...validation],
@@ -489,38 +501,39 @@ function buildFranchiseTerms(movieTitle: string, franchiseName: string | null): 
 /**
  * Check if a CV character's volume_credits include any volume title that
  * matches one of the franchise terms well enough.
- * This is the core franchise-validation gate that prevents wrong characters.
+ * threshold defaults to 0.65 for franchise movies; pass 0.4 for standalone films.
  */
 function characterBelongsToFranchise(
   volumeCredits: VolumeCredit[] | undefined,
   franchiseTerms: string[],
+  threshold = 0.65,
 ): boolean {
   if (!volumeCredits || volumeCredits.length === 0) return false;
   for (const vc of volumeCredits) {
     for (const term of franchiseTerms) {
-      if (volumeTitleScore(vc.name, term) >= 0.65) return true;
+      if (volumeTitleScore(vc.name, term) >= threshold) return true;
     }
   }
   return false;
 }
 
-// ── CV Volume-First + Fallback Lookup ────────────────────────────────────────
+// ── CV Character Lookup ───────────────────────────────────────────────────────
 
 /**
- * For non-anime movies/shows: find matching Comic Vine characters while
- * strictly validating they belong to the correct franchise.
+ * For non-anime movies/shows: find matching Comic Vine characters and validate
+ * that they belong to this movie's source material.
  *
- * Two-pass strategy:
- *  Pass 1 — Volume-based (strict 0.75 threshold):
- *    Find the CV volume that best matches the franchise title, then
- *    cross-reference TMDB character names against that volume's characters.
+ * Strategy: direct character search + volume_credits validation.
+ *  1. Search CV for each character name (top 5 results).
+ *  2. Take the first result whose name matches (cvNameMatches).
+ *  3. Fetch full character detail (cached after first call).
+ *  4. Validate via volume_credits that the character is from this franchise.
+ *     — Franchise movies (TMDB collection): strict threshold 0.65
+ *     — Standalone movies: relaxed threshold 0.4 + word-level validation terms
+ *  5. Require at least an image OR description (rejects empty stubs).
  *
- *  Pass 2 — Direct search + volume_credits validation (for chars missed in pass 1):
- *    Search CV for the character name directly, then validate via
- *    volume_credits that the result actually belongs to this franchise.
- *    Only include results that have an image (or at minimum a description).
- *
- * Characters not validated by either pass are excluded entirely.
+ * Characters are processed in batches of 5 to avoid CV API rate limits.
+ * Each character causes at most 2 CV API calls (search + detail), both cached.
  */
 async function lookupComicVineForMovie(
   characterNames: string[],
@@ -531,137 +544,46 @@ async function lookupComicVineForMovie(
   if (!process.env["COMIC_VINE_API_KEY"] || !movieTitle) return resultMap;
 
   const terms = buildFranchiseTerms(movieTitle, franchiseName);
+  // Franchise movies use strict threshold; standalone films use relaxed threshold
+  // because their title words (e.g. "wars", "maul") are used as validation terms.
+  const threshold = franchiseName ? 0.65 : 0.4;
 
-  // ── Pass 1: Volume-based matching ─────────────────────────────────────────
-  // Only search using SPECIFIC, complete titles (volumeSearch terms).
-  // We do NOT use the stripped base name here: searching for "Punisher" alone
-  // would match the 200-issue omnibus and pull in unrelated characters.
+  // Process in batches of 5 to avoid overwhelming the CV API with concurrent requests.
+  const BATCH = 5;
+  for (let i = 0; i < characterNames.length; i += BATCH) {
+    const batch = characterNames.slice(i, i + BATCH);
+    await Promise.allSettled(
+      batch.map(async (charName) => {
+        if (charName.trim().length < 3) return;
+        try {
+          // Search CV for this character name
+          const searchResults = await searchComicVineCharacters(charName, 5);
+          // Take the first result whose name/alias matches
+          const match = searchResults.find(r => cvNameMatches(r, charName));
+          if (!match) return;
 
-  let bestVolume: ComicVineVolume | null = null;
-  let bestScore = 0;
+          // Fetch full detail (search results may lack volume_credits / description)
+          const detail = await getComicVineCharacterById(match.id).catch(() => null);
+          if (!detail) return;
 
-  for (const query of terms.volumeSearch) {
-    const volumes = await searchComicVineVolumes(query, 10).catch(() => []);
-    for (const vol of volumes) {
-      let score = 0;
-      // Score against ALL volumeSearch terms (strictest possible match)
-      for (const t of terms.volumeSearch) {
-        score = Math.max(score, volumeTitleScore(vol.name, t));
-      }
-      // Prefer higher score; tiebreak by issue count (main series > one-shots)
-      if (
-        score > bestScore ||
-        (score === bestScore && (vol.count_of_issues ?? 0) > (bestVolume?.count_of_issues ?? 0))
-      ) {
-        bestScore = score;
-        bestVolume = vol;
-      }
-    }
-    if (bestScore >= 0.9) break;
-  }
+          // Require at least an image or description — rejects empty placeholder stubs
+          const hasImage = !!(detail.image?.super_url || detail.image?.medium_url);
+          const hasDesc  = !!(detail.deck || detail.description);
+          if (!hasImage && !hasDesc) return;
 
-  const VOLUME_THRESHOLD = 0.75;
-  const matchedVolumeChars: Array<{ id: number; name: string }> = [];
+          // Validate the character belongs to this movie's franchise / source material
+          if (!characterBelongsToFranchise(detail.volume_credits, terms.validation, threshold)) return;
 
-  if (bestVolume && bestScore >= VOLUME_THRESHOLD) {
-    const vChars = await getCvVolumeCharacters(bestVolume.id).catch(() => []);
-    matchedVolumeChars.push(...vChars);
-  }
-
-  const unmatchedNames = new Set(characterNames);
-
-  // Process volume matches first
-  await Promise.allSettled(
-    characterNames.map(async (charName) => {
-      const match = matchedVolumeChars.find(vc => cvNameMatches(vc, charName));
-      if (!match) return;
-      try {
-        const cvDetail = await getComicVineCharacterById(match.id);
-        if (cvDetail) {
           resultMap.set(charName, {
-            id: match.id,
-            name: cvDetail.name,
-            imageUrl: cvDetail.image?.super_url ?? cvDetail.image?.medium_url ?? null,
-            sourceUrl: cvDetail.site_detail_url ?? `https://comicvine.gamespot.com/character/4005-${match.id}/`,
+            id:        detail.id,
+            name:      detail.name,
+            imageUrl:  detail.image?.super_url ?? detail.image?.medium_url ?? null,
+            sourceUrl: detail.site_detail_url ?? `https://comicvine.gamespot.com/character/4005-${detail.id}/`,
           });
-          unmatchedNames.delete(charName);
-        }
-      } catch { /* ignore */ }
-    }),
-  );
-
-  // ── Pass 2: Direct search + volume_credits franchise validation ────────────
-  // For chars not found in pass 1.
-  // Uses ALL validation terms (including stripped base name) to confirm the
-  // character belongs to the wider franchise.
-  //
-  // Min-length guard: skip character names shorter than 3 characters.
-  // This prevents generic short names ("Ma", "Jo", "V") from false-matching
-  // unrelated characters in CV that happen to share that name.
-
-  await Promise.allSettled(
-    [...unmatchedNames].map(async (charName) => {
-      // Skip names that are too short to unambiguously identify a character
-      if (charName.trim().length < 3) return;
-      try {
-        const cvResults = await searchComicVineCharacters(charName, 10);
-        const candidates = cvResults.filter(r => cvNameMatches(r, charName));
-        if (candidates.length === 0) return;
-
-        // Score ALL validated candidates and pick the highest-quality one.
-        // Quality = image (2 pts) + description (1 pt) + best franchise score (0–3 pts).
-        // This prevents picking a low-quality stub when a richer entry exists.
-        let bestEntry: { id: number; name: string; imageUrl: string | null; sourceUrl: string } | null = null;
-        let bestQuality = -1;
-
-        for (const candidate of candidates) {
-          // Use volume_credits from search result; fetch detail if absent
-          let volumeCredits = candidate.volume_credits;
-          if (!volumeCredits || volumeCredits.length === 0) {
-            const full = await getComicVineCharacterById(candidate.id).catch(() => null);
-            volumeCredits = full?.volume_credits ?? [];
-          }
-
-          // Validate franchise using broad validation terms
-          if (!characterBelongsToFranchise(volumeCredits, terms.validation)) continue;
-
-          const cvDetail = await getComicVineCharacterById(candidate.id).catch(() => null);
-          if (!cvDetail) continue;
-
-          // Require image OR description — rejects empty placeholder entries
-          const hasImage = !!(cvDetail.image?.super_url || cvDetail.image?.medium_url);
-          const hasDesc  = !!(cvDetail.deck || cvDetail.description);
-          if (!hasImage && !hasDesc) continue;
-
-          // Compute quality score
-          let qualScore = 0;
-          if (hasImage) qualScore += 2;
-          if (hasDesc)  qualScore += 1;
-          // Best franchise match across volume_credits (0–1 scaled to 0–3 pts)
-          let bestFranchise = 0;
-          for (const vc of (cvDetail.volume_credits ?? [])) {
-            for (const term of terms.validation) {
-              const s = volumeTitleScore(vc.name, term);
-              if (s > bestFranchise) bestFranchise = s;
-            }
-          }
-          qualScore += bestFranchise * 3;
-
-          if (qualScore > bestQuality) {
-            bestQuality = qualScore;
-            bestEntry = {
-              id: cvDetail.id,
-              name: cvDetail.name,
-              imageUrl: cvDetail.image?.super_url ?? cvDetail.image?.medium_url ?? null,
-              sourceUrl: cvDetail.site_detail_url ?? `https://comicvine.gamespot.com/character/4005-${cvDetail.id}/`,
-            };
-          }
-        }
-
-        if (bestEntry) resultMap.set(charName, bestEntry);
-      } catch { /* ignore */ }
-    }),
-  );
+        } catch { /* ignore — character simply won't be included */ }
+      }),
+    );
+  }
 
   return resultMap;
 }

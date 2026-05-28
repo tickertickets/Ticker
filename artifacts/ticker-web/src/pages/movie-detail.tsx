@@ -206,9 +206,13 @@ function MovieDetailChainCard({ chain }: { chain: ChainItem }) {
 
 // Accordion with JS-measured height — animates correctly on ALL browsers including iOS Safari < 16
 // (grid-template-rows animation is not supported on iOS Safari < 16).
+// `ready` starts false so the initial height render is instant (no animation), which lets
+// scroll restoration work correctly when the section is open on remount.  After two frames
+// (double-RAF) the transition is enabled so user-triggered open/close animates smoothly.
 function AccordionContent({ open, children }: { open: boolean; children?: ReactNode }) {
   const innerRef = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState(0);
+  const [ready, setReady] = useState(false);
   useEffect(() => {
     const el = innerRef.current;
     if (!el) return;
@@ -216,10 +220,12 @@ function AccordionContent({ open, children }: { open: boolean; children?: ReactN
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     measure();
-    return () => ro.disconnect();
+    let r1 = 0, r2 = 0;
+    r1 = requestAnimationFrame(() => { r2 = requestAnimationFrame(() => setReady(true)); });
+    return () => { cancelAnimationFrame(r1); cancelAnimationFrame(r2); ro.disconnect(); };
   }, []);
   return (
-    <div style={{ height: open ? height : 0, overflow: "hidden", transition: "height 0.4s cubic-bezier(0.4,0,0.2,1)", overflowAnchor: "none" }}>
+    <div style={{ height: open ? height : 0, overflow: "hidden", transition: ready ? "height 0.4s cubic-bezier(0.4,0,0.2,1)" : "none", overflowAnchor: "none" }}>
       <div ref={innerRef}>{children}</div>
     </div>
   );
@@ -1221,7 +1227,7 @@ export default function MovieDetail() {
                             <div className="relative flex items-center justify-center bg-zinc-900" style={{ aspectRatio: "2/3" }}>
                               <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" />
                             </div>
-                            <div className="p-1.5 pb-2 h-[44px]">
+                            <div className="p-1.5 pb-2 min-h-[44px]">
                               <div className="h-2 rounded bg-muted/50 animate-pulse mb-1.5" />
                               <div className="h-2 rounded bg-muted/30 animate-pulse w-2/3" />
                             </div>
@@ -1247,7 +1253,7 @@ export default function MovieDetail() {
                                 </div>
                               )}
                             </div>
-                            <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
+                            <div className="p-1.5 pb-2 min-h-[44px] overflow-hidden">
                               <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{char.name}</p>
                             </div>
                           </div>
@@ -1312,7 +1318,7 @@ export default function MovieDetail() {
                                     </div>
                                   )}
                                 </div>
-                                <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
+                                <div className="p-1.5 pb-2 min-h-[44px] overflow-hidden">
                                   <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{m.title}</p>
                                   {m.year && <p className="text-[8px] text-muted-foreground mt-0.5">{displayYear(m.year, lang)}</p>}
                                 </div>
@@ -1344,7 +1350,7 @@ export default function MovieDetail() {
                                     : <div className="w-full h-full flex items-center justify-center bg-zinc-900"><Film className="w-4 h-4 text-muted-foreground" /></div>
                                   }
                                 </div>
-                                <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
+                                <div className="p-1.5 pb-2 min-h-[44px] overflow-hidden">
                                   <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{m.title}</p>
                                   {m.year && <p className="text-[8px] text-muted-foreground mt-0.5">{displayYear(m.year, lang)}</p>}
                                 </div>
@@ -1375,7 +1381,7 @@ export default function MovieDetail() {
                               : <div className="w-full h-full flex items-center justify-center bg-zinc-900"><User className="w-4 h-4 text-muted-foreground" /></div>
                             }
                           </div>
-                          <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
+                          <div className="p-1.5 pb-2 min-h-[44px] overflow-hidden">
                             <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{p.name}</p>
                           </div>
                         </div>
@@ -1406,7 +1412,7 @@ export default function MovieDetail() {
                               : <div className="w-full h-full flex items-center justify-center bg-zinc-900"><User className="w-4 h-4 text-muted-foreground" /></div>
                             }
                           </div>
-                          <div className="p-1.5 pb-2 h-[44px] overflow-hidden">
+                          <div className="p-1.5 pb-2 min-h-[44px] overflow-hidden">
                             <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{p.name}</p>
                             {p.character && <p className="text-[8px] text-muted-foreground mt-0.5 truncate">{p.character}</p>}
                           </div>
