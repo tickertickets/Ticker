@@ -181,7 +181,7 @@ export default function Feed() {
     let lastY = saved;
     if (saved > 0) requestAnimationFrame(() => { if (el.isConnected) el.scrollTop = saved; });
     let scrollUpDelta = 0;
-    const SHOW_THRESHOLD = 60;
+    const SHOW_THRESHOLD = 150;
     const onScroll = () => {
       const y = el.scrollTop;
       scrollStore.set("feed", y);

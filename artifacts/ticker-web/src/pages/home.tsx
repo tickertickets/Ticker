@@ -412,7 +412,7 @@ export default function Home() {
     if (!el) return;
     let lastY = scrollStore.get(`home-${tab}`) ?? el.scrollTop;
     let scrollUpDelta = 0;
-    const SHOW_THRESHOLD = 60;
+    const SHOW_THRESHOLD = 150;
     const onScroll = () => {
       const y = el.scrollTop;
       if (y <= 0) {

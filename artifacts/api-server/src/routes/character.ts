@@ -856,12 +856,6 @@ router.get(
       }
     } catch { /* ignore */ }
 
-    // Standalone movies with no franchise collection → no character section
-    if (!isTvSeries && !hasFranchise) {
-      BY_MOVIE_CACHE.set(tmdbId, { results: [], ts: Date.now() });
-      return res.json({ results: [] });
-    }
-
     if (characterEntries.length === 0) {
       BY_MOVIE_CACHE.set(tmdbId, { results: [], ts: Date.now() });
       return res.json({ results: [] });

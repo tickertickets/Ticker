@@ -7,7 +7,7 @@ import { computeCardTier, computeEffectTags, TIER_VISUAL } from "@/lib/ranks";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { ChevronLeft, Film, Star, Users, Bookmark, ChevronDown, ChevronUp, Tv, Flag, Loader2, EyeOff, Lock, User, Link2, Heart, MessageCircle, Send, Search, Bell, BellOff, Info, Layers, GitBranch } from "lucide-react";
 import { ChainCard, PosterCollage, ChainCommentSheet, ChainShareModal, type ChainItem } from "@/components/ChainsSection";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, type ReactNode } from "react";
 import { cn, fmtCount, IS_PWA } from "@/lib/utils";
 import { scrollStore } from "@/lib/scroll-store";
 import { useLang, displayYear } from "@/lib/i18n";
@@ -204,6 +204,27 @@ function MovieDetailChainCard({ chain }: { chain: ChainItem }) {
   );
 }
 
+// Accordion with JS-measured height — animates correctly on ALL browsers including iOS Safari < 16
+// (grid-template-rows animation is not supported on iOS Safari < 16).
+function AccordionContent({ open, children }: { open: boolean; children?: ReactNode }) {
+  const innerRef = useRef<HTMLDivElement>(null);
+  const [height, setHeight] = useState(0);
+  useEffect(() => {
+    const el = innerRef.current;
+    if (!el) return;
+    const measure = () => { const n = el.scrollHeight; setHeight(h => n !== h ? n : h); };
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    measure();
+    return () => ro.disconnect();
+  }, []);
+  return (
+    <div style={{ height: open ? height : 0, overflow: "hidden", transition: "height 0.4s cubic-bezier(0.4,0,0.2,1)", overflowAnchor: "none" }}>
+      <div ref={innerRef}>{children}</div>
+    </div>
+  );
+}
+
 export default function MovieDetail() {
   const { t, lang } = useLang();
   const { user } = useAuth();
@@ -246,16 +267,17 @@ export default function MovieDetail() {
       [spinoffsScrollRef,   `movie-${movieId}-spinoffs-x`],
     ];
     const liveCleanups: Array<() => void> = [];
+    const attached = new Set<Element>();
 
-    // Attach live scroll listeners and restore saved positions
-    const attachAndRestore = () => {
+    // Attach listener + restore scroll — safe to call many times (deduped via `attached`)
+    // Retried at 80ms / 500ms / 1500ms to cover refs that become available after data loads.
+    const tryAttach = () => {
       rows.forEach(([ref, key]) => {
         const el = ref.current;
-        if (!el) return;
-        // Restore
+        if (!el || attached.has(el)) return;
+        attached.add(el);
         const saved = scrollStore.get(key);
         if (saved != null) el.scrollLeft = saved;
-        // Live save
         const onScroll = () => scrollStore.set(key, el.scrollLeft);
         el.addEventListener("scroll", onScroll, { passive: true });
         liveCleanups.push(() => {
@@ -265,11 +287,12 @@ export default function MovieDetail() {
       });
     };
 
-    const tid = setTimeout(attachAndRestore, 80);
+    const t1 = setTimeout(tryAttach, 80);
+    const t2 = setTimeout(tryAttach, 500);
+    const t3 = setTimeout(tryAttach, 1500);
 
-    // Save on unmount (catches refs that were live at unmount time)
     return () => {
-      clearTimeout(tid);
+      clearTimeout(t1); clearTimeout(t2); clearTimeout(t3);
       liveCleanups.forEach(fn => fn());
       rows.forEach(([ref, key]) => {
         const el = ref.current;
@@ -329,6 +352,15 @@ export default function MovieDetail() {
       if (scrollRef.current) scrollRef.current.scrollTop = _savedPos;
       setShowDetails((scrollStore.get(`movie-${movieId}-details`) ?? 0) === 1);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [movieId]);
+
+  // Save showDetails on unmount so back-navigation from person/character pages restores the open state.
+  // Without this, showDetails always resets to false, which changes page height and breaks scroll restoration.
+  useEffect(() => {
+    return () => {
+      scrollStore.set(`movie-${movieId}-details`, showDetailsRef.current ? 1 : 0);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [movieId]);
 
@@ -1099,9 +1131,7 @@ export default function MovieDetail() {
                 : <ChevronDown className="w-4 h-4 text-muted-foreground" />
               }
             </button>
-            {/* Smooth open/close — min-height:0 on inner div is critical for 0fr collapse */}
-            <div style={{ display: "grid", gridTemplateRows: expandedSeason !== null ? "1fr" : "0fr", transition: "grid-template-rows 0.4s cubic-bezier(0.4, 0, 0.2, 1)", overflowAnchor: "none" }}>
-              <div style={{ overflow: "hidden", minHeight: 0 }}>
+            <AccordionContent open={expandedSeason !== null}>
                 {seasonsData.seasons.length > 0 && (
                   <div className="space-y-0 divide-y divide-border">
                     {seasonsData.seasons.map((season) => (
@@ -1116,8 +1146,7 @@ export default function MovieDetail() {
                             : <ChevronDown className="w-4 h-4 text-muted-foreground" />
                           }
                         </button>
-                        <div style={{ display: "grid", gridTemplateRows: expandedSeason === season.seasonNumber ? "1fr" : "0fr", transition: "grid-template-rows 0.4s cubic-bezier(0.4, 0, 0.2, 1)", overflowAnchor: "none" }}>
-                          <div style={{ overflow: "hidden", minHeight: 0 }}>
+                        <AccordionContent open={expandedSeason === season.seasonNumber}>
                             <div className="space-y-0 divide-y divide-border">
                               {season.episodes.map((ep) => (
                                 <div key={ep.episodeNumber} className="py-2.5 px-3 bg-background space-y-0.5">
@@ -1142,14 +1171,12 @@ export default function MovieDetail() {
                                 </div>
                               ))}
                             </div>
-                          </div>
-                        </div>
+                        </AccordionContent>
                       </div>
                     ))}
                   </div>
                 )}
-              </div>
-            </div>
+            </AccordionContent>
           </div>
         </div>
       )}
@@ -1167,8 +1194,7 @@ export default function MovieDetail() {
               ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
               : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />}
           </button>
-          <div style={{ display: "grid", gridTemplateRows: showDetails ? "1fr" : "0fr", transition: "grid-template-rows 0.4s cubic-bezier(0.4, 0, 0.2, 1)", overflowAnchor: "none" }}>
-            <div style={{ overflow: "hidden", minHeight: 0 }}>
+          <AccordionContent open={showDetails}>
 
               {/* ── Characters: skeleton cards with spinner while AniList/CV loads ── */}
               {(creditsData && ((creditsData.cast ?? []).some(p => p.character && p.character.trim()) || (charsData?.results ?? []).length > 0)) && (
@@ -1201,6 +1227,10 @@ export default function MovieDetail() {
                             </div>
                           </div>
                         ))
+                    ) : (charsData.results ?? []).length === 0 ? (
+                      <p className="text-xs text-muted-foreground py-2 px-1">
+                        {lang === "th" ? "เรื่องนี้ไม่มีข้อมูลตัวละคร" : "No character data available"}
+                      </p>
                     ) : (
                       // Loaded: show only AniList/CV matched characters (no actor-photo fill-ins)
                       (charsData.results ?? []).map((char) => {
@@ -1387,8 +1417,7 @@ export default function MovieDetail() {
                 </div>
               )}
 
-            </div>
-          </div>
+          </AccordionContent>
         </div>
       )}
 
