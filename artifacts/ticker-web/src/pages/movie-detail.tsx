@@ -1,5 +1,5 @@
 import { useRoute, Link, useLocation } from "wouter";
-import { navBack } from "@/lib/nav-back";
+import { navBack, consumePendingBackNav } from "@/lib/nav-back";
 import { VerifiedBadge, isVerified } from "@/components/VerifiedBadge";
 import { BadgeIcon } from "@/components/BadgeIcon";
 import { MovieBadges, BADGE_DESC_TH, BADGE_DESC_EN } from "@/components/MovieBadges";
@@ -253,7 +253,14 @@ export default function MovieDetail() {
   const badgePopupRef = useRef<HTMLDivElement>(null);
   const [expandedSeason, setExpandedSeason] = useState<number | null>(null);
   const episodeRatingsRef = useRef<HTMLDivElement>(null);
-  const [showDetails, setShowDetails] = useState(() => (scrollStore.get(`movie-${movieId}-details`) ?? 0) === 1);
+  // Capture once per mount whether this is a back-navigation.
+  // useRef ensures consumePendingBackNav() is only effectively used on first render.
+  const isBackNavRef = useRef(consumePendingBackNav());
+  const isBackNav = isBackNavRef.current;
+
+  const [showDetails, setShowDetails] = useState(() =>
+    isBackNav && (scrollStore.get(`movie-${movieId}-details`) ?? 0) === 1
+  );
   const [showCollection, setShowCollection] = useState(false);
   const [showSpinoffs, setShowSpinoffs] = useState(false);
 
@@ -337,14 +344,26 @@ export default function MovieDetail() {
   const showDetailsRef = useRef(showDetails);
   showDetailsRef.current = showDetails;
 
-  // FORCE-TOP: only reset scroll when navigating to a DIFFERENT movie within
-  // the same component lifetime. On first mount we leave the stored position
-  // intact so the RESTORE effect can scroll back to where the user was.
+  // FORCE-TOP: reset scroll when navigating forward, or when navigating to a
+  // different movie within the same component lifetime (e.g. spinoffs/collection).
+  // On first mount via back-navigation we leave the stored position intact so
+  // the RESTORE effect can scroll back to where the user was.
   const prevMovieIdRef = useRef("");
   useEffect(() => {
     const prev = prevMovieIdRef.current;
     prevMovieIdRef.current = movieId;
-    // First mount: prev is "" — do NOT delete the stored position.
+
+    if (!prev) {
+      // First mount — clear stored state for forward navigation so page always
+      // starts at top with Details closed. Back navigation keeps the saved state.
+      if (!isBackNav) {
+        scrollStore.delete(`movie-${movieId}`);
+        scrollStore.delete(`movie-${movieId}-details`);
+        if (scrollRef.current) scrollRef.current.scrollTop = 0;
+      }
+      return;
+    }
+
     if (prev && prev !== movieId) {
       // Save the PREVIOUS movie's showDetails state (ref holds the real current value)
       scrollStore.set(`movie-${prev}-details`, showDetailsRef.current ? 1 : 0);
@@ -1357,7 +1376,9 @@ export default function MovieDetail() {
                         <div className="w-full flex items-center gap-2 py-1">
                           <GitBranch className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                           <p className="text-xs font-semibold text-muted-foreground flex-1">
-                            {lang === "th" ? "ภาคเสริม" : "Spinoffs"}
+                            {mainMovies.length > 0
+                              ? (lang === "th" ? "ภาคเสริม" : "Spinoffs")
+                              : (lang === "th" ? "ภาคเสริม / ที่เกี่ยวข้อง" : "Spinoffs/Related")}
                           </p>
                         </div>
                         <div ref={spinoffsScrollRef} className="flex overflow-x-auto gap-2.5 pb-1 mt-2 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>

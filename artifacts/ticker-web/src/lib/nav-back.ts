@@ -30,6 +30,22 @@ const _stack: string[] = [];
 // forward navigation to the same path to incorrectly pop the stack).
 let _backNavPending = false;
 
+// One-shot flag: set by navBack, consumed once by the next page that mounts.
+// Lets pages distinguish back-navigation (restore scroll) from forward
+// navigation (always start at top).
+let _pendingBackNav = false;
+
+/**
+ * Consume the pending-back-navigation flag.
+ * Returns true if the last navigation was a back navigation, then resets to false.
+ * Must be called at most once per page mount (use useRef to ensure this).
+ */
+export function consumePendingBackNav(): boolean {
+  const v = _pendingBackNav;
+  _pendingBackNav = false;
+  return v;
+}
+
 /**
  * เรียกทุกครั้งที่ location เปลี่ยน (จาก App.tsx useEffect)
  */
@@ -61,6 +77,7 @@ export function navBack(
   // Pop current page
   _stack.pop();
   _backNavPending = true;
+  _pendingBackNav = true;
   const prev = _stack[_stack.length - 1] ?? fallback;
   navigate(prev, { replace: true });
 }

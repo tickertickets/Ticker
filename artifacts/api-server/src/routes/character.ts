@@ -658,11 +658,18 @@ router.get(
     }
 
     const cached = BY_MOVIE_CACHE.get(tmdbId);
-    if (cached && Date.now() - cached.ts < CACHE_TTL) {
-      return res.json({ results: cached.results });
+    const _emptyTtl = 60 * 60 * 1000;
+    if (cached) {
+      const age = Date.now() - cached.ts;
+      const ttl = cached.results.length === 0 ? _emptyTtl : CACHE_TTL;
+      if (age < ttl) return res.json({ results: cached.results });
     }
 
     // Check persistent DB cache (survives server restarts)
+    // Empty results are only trusted for 1 hour — they may reflect a transient
+    // API failure or missing API keys at the time of caching. Non-empty results
+    // are trusted for the full CACHE_TTL (12 hours).
+    const EMPTY_CACHE_TTL = 60 * 60 * 1000; // 1 hour for empty result sets
     try {
       const dbRow = await db
         .select()
@@ -672,8 +679,9 @@ router.get(
       if (dbRow.length > 0) {
         const row = dbRow[0];
         const ageMs = Date.now() - new Date(row.cachedAt).getTime();
-        if (ageMs < CACHE_TTL) {
-          const results = row.results as CharResult[];
+        const results = row.results as CharResult[];
+        const effectiveTtl = results.length === 0 ? EMPTY_CACHE_TTL : CACHE_TTL;
+        if (ageMs < effectiveTtl) {
           BY_MOVIE_CACHE.set(tmdbId, { results, ts: Date.now() - ageMs });
           return res.json({ results });
         }
