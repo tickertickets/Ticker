@@ -604,26 +604,8 @@ async function buildCvDetailResponse(cvId: number, now: number) {
   const cvDetail = await getComicVineCharacterById(cvId).catch(() => null);
   if (!cvDetail) return null;
 
-  const filmCacheKey = `cv:${cvId}`;
-  const filmCached = FILMOGRAPHY_CACHE.get(filmCacheKey);
-  let filmography: FilmographyEntry[] = [];
-  if (filmCached && now - filmCached.ts < CACHE_TTL) {
-    filmography = filmCached.filmography;
-  } else {
-    const specificRealName = (cvDetail.real_name && cvDetail.real_name.length >= 6)
-      ? cvDetail.real_name : null;
-    // Three filmography sources: keyword (char name), keyword (real name), volume_credits TMDB search
-    const [kwFilmo1, kwFilmo2, vcFilmo] = await Promise.allSettled([
-      getFilmographyByKeyword(cvDetail.name),
-      specificRealName ? getFilmographyByKeyword(specificRealName) : Promise.resolve([] as FilmographyEntry[]),
-      getFilmographyFromCvVolumeCredits(cvDetail.volume_credits ?? []),
-    ]);
-    const kw1 = kwFilmo1.status === "fulfilled" ? kwFilmo1.value : [];
-    const kw2 = kwFilmo2.status === "fulfilled" ? kwFilmo2.value : [];
-    const vc  = vcFilmo.status  === "fulfilled" ? vcFilmo.value  : [];
-    filmography = mergeFilmographies(mergeFilmographies(kw1, kw2), vc);
-    FILMOGRAPHY_CACHE.set(filmCacheKey, { filmography, ts: now });
-  }
+  // CV profiles do not include filmography — they are comic characters, not actors.
+  const filmography: FilmographyEntry[] = [];
 
   // Use deck as primary short description; fall back to first paragraph of description
   const deckText = cvDetail.deck?.trim() ?? "";
@@ -862,13 +844,12 @@ router.get(
         } else if (anilistMediaId) {
           // Unmatched in pre-fetched list — encode media ID for validated lazy fetch
           // `alm:mediaId:charName` tells the detail handler to search within that specific media
-          // Use actor profile photo as placeholder image until the character detail page loads
-          const actorThumb = entry.profilePath ? `${PROFILE_BASE}${entry.profilePath}` : null;
+          // No placeholder image — character image loads when the detail page is opened
           results.push({
             name: entry.name,
             wikidataId: `alm:${anilistMediaId}:${encodeURIComponent(entry.name)}`,
             description: "",
-            imageUrl: actorThumb,
+            imageUrl: null,
             alias: null,
             source: "anilist",
           });

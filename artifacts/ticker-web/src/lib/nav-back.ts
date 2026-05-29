@@ -30,20 +30,28 @@ const _stack: string[] = [];
 // forward navigation to the same path to incorrectly pop the stack).
 let _backNavPending = false;
 
-// One-shot flag: set by navBack, consumed once by the next page that mounts.
-// Lets pages distinguish back-navigation (restore scroll) from forward
-// navigation (always start at top).
-let _pendingBackNav = false;
+/**
+ * Module-level map: movieId → version counter.
+ * Incremented each time navBack() targets that movie detail page.
+ * MovieDetail reads this via useRef (Strict Mode safe) and clears it in useEffect.
+ */
+const _restoreMovieVersions = new Map<string, number>();
 
 /**
- * Consume the pending-back-navigation flag.
- * Returns true if the last navigation was a back navigation, then resets to false.
- * Must be called at most once per page mount (use useRef to ensure this).
+ * Get the current restore version for a movieId.
+ * Returns 0 if no restore is pending. Non-zero means a back-navigation
+ * targeted this movie and scroll state should be restored.
  */
-export function consumePendingBackNav(): boolean {
-  const v = _pendingBackNav;
-  _pendingBackNav = false;
-  return v;
+export function getMovieRestoreVersion(movieId: string): number {
+  return _restoreMovieVersions.get(movieId) ?? 0;
+}
+
+/**
+ * Clear the restore mark for a movieId after it has been consumed.
+ * Safe to call multiple times (idempotent).
+ */
+export function clearMovieRestore(movieId: string): void {
+  _restoreMovieVersions.delete(movieId);
 }
 
 /**
@@ -77,7 +85,16 @@ export function navBack(
   // Pop current page
   _stack.pop();
   _backNavPending = true;
-  _pendingBackNav = true;
   const prev = _stack[_stack.length - 1] ?? fallback;
+
+  // If navigating back to a movie detail, mark it for scroll restoration.
+  // Extract the movieId from paths like /movie/tt1234567 or /movie/tmdb%3A12345
+  const movieMatch = prev.match(/^\/movie\/([^?#/]+)/);
+  if (movieMatch) {
+    let movieId = movieMatch[1]!;
+    try { movieId = decodeURIComponent(movieId); } catch { /* keep raw */ }
+    _restoreMovieVersions.set(movieId, (_restoreMovieVersions.get(movieId) ?? 0) + 1);
+  }
+
   navigate(prev, { replace: true });
 }

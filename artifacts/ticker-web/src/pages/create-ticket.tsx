@@ -1488,10 +1488,10 @@ export default function CreateTicket() {
             {submitError && <p className="text-sm text-red-500 text-center font-semibold">{submitError}</p>}
 
             {/* Submit */}
-            <button onClick={() => { if (rating >= 1 && !createTicket.isPending) setShowCommunityWarning(true); }}
-              disabled={createTicket.isPending || rating < 1}
+            <button onClick={() => { if (!createTicket.isPending) setShowCommunityWarning(true); }}
+              disabled={createTicket.isPending}
               className={cn("w-full h-14 rounded-2xl font-bold text-base flex items-center justify-center gap-2 transition-all",
-                rating >= 1 ? "bg-foreground text-background active:scale-[0.98]" : "bg-border text-muted-foreground cursor-not-allowed")}>
+                "bg-foreground text-background active:scale-[0.98]")}>
               {createTicket.isPending ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
               ) : partyMode ? (

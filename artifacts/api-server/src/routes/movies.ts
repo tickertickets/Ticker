@@ -1060,7 +1060,16 @@ router.get(
           updatedAt: c.updatedAt,
         };
       })
-      .sort((a, b) => b.likeCount - a.likeCount);
+      .sort((a, b) => {
+        // Feed-style popularity score: likes + comments + runs, with recency boost
+        const now = Date.now();
+        const recentMs = 48 * 60 * 60 * 1000; // 48-hour window
+        const recentA = a.updatedAt && (now - new Date(a.updatedAt).getTime()) < recentMs ? 2 : 0;
+        const recentB = b.updatedAt && (now - new Date(b.updatedAt).getTime()) < recentMs ? 2 : 0;
+        const scoreA = a.likeCount + a.commentCount + Math.floor(a.chainCount / 2) + recentA;
+        const scoreB = b.likeCount + b.commentCount + Math.floor(b.chainCount / 2) + recentB;
+        return scoreB - scoreA;
+      });
 
     res.json({ chains });
   }),

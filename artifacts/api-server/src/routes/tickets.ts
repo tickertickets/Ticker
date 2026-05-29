@@ -510,8 +510,8 @@ router.post(
     if (isReel && !clipUrl) {
       throw new ValidationError("clipUrl is required for reel posts");
     }
-    if (!isReel && (!rating || Number(rating) < 1 || Number(rating) > 5)) {
-      throw new ValidationError("rating is required (1–5)");
+    if (!isReel && rating !== undefined && rating !== null && rating !== "" && (Number(rating) < 1 || Number(rating) > 5)) {
+      throw new ValidationError("rating ต้องอยู่ระหว่าง 1–5");
     }
 
     // cardData size guard — prevent unbounded JSONB growth

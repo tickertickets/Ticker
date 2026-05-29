@@ -1,5 +1,5 @@
 import { useRoute, Link, useLocation } from "wouter";
-import { navBack, consumePendingBackNav } from "@/lib/nav-back";
+import { navBack, getMovieRestoreVersion, clearMovieRestore } from "@/lib/nav-back";
 import { VerifiedBadge, isVerified } from "@/components/VerifiedBadge";
 import { BadgeIcon } from "@/components/BadgeIcon";
 import { MovieBadges, BADGE_DESC_TH, BADGE_DESC_EN } from "@/components/MovieBadges";
@@ -253,16 +253,23 @@ export default function MovieDetail() {
   const badgePopupRef = useRef<HTMLDivElement>(null);
   const [expandedSeason, setExpandedSeason] = useState<number | null>(null);
   const episodeRatingsRef = useRef<HTMLDivElement>(null);
-  // Capture once per mount whether this is a back-navigation.
-  // useRef ensures consumePendingBackNav() is only effectively used on first render.
-  const isBackNavRef = useRef(consumePendingBackNav());
-  const isBackNav = isBackNavRef.current;
+  // Capture the restore version at mount time using useRef.
+  // useRef is Strict Mode safe: the argument is evaluated once on first render
+  // and the ref.current value is preserved across the double-render cycle.
+  // Non-zero means navBack() targeted this movie — restore scroll + details state.
+  const _restoreVersion = useRef(getMovieRestoreVersion(movieId));
+  const isBackNav = _restoreVersion.current > 0;
 
   const [showDetails, setShowDetails] = useState(() =>
     isBackNav && (scrollStore.get(`movie-${movieId}-details`) ?? 0) === 1
   );
   const [showCollection, setShowCollection] = useState(false);
   const [showSpinoffs, setShowSpinoffs] = useState(false);
+
+  // Consume the restore mark after mount so forward navigations to this movie
+  // later don't incorrectly restore scroll. The second call in Strict Mode is a no-op.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (_restoreVersion.current > 0) clearMovieRestore(movieId); }, []);
 
   // Horizontal scroll refs for position save/restore
   const directorScrollRef  = useRef<HTMLDivElement>(null);
