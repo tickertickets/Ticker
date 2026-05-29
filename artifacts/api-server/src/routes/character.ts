@@ -32,7 +32,7 @@ type CharResult = {
   description: string;
   imageUrl: string | null;
   alias: string | null;
-  source: "anilist" | "comicvine" | "tmdb";
+  source: "anilist" | "comicvine" | "tmdb" | "cast";
   sourceUrl?: string;
 };
 
@@ -875,8 +875,21 @@ router.get(
             source: "comicvine",
             sourceUrl: useChar.sourceUrl,
           });
+        } else {
+          // Fallback stub for non-anime chars not found in Comic Vine
+          // Use actor's TMDB profile photo as placeholder image (better than nothing)
+          const stubImageUrl = entry.profilePath
+            ? `https://image.tmdb.org/t/p/w185${entry.profilePath}`
+            : null;
+          results.push({
+            name: entry.name,
+            wikidataId: `cast:${encodeURIComponent(entry.name)}`,
+            description: "",
+            imageUrl: stubImageUrl,
+            alias: null,
+            source: "cast",
+          });
         }
-        // Unmatched non-anime chars excluded entirely — no stubs
       }
     }
 
@@ -890,6 +903,22 @@ router.get(
       })
       .catch(() => { /* ignore */ });
     return res.json({ results });
+  }),
+);
+
+// ── GET /character/bookmarked — list all bookmarked character IDs ─────────────
+// IMPORTANT: must be defined before /:charId so Express doesn't eat it
+
+router.get(
+  "/bookmarked",
+  asyncHandler(async (req, res) => {
+    const userId = (req as any).session?.userId as string | undefined;
+    if (!userId) throw new UnauthorizedError();
+    const rows = await db
+      .select({ characterId: characterBookmarksTable.characterId })
+      .from(characterBookmarksTable)
+      .where(eq(characterBookmarksTable.userId, userId));
+    res.json({ characterIds: rows.map(r => r.characterId) });
   }),
 );
 
@@ -1107,6 +1136,22 @@ router.get(
       }
 
       return res.json({ wikidataId: rawCharId, charId: rawCharId, name: cleanName, description: "", structuredInfo: [], imageUrl: null, filmography: [], source: "anilist" });
+    }
+
+    // ── cast:<name>  — TMDB cast stub (no CV/AniList match) ─────────────────
+    // Returns minimal data so the detail page still works.
+    if (rawCharId.startsWith("cast:")) {
+      const charName = decodeURIComponent(rawCharId.slice(5));
+      return res.json({
+        wikidataId: rawCharId,
+        charId: rawCharId,
+        name: charName,
+        description: "",
+        structuredInfo: [],
+        imageUrl: null,
+        filmography: [],
+        source: "cast",
+      });
     }
 
     // ── cvs:<name>  — Legacy CV name search (backward compat only) ────────────

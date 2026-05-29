@@ -652,10 +652,6 @@ export default function CreateTicket() {
 
   const handleSubmit = async () => {
     if (!selectedMovieId || !movieDetails) return;
-    if (!rating || rating < 1) {
-      setSubmitError(t.errNoRating);
-      return;
-    }
     setSubmitError("");
     // Fresh-fetch trash list at submit time to catch stale cache
     try {

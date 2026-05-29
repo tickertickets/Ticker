@@ -356,6 +356,9 @@ export default function MovieDetail() {
   // On first mount via back-navigation we leave the stored position intact so
   // the RESTORE effect can scroll back to where the user was.
   const prevMovieIdRef = useRef("");
+  // Tracks pending scroll-to-top for the case where movie data hasn't loaded yet
+  // (scrollRef.current is null at effect time). Applied when data first renders.
+  const needsScrollResetRef = useRef(false);
   useEffect(() => {
     const prev = prevMovieIdRef.current;
     prevMovieIdRef.current = movieId;
@@ -366,7 +369,12 @@ export default function MovieDetail() {
       if (!isBackNav) {
         scrollStore.delete(`movie-${movieId}`);
         scrollStore.delete(`movie-${movieId}-details`);
-        if (scrollRef.current) scrollRef.current.scrollTop = 0;
+        if (scrollRef.current) {
+          scrollRef.current.scrollTop = 0;
+        } else {
+          // Data still loading — mark for reset once scrollRef is available
+          needsScrollResetRef.current = true;
+        }
       }
       return;
     }
@@ -431,6 +439,17 @@ export default function MovieDetail() {
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [movieId]);
+
+  // PENDING-RESET: when data was still loading at FORCE-TOP time, apply the
+  // scroll reset now that scrollRef is first available (movie just loaded).
+  // This is a ref-based approach so it doesn't cause unnecessary re-renders.
+  useEffect(() => {
+    if (needsScrollResetRef.current && scrollRef.current) {
+      scrollRef.current.scrollTop = 0;
+      needsScrollResetRef.current = false;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [movie]);
 
   // RESTORE: scroll to the saved position once there is enough content.
   // Strategy: ResizeObserver fires whenever scrollHeight grows (images load,
@@ -832,6 +851,25 @@ export default function MovieDetail() {
   return (
     <div ref={scrollRef} className="h-full overflow-y-auto overscroll-y-none" style={{ overflowAnchor: "none" }}>
 
+      {/* ── Sticky nav overlay — height:0 so hero image is not pushed down ── */}
+      <div className="sticky top-0 z-20 h-0 overflow-visible pointer-events-none">
+        <button
+          onClick={() => navBack(navigate)}
+          className="absolute left-4 w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center border border-white/20 pointer-events-auto"
+          style={{ top: "max(1rem, env(safe-area-inset-top, 0px))" }}
+        >
+          <ChevronLeft className="w-5 h-5 text-white translate-x-[-1px]" />
+        </button>
+        <button
+          onClick={() => { if (!user) { toast({ title: t.signInToLike, duration: 1500 }); return; } bookmarkMutation.mutate(); }}
+          disabled={bookmarkLoading || bookmarkMutation.isPending}
+          className="absolute right-4 w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center border border-white/20 pointer-events-auto"
+          style={{ top: "max(1rem, env(safe-area-inset-top, 0px))" }}
+        >
+          <Bookmark className={cn("w-4.5 h-4.5", isBookmarked ? "fill-white text-white" : "text-white")} />
+        </button>
+      </div>
+
       {/* ── Hero poster — full 2:3 ratio ── */}
       <div className="relative w-full overflow-hidden">
         {(srcposter || movie.posterUrl) ? (
@@ -849,25 +887,6 @@ export default function MovieDetail() {
 
         <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/60 to-transparent" />
         <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-white via-white/85 dark:from-black dark:via-black/85 to-transparent" />
-
-        {/* Back button */}
-        <button
-          onClick={() => navBack(navigate)}
-          className="absolute left-4 w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center border border-white/20"
-          style={{ top: "max(1rem, env(safe-area-inset-top, 0px))" }}
-        >
-          <ChevronLeft className="w-5 h-5 text-white translate-x-[-1px]" />
-        </button>
-
-        {/* Bookmark button */}
-        <button
-          onClick={() => { if (!user) { toast({ title: t.signInToLike, duration: 1500 }); return; } bookmarkMutation.mutate(); }}
-          disabled={bookmarkLoading || bookmarkMutation.isPending}
-          className="absolute right-4 w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center border border-white/20"
-          style={{ top: "max(1rem, env(safe-area-inset-top, 0px))" }}
-        >
-          <Bookmark className={cn("w-4.5 h-4.5", isBookmarked ? "fill-white text-white" : "text-white")} />
-        </button>
 
 
         {/* Rank + effect badges — below bookmark, centred with it */}

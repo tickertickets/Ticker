@@ -2,7 +2,7 @@ import { useGetMyBookmarks } from "@workspace/api-client-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { TicketCard } from "@/components/TicketCard";
 import {
-  Bookmark as BookmarkIcon, Film, ChevronLeft, Ticket as TicketIcon, Link2, User,
+  Bookmark as BookmarkIcon, Film, ChevronLeft, Ticket as TicketIcon, Link2, User, Smile,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Link, useLocation } from "wouter";
@@ -14,7 +14,7 @@ import type { ChainItem } from "@/components/ChainsSection";
 import { PosterCollage } from "@/components/ChainsSection";
 import { useLang, displayYear } from "@/lib/i18n";
 
-type Filter = "all" | "movies" | "people" | "tickets" | "chains";
+type Filter = "all" | "movies" | "people" | "tickets" | "chains" | "characters";
 
 function BookmarkedMovieCard({ movieId, onRemoved }: { movieId: string; onRemoved: () => void }) {
   const [, navigate] = useLocation();
@@ -124,6 +124,45 @@ function BookmarkedPersonCard({ personId }: { personId: string }) {
   );
 }
 
+function BookmarkedCharacterCard({ charId }: { charId: string }) {
+  const [, navigate] = useLocation();
+
+  const { data, isLoading } = useQuery<{
+    name: string;
+    imageUrl: string | null;
+    description: string;
+  }>({
+    queryKey: ["/api/character", charId],
+    queryFn: async () => {
+      const r = await fetch(`/api/character/${encodeURIComponent(charId)}`, { credentials: "include" });
+      if (!r.ok) throw new Error("not found");
+      return r.json();
+    },
+    staleTime: 1000 * 60 * 10,
+  });
+
+  return (
+    <button
+      onClick={() => navigate(`/character/${encodeURIComponent(charId)}`)}
+      className="flex items-center gap-3 px-4 py-3 w-full text-left active:bg-secondary/40 transition-colors"
+    >
+      <div className="w-10 h-14 rounded-lg bg-secondary overflow-hidden flex-shrink-0 flex items-center justify-center border border-border">
+        {data?.imageUrl
+          ? <img src={data.imageUrl} alt={data.name} className="w-full h-full object-cover" />
+          : !isLoading && <Smile className="w-5 h-5 text-muted-foreground" />
+        }
+      </div>
+      <div className="flex-1 min-w-0">
+        {isLoading ? (
+          <div className="h-4 bg-secondary rounded w-32 animate-pulse" />
+        ) : (
+          <p className="text-sm font-semibold text-foreground truncate">{data?.name ?? charId}</p>
+        )}
+      </div>
+    </button>
+  );
+}
+
 function BookmarkedChainCard({ chain }: { chain: ChainItem }) {
   const { t } = useLang();
   const [, navigate] = useLocation();
@@ -192,6 +231,17 @@ export default function Bookmarks() {
   });
   const bookmarkedPersonIds = personBmData?.personIds ?? [];
 
+  const { data: charBmData, isLoading: charBmLoading } = useQuery<{ characterIds: string[] }>({
+    queryKey: ["/api/character/bookmarked"],
+    queryFn: async () => {
+      const r = await fetch("/api/character/bookmarked", { credentials: "include" });
+      if (!r.ok) return { characterIds: [] };
+      return r.json();
+    },
+    enabled: !!user,
+  });
+  const bookmarkedCharacterIds = charBmData?.characterIds ?? [];
+
   if (!user) {
     return (
       <div ref={scrollRef} className="h-full overflow-y-auto overscroll-y-none flex flex-col items-center justify-center gap-4 px-6 text-center">
@@ -206,21 +256,23 @@ export default function Bookmarks() {
     );
   }
 
-  const totalSaved = allTickets.length + bookmarkedMovieIds.length + bookmarkedChains.length + bookmarkedPersonIds.length;
+  const totalSaved = allTickets.length + bookmarkedMovieIds.length + bookmarkedChains.length + bookmarkedPersonIds.length + bookmarkedCharacterIds.length;
 
-  const showMovies  = filter === "all" || filter === "movies";
-  const showPeople  = filter === "all" || filter === "people";
-  const showTickets = filter === "all" || filter === "tickets";
-  const showChains  = filter === "all" || filter === "chains";
+  const showMovies     = filter === "all" || filter === "movies";
+  const showPeople     = filter === "all" || filter === "people";
+  const showTickets    = filter === "all" || filter === "tickets";
+  const showChains     = filter === "all" || filter === "chains";
+  const showCharacters = filter === "all" || filter === "characters";
 
-  const anyLoading = isLoading || movieBmLoading || chainBmLoading || personBmLoading;
+  const anyLoading = isLoading || movieBmLoading || chainBmLoading || personBmLoading || charBmLoading;
 
   const FILTERS: { id: Filter; label: string }[] = [
-    { id: "all",     label: t.tabAll  },
-    { id: "movies",  label: "Movies"  },
-    { id: "people",  label: lang === "th" ? "บุคคล" : "People" },
-    { id: "tickets", label: "Tickets" },
-    { id: "chains",  label: "Chains"  },
+    { id: "all",        label: t.tabAll  },
+    { id: "movies",     label: "Movies"  },
+    { id: "people",     label: lang === "th" ? "บุคคล" : "People" },
+    { id: "characters", label: lang === "th" ? "ตัวละคร" : "Characters" },
+    { id: "tickets",    label: "Tickets" },
+    { id: "chains",     label: "Chains"  },
   ];
 
   const pillContainerRef = useRef<HTMLDivElement>(null);
@@ -324,6 +376,17 @@ export default function Bookmarks() {
           </div>
         </div>
       )}
+      {!error && filter === "characters" && bookmarkedCharacterIds.length === 0 && !anyLoading && (
+        <div className="flex flex-col items-center justify-center py-24 px-6 gap-4 text-center">
+          <div className="w-16 h-16 rounded-3xl bg-secondary flex items-center justify-center">
+            <Smile className="w-8 h-8 text-muted-foreground" />
+          </div>
+          <div className="space-y-1">
+            <p className="font-display font-bold text-foreground">{lang === "th" ? "ยังไม่มีตัวละครที่บันทึก" : "No saved characters"}</p>
+            <p className="text-sm text-muted-foreground">{lang === "th" ? "กดบันทึกตัวละครที่ชื่นชอบจากหน้าข้อมูลตัวละคร" : "Bookmark characters from their detail pages"}</p>
+          </div>
+        </div>
+      )}
 
       {/* Movies section */}
       {bookmarkedMovieIds.length > 0 && showMovies && (
@@ -362,6 +425,20 @@ export default function Bookmarks() {
           <div className="divide-y divide-border">
             {bookmarkedChains.map(chain => (
               <BookmarkedChainCard key={chain.id} chain={chain} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Characters section */}
+      {bookmarkedCharacterIds.length > 0 && showCharacters && (
+        <div>
+          <p className="px-4 pt-4 pb-1 text-[11px] font-bold text-muted-foreground tracking-wider">
+            {lang === "th" ? "ตัวละคร" : "Characters"}
+          </p>
+          <div className="divide-y divide-border">
+            {bookmarkedCharacterIds.map(id => (
+              <BookmarkedCharacterCard key={id} charId={id} />
             ))}
           </div>
         </div>

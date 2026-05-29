@@ -253,7 +253,7 @@ function PartyAcceptModal({
                     <button
                       key={star}
                       type="button"
-                      onClick={() => setRating(star)}
+                      onClick={() => setRating(star === rating ? undefined : star)}
                       onMouseEnter={() => setHoverRating(star)}
                       onMouseLeave={() => setHoverRating(null)}
                       className={cn(
@@ -306,7 +306,7 @@ function PartyAcceptModal({
               </button>
               <button
                 onClick={handleAccept}
-                disabled={accept.isPending || decline.isPending || !seatNumber || !rating || alreadyAccepted || accept.isSuccess}
+                disabled={accept.isPending || decline.isPending || !seatNumber || alreadyAccepted || accept.isSuccess}
                 className={cn(
                   "flex-1 h-12 rounded-2xl font-bold text-sm transition-all",
                   (alreadyAccepted || accept.isSuccess)
