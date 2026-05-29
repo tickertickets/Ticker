@@ -192,32 +192,33 @@ export default function PersonDetail() {
 
   return (
     <div className="absolute inset-0 bg-background flex flex-col overflow-hidden">
-      {/* ── Overlay nav buttons ── */}
-      <button
-        onClick={() => navBack(navigate)}
-        className="absolute z-20 left-4 w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center border border-white/20"
-        style={{ top: "max(1rem, env(safe-area-inset-top, 0px))" }}
-        aria-label="Back"
-      >
-        <ChevronLeft className="w-5 h-5 text-white" style={{ transform: "translateX(-1px)" }} />
-      </button>
-
-      {user !== undefined && (
-        <button
-          onClick={handleBookmark}
-          disabled={bookmarkMutation.isPending}
-          className="absolute z-20 right-4 w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center border border-white/20"
-          style={{ top: "max(1rem, env(safe-area-inset-top, 0px))" }}
-          aria-label={isBookmarked ? "Remove bookmark" : "Bookmark"}
-        >
-          <Bookmark
-            className={cn("w-4.5 h-4.5 transition-all", isBookmarked ? "fill-white text-white" : "text-white")}
-          />
-        </button>
-      )}
-
       {/* ── Scrollable body ── */}
       <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto overscroll-y-none">
+
+        {/* ── Sticky nav overlay — height:0 so hero image is not pushed down ── */}
+        <div className="sticky top-0 z-20 h-0 overflow-visible pointer-events-none">
+          <button
+            onClick={() => navBack(navigate)}
+            className="absolute left-4 w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center border border-white/20 pointer-events-auto"
+            style={{ top: "max(1rem, env(safe-area-inset-top, 0px))" }}
+            aria-label="Back"
+          >
+            <ChevronLeft className="w-5 h-5 text-white" style={{ transform: "translateX(-1px)" }} />
+          </button>
+          {user !== undefined && (
+            <button
+              onClick={handleBookmark}
+              disabled={bookmarkMutation.isPending}
+              className="absolute right-4 w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center border border-white/20 pointer-events-auto"
+              style={{ top: "max(1rem, env(safe-area-inset-top, 0px))" }}
+              aria-label={isBookmarked ? "Remove bookmark" : "Bookmark"}
+            >
+              <Bookmark
+                className={cn("w-4.5 h-4.5 transition-all", isBookmarked ? "fill-white text-white" : "text-white")}
+              />
+            </button>
+          )}
+        </div>
 
         {/* ── Hero ── */}
         <div className="relative w-full bg-secondary overflow-hidden" style={{ height: 280 }}>

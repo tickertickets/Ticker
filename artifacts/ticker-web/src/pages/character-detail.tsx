@@ -1,12 +1,14 @@
 import { useRoute, Link, useLocation } from "wouter";
 import { navBack } from "@/lib/nav-back";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { ChevronLeft, Film, User, Loader2, Flag, Send } from "lucide-react";
+import { ChevronLeft, Film, User, Loader2, Flag, Send, Bookmark } from "lucide-react";
 import { useLang, displayYear } from "@/lib/i18n";
 import { scrollStore } from "@/lib/scroll-store";
 import { usePageScroll } from "@/hooks/use-page-scroll";
-import { IS_PWA } from "@/lib/utils";
+import { cn, IS_PWA } from "@/lib/utils";
+import { useAuth } from "@/hooks/use-auth";
+import { useToast } from "@/hooks/use-toast";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -114,6 +116,10 @@ export default function CharacterDetail() {
     return () => { document.head.removeChild(meta); };
   }, []);
 
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const qc = useQueryClient();
+
   // ── Data fetch ──────────────────────────────────────────────────────────────
 
   const { data, isLoading, isError } = useQuery<CharData>({
@@ -151,6 +157,38 @@ export default function CharacterDetail() {
   );
 
   const hasBioContent = !!(bioText.trim());
+
+  // ── Bookmark ─────────────────────────────────────────────────────────────────
+  const bookmarkCharId = data?.charId ?? wikidataId;
+
+  const { data: bookmarkData } = useQuery<{ isBookmarked: boolean }>({
+    queryKey: ["/api/character", bookmarkCharId, "bookmark"],
+    queryFn: async () => {
+      const res = await fetch(`/api/character/${encodeURIComponent(bookmarkCharId)}/bookmark`);
+      if (!res.ok) return { isBookmarked: false };
+      return res.json();
+    },
+    enabled: !!user && !!bookmarkCharId,
+  });
+
+  const isBookmarked = bookmarkData?.isBookmarked ?? false;
+
+  const bookmarkMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/character/${encodeURIComponent(bookmarkCharId)}/bookmark`, { method: "POST" });
+      if (!res.ok) throw new Error("Failed");
+      return res.json() as Promise<{ bookmarked: boolean }>;
+    },
+    onSuccess: (result) => {
+      qc.setQueryData(["/api/character", bookmarkCharId, "bookmark"], { isBookmarked: result.bookmarked });
+      toast({ title: result.bookmarked
+        ? (lang === "th" ? "บันทึกตัวละครแล้ว" : "Character bookmarked")
+        : (lang === "th" ? "ยกเลิกการบันทึกแล้ว" : "Bookmark removed"),
+      });
+    },
+  });
+
+  const handleBookmark = () => { bookmarkMutation.mutate(); };
 
   // ── Source credit ────────────────────────────────────────────────────────────
   const sourceIsAniList   = data?.source === "anilist";
@@ -206,17 +244,31 @@ export default function CharacterDetail() {
 
   return (
     <div className="absolute inset-0 bg-background flex flex-col overflow-hidden">
-      {/* Back button */}
-      <button
-        onClick={() => navBack(navigate)}
-        className="absolute z-20 left-4 w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center border border-white/20"
-        style={{ top: "max(1rem, env(safe-area-inset-top, 0px))" }}
-        aria-label="Back"
-      >
-        <ChevronLeft className="w-5 h-5 text-white" style={{ transform: "translateX(-1px)" }} />
-      </button>
-
       <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto overscroll-y-none">
+
+        {/* ── Sticky nav overlay — height:0 so hero image is not pushed down ── */}
+        <div className="sticky top-0 z-20 h-0 overflow-visible pointer-events-none">
+          <button
+            onClick={() => navBack(navigate)}
+            className="absolute left-4 w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center border border-white/20 pointer-events-auto"
+            style={{ top: "max(1rem, env(safe-area-inset-top, 0px))" }}
+            aria-label="Back"
+          >
+            <ChevronLeft className="w-5 h-5 text-white" style={{ transform: "translateX(-1px)" }} />
+          </button>
+          {user !== undefined && (
+            <button
+              onClick={handleBookmark}
+              disabled={bookmarkMutation.isPending}
+              className="absolute right-4 w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center border border-white/20 pointer-events-auto"
+              style={{ top: "max(1rem, env(safe-area-inset-top, 0px))" }}
+              aria-label={isBookmarked ? "Remove bookmark" : "Bookmark"}
+            >
+              <Bookmark className={cn("w-4.5 h-4.5 transition-all", isBookmarked ? "fill-white text-white" : "text-white")} />
+            </button>
+          )}
+        </div>
+
         {/* ── Hero ── */}
         <div className="relative w-full bg-secondary overflow-hidden" style={{ height: 280 }}>
           {data?.imageUrl && (

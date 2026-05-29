@@ -164,7 +164,7 @@ export default function EditTicket() {
                 <button key={s}
                   onMouseEnter={() => setHoverRating(s)}
                   onMouseLeave={() => setHoverRating(0)}
-                  onClick={() => setRating(s)}
+                  onClick={() => setRating(s === rating ? 0 : s)}
                   className="p-1 transition-transform active:scale-90"
                 >
                   <svg width={36} height={36} viewBox="0 0 24 24" fill={active ? "#fbbf24" : "#6b7280"} xmlns="http://www.w3.org/2000/svg" className="transition-all">

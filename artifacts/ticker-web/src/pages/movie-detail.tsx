@@ -1229,7 +1229,11 @@ export default function MovieDetail() {
           <AccordionContent open={showDetails}>
 
               {/* ── Characters: skeleton cards with spinner while AniList/CV loads ── */}
-              {(creditsData && ((creditsData.cast ?? []).some(p => p.character && p.character.trim()) || (charsData?.results ?? []).length > 0)) && (
+              {(creditsData && (
+                !charsData
+                  ? (creditsData.cast ?? []).some(p => p.character && p.character.trim())
+                  : (charsData?.results ?? []).length > 0
+              )) && (
                 <>
                   <div className="border-t border-border mt-3 mb-2" />
                   <div className="flex items-center gap-2 mb-1.5">
@@ -1256,27 +1260,6 @@ export default function MovieDetail() {
                             <div className="p-1.5 pb-2 min-h-[44px]">
                               <div className="h-2 rounded bg-muted/50 animate-pulse mb-1.5" />
                               <div className="h-2 rounded bg-muted/30 animate-pulse w-2/3" />
-                            </div>
-                          </div>
-                        ))
-                    ) : (charsData.results ?? []).length === 0 ? (
-                      // No AniList/CV matches — show TMDB cast as non-clickable fallback cards
-                      (creditsData?.cast ?? [])
-                        .filter(p => p.character && p.character.trim())
-                        .slice(0, 15)
-                        .map((p, i) => (
-                          <div key={i} className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border">
-                            <div className="relative" style={{ aspectRatio: "2/3" }}>
-                              {p.profileUrl ? (
-                                <img src={p.profileUrl} alt={p.character} className="w-full h-full object-cover object-top" loading="eager" />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center bg-zinc-900">
-                                  <User className="w-4 h-4 text-muted-foreground opacity-30" />
-                                </div>
-                              )}
-                            </div>
-                            <div className="p-1.5 pb-2 min-h-[44px] overflow-hidden">
-                              <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{p.character?.split("/")[0]?.trim()}</p>
                             </div>
                           </div>
                         ))

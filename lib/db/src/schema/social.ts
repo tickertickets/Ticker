@@ -122,6 +122,12 @@ export const personBookmarksTable = pgTable("person_bookmarks", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const characterBookmarksTable = pgTable("character_bookmarks", {
+  userId: text("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+  characterId: text("character_id").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const insertCommentSchema = createInsertSchema(commentsTable).omit({
   createdAt: true,
   updatedAt: true,

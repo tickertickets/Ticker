@@ -2,8 +2,9 @@ import { Router } from "express";
 import { asyncHandler } from "../middlewares/error-handler";
 import { tmdbFetch, posterUrl } from "../lib/tmdb-client";
 import { db } from "@workspace/db";
-import { characterCacheTable } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { characterCacheTable, characterBookmarksTable } from "@workspace/db/schema";
+import { eq, and } from "drizzle-orm";
+import { UnauthorizedError } from "../lib/errors";
 import {
   getAniListMediaWithChars,
   getAniListCharacterById,
@@ -582,13 +583,14 @@ async function lookupComicVineForMovie(
       batch.map(async ({ name: charName, altName }) => {
         if (charName.trim().length < 3) return;
         try {
-          // Try primary name first; if not found and altName exists, try that too.
-          // This handles cases like "Peter Parker / Spider-Man" where the CV character
-          // is stored under "Spider-Man" (not found by real_name search) — we try
-          // "Spider-Man" as the altName and succeed.
-          const found = await tryCvCandidate(charName, charName);
-          if (!found && altName && altName.trim().length >= 3 && altName !== charName) {
-            await tryCvCandidate(charName, altName);
+          // Always try primary name, AND try altName as an independent lookup.
+          // This handles cases like "Spider-Man / Ben Reilly" where the altName
+          // (Ben Reilly) is a distinct CV character from the primary (Peter Parker
+          // Spider-Man). Both are looked up independently and the results code
+          // prefers the altName match when it resolves to a different character.
+          await tryCvCandidate(charName, charName);
+          if (altName && altName.trim().length >= 3 && altName !== charName) {
+            await tryCvCandidate(altName, altName);
           }
         } catch { /* ignore — character simply won't be included */ }
       }),
@@ -856,16 +858,22 @@ router.get(
         }
         // If anilistMediaId is null (AniList doesn't know this anime), skip entirely
       } else {
-        const cvMatch = cvLookup.get(entry.name) ?? null;
-        if (cvMatch) {
+        const cvMatch    = cvLookup.get(entry.name) ?? null;
+        const cvAltMatch = entry.altName ? (cvLookup.get(entry.altName) ?? null) : null;
+        // When altName resolves to a DIFFERENT CV character, prefer it — it is
+        // usually more specific (e.g. "Ben Reilly" over generic "Spider-Man").
+        const useChar = (cvAltMatch && (!cvMatch || cvAltMatch.id !== cvMatch.id))
+          ? cvAltMatch
+          : cvMatch;
+        if (useChar) {
           results.push({
-            name: cvMatch.name,
-            wikidataId: `cv:${cvMatch.id}`,
+            name: useChar.name,
+            wikidataId: `cv:${useChar.id}`,
             description: "",
-            imageUrl: cvMatch.imageUrl ?? null,
+            imageUrl: useChar.imageUrl ?? null,
             alias: null,
             source: "comicvine",
-            sourceUrl: cvMatch.sourceUrl,
+            sourceUrl: useChar.sourceUrl,
           });
         }
         // Unmatched non-anime chars excluded entirely — no stubs
@@ -1169,6 +1177,66 @@ router.get(
     }
 
     return res.json({ wikidataId: rawCharId, charId: rawCharId, name: characterName, description: "", structuredInfo: [], imageUrl: null, filmography: [], source: "tmdb" });
+  }),
+);
+
+// ── GET /character/:charId/bookmark ──────────────────────────────────────────
+router.get(
+  "/:charId/bookmark",
+  asyncHandler(async (req, res) => {
+    const charId = decodeURIComponent(String(req.params["charId"]));
+    const userId = (req as any).session?.userId as string | undefined;
+    if (!userId) {
+      res.json({ isBookmarked: false });
+      return;
+    }
+    const [row] = await db
+      .select()
+      .from(characterBookmarksTable)
+      .where(
+        and(
+          eq(characterBookmarksTable.userId, userId),
+          eq(characterBookmarksTable.characterId, charId),
+        ),
+      )
+      .limit(1);
+    res.json({ isBookmarked: !!row });
+  }),
+);
+
+// ── POST /character/:charId/bookmark ─────────────────────────────────────────
+router.post(
+  "/:charId/bookmark",
+  asyncHandler(async (req, res) => {
+    const charId = decodeURIComponent(String(req.params["charId"]));
+    const userId = (req as any).session?.userId as string | undefined;
+    if (!userId) throw new UnauthorizedError();
+    const [existing] = await db
+      .select()
+      .from(characterBookmarksTable)
+      .where(
+        and(
+          eq(characterBookmarksTable.userId, userId),
+          eq(characterBookmarksTable.characterId, charId),
+        ),
+      )
+      .limit(1);
+    if (existing) {
+      await db
+        .delete(characterBookmarksTable)
+        .where(
+          and(
+            eq(characterBookmarksTable.userId, userId),
+            eq(characterBookmarksTable.characterId, charId),
+          ),
+        );
+      res.json({ bookmarked: false });
+    } else {
+      await db
+        .insert(characterBookmarksTable)
+        .values({ userId, characterId: charId });
+      res.json({ bookmarked: true });
+    }
   }),
 );
 

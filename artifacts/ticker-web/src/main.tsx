@@ -10,6 +10,9 @@ import { initPerfProbe } from "@/lib/perf-probe";
 applyTheme(getTheme());
 initPerfProbe();
 
+// Disable browser's native scroll restoration so our SPA scroll logic is in full control
+if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+
 // ── Safe-area-inset-bottom fix ──────────────────────────────────────────────
 // On Android Chrome and PWA, env(safe-area-inset-bottom) can return 0 on the
 // first paint after a hard redirect (e.g. after login). Reading the value via
