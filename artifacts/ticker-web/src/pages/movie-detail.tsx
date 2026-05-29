@@ -437,8 +437,12 @@ export default function MovieDetail() {
       // may already be detached from the DOM when cleanup runs.
       scrollStore.set(key, lastScrollTop);
     };
+  // Re-run when movie data first loads — if scrollRef was null at mount time
+  // (data was still fetching), the listener was never registered and scroll
+  // position would not be tracked.  Adding !!movie re-runs the effect the
+  // moment the movie object becomes available, so the listener is registered.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [movieId]);
+  }, [movieId, !!movie]);
 
   // PENDING-RESET: when data was still loading at FORCE-TOP time, apply the
   // scroll reset now that scrollRef is first available (movie just loaded).
@@ -1247,12 +1251,8 @@ export default function MovieDetail() {
           </button>
           <AccordionContent open={showDetails}>
 
-              {/* ── Characters: skeleton cards with spinner while AniList/CV loads ── */}
-              {(creditsData && (
-                !charsData
-                  ? (creditsData.cast ?? []).some(p => p.character && p.character.trim())
-                  : (charsData?.results ?? []).length > 0
-              )) && (
+              {/* ── Characters: show section whenever cast has named characters ── */}
+              {creditsData && (creditsData.cast ?? []).some(p => p.character && p.character.trim()) && (
                 <>
                   <div className="border-t border-border mt-3 mb-2" />
                   <div className="flex items-center gap-2 mb-1.5">
@@ -1261,14 +1261,15 @@ export default function MovieDetail() {
                       {lang === "th" ? "ตัวละคร" : "Characters"}
                     </p>
                   </div>
-                  <div
-                    ref={charScrollRef}
-                    className="flex overflow-x-auto gap-2.5 pb-1 scrollbar-hide"
-                    style={{ WebkitOverflowScrolling: "touch", marginLeft: -20, marginRight: -20, paddingLeft: 20, paddingRight: 20 }}
-                  >
-                    {!charsData ? (
-                      // Loading: one skeleton card per cast character (max 8), spinner inside each
-                      (creditsData.cast ?? [])
+
+                  {/* Loading skeletons */}
+                  {!charsData && (
+                    <div
+                      ref={charScrollRef}
+                      className="flex overflow-x-auto gap-2.5 pb-1 scrollbar-hide"
+                      style={{ WebkitOverflowScrolling: "touch", marginLeft: -20, marginRight: -20, paddingLeft: 20, paddingRight: 20 }}
+                    >
+                      {(creditsData.cast ?? [])
                         .filter(p => p.character && p.character.trim())
                         .slice(0, 8)
                         .map((_p, i) => (
@@ -1281,14 +1282,23 @@ export default function MovieDetail() {
                               <div className="h-2 rounded bg-muted/30 animate-pulse w-2/3" />
                             </div>
                           </div>
-                        ))
-                    ) : (
-                      // Loaded: show AniList/CV matched characters
-                      (charsData.results ?? []).map((char) => {
-                        // al: = direct AniList match, alm: = lazy AniList, cv: = Comic Vine — all clickable
-                        // cast: = TMDB-only fallback stub — non-clickable
-                        const isClickable = !char.wikidataId.startsWith("cast:");
-                        const cardInner = (
+                        ))}
+                    </div>
+                  )}
+
+                  {/* Loaded — results found */}
+                  {charsData && (charsData.results ?? []).length > 0 && (
+                    <div
+                      ref={charScrollRef}
+                      className="flex overflow-x-auto gap-2.5 pb-1 scrollbar-hide"
+                      style={{ WebkitOverflowScrolling: "touch", marginLeft: -20, marginRight: -20, paddingLeft: 20, paddingRight: 20 }}
+                    >
+                      {(charsData.results ?? []).map((char) => (
+                        <Link
+                          key={char.wikidataId}
+                          href={`/character/${encodeURIComponent(char.wikidataId)}${navSrclang ? `?srclang=${encodeURIComponent(navSrclang)}` : ""}`}
+                          onClick={() => scrollStore.delete(`character-${char.wikidataId}`)}
+                        >
                           <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
                             <div className="relative" style={{ aspectRatio: "2/3" }}>
                               {char.imageUrl ? (
@@ -1303,21 +1313,19 @@ export default function MovieDetail() {
                               <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{char.name}</p>
                             </div>
                           </div>
-                        );
-                        return isClickable ? (
-                          <Link
-                            key={char.wikidataId}
-                            href={`/character/${encodeURIComponent(char.wikidataId)}${navSrclang ? `?srclang=${encodeURIComponent(navSrclang)}` : ""}`}
-                            onClick={() => scrollStore.delete(`character-${char.wikidataId}`)}
-                          >
-                            {cardInner}
-                          </Link>
-                        ) : (
-                          <div key={char.wikidataId}>{cardInner}</div>
-                        );
-                      })
-                    )}
-                  </div>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Loaded — no characters found from AniList/CV */}
+                  {charsData && (charsData.results ?? []).length === 0 && (
+                    <div className="flex items-center justify-center py-6">
+                      <p className="text-xs text-muted-foreground">
+                        {lang === "th" ? "ไม่มีข้อมูลตัวละคร" : "No character data"}
+                      </p>
+                    </div>
+                  )}
                 </>
               )}
 

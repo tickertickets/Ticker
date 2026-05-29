@@ -563,7 +563,26 @@ async function lookupComicVineForMovie(
       const hasImage = !!(detail.image?.super_url || detail.image?.medium_url);
       const hasDesc  = !!(detail.deck || detail.description);
       if (!hasImage && !hasDesc) continue;
-      if (!characterBelongsToFranchise(detail.volume_credits, terms.validation, threshold)) continue;
+
+      // Primary validation: volume_credits franchise check
+      const volumeOk = characterBelongsToFranchise(detail.volume_credits, terms.validation, threshold);
+
+      if (!volumeOk) {
+        // Fallback: characters with too many issues (e.g. 753+) often get
+        // empty volume_credits from the CV API because the list is too large
+        // to enumerate. In that case, check their deck/description text for
+        // franchise keyword matches instead.
+        if (!detail.volume_credits || detail.volume_credits.length === 0) {
+          const descBlob = `${detail.deck ?? ""} ${detail.description ?? ""}`.toLowerCase();
+          const descOk = terms.validation.some(term =>
+            descBlob.includes(term.toLowerCase()),
+          );
+          if (!descOk) continue;
+        } else {
+          continue;
+        }
+      }
+
       resultMap.set(storeKey, {
         id:        detail.id,
         name:      detail.name,
@@ -663,7 +682,15 @@ router.get(
       if (dbRow.length > 0) {
         const row = dbRow[0];
         const ageMs = Date.now() - new Date(row.cachedAt).getTime();
-        const results = row.results as CharResult[];
+        const rawResults = row.results as CharResult[];
+        // Sanitize: a previous agent incorrectly stored TMDB actor profile URLs
+        // as imageUrl for anilist-sourced characters. AniList images always use
+        // s4.anilist.co; any image.tmdb.org/t/p/ URL on an anilist entry is wrong.
+        const results = rawResults.map(r =>
+          r.source === "anilist" && r.imageUrl?.includes("image.tmdb.org/t/p/")
+            ? { ...r, imageUrl: null }
+            : r,
+        );
         const effectiveTtl = results.length === 0 ? EMPTY_CACHE_TTL : CACHE_TTL;
         if (ageMs < effectiveTtl) {
           BY_MOVIE_CACHE.set(tmdbId, { results, ts: Date.now() - ageMs });
@@ -875,21 +902,8 @@ router.get(
             source: "comicvine",
             sourceUrl: useChar.sourceUrl,
           });
-        } else {
-          // Fallback stub for non-anime chars not found in Comic Vine
-          // Use actor's TMDB profile photo as placeholder image (better than nothing)
-          const stubImageUrl = entry.profilePath
-            ? `https://image.tmdb.org/t/p/w185${entry.profilePath}`
-            : null;
-          results.push({
-            name: entry.name,
-            wikidataId: `cast:${encodeURIComponent(entry.name)}`,
-            description: "",
-            imageUrl: stubImageUrl,
-            alias: null,
-            source: "cast",
-          });
         }
+        // No CV match → character excluded entirely (no stub/placeholder)
       }
     }
 
