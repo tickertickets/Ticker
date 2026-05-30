@@ -73,7 +73,7 @@ export default function EditTicket() {
         method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ caption, captionAlign, memoryNote, rating, watchedAt: watchDate || "", location: watchLocation, isSpoiler }),
+        body: JSON.stringify({ caption, captionAlign, memoryNote, rating: rating > 0 ? rating : null, watchedAt: watchDate || "", location: watchLocation, isSpoiler }),
       });
       if (!res.ok) throw new Error(t.errSaveFailed);
       queryClient.removeQueries({ queryKey: [`/api/tickets/${ticketId}`] });

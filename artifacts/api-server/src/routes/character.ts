@@ -683,18 +683,25 @@ router.get(
         const row = dbRow[0];
         const ageMs = Date.now() - new Date(row.cachedAt).getTime();
         const rawResults = row.results as CharResult[];
-        // Sanitize: a previous agent incorrectly stored TMDB actor profile URLs
-        // as imageUrl for anilist-sourced characters. AniList images always use
-        // s4.anilist.co; any image.tmdb.org/t/p/ URL on an anilist entry is wrong.
+        // Detect entries where a previous agent stored TMDB actor profile URLs
+        // as imageUrl for anilist-sourced characters (those should use s4.anilist.co).
+        const hadBadImages = rawResults.some(
+          r => r.source === "anilist" && r.imageUrl?.includes("image.tmdb.org/t/p/"),
+        );
         const results = rawResults.map(r =>
           r.source === "anilist" && r.imageUrl?.includes("image.tmdb.org/t/p/")
             ? { ...r, imageUrl: null }
             : r,
         );
         const effectiveTtl = results.length === 0 ? EMPTY_CACHE_TTL : CACHE_TTL;
-        if (ageMs < effectiveTtl) {
+        if (!hadBadImages && ageMs < effectiveTtl) {
           BY_MOVIE_CACHE.set(tmdbId, { results, ts: Date.now() - ageMs });
           return res.json({ results });
+        }
+        // Bad images detected — delete this DB row so a fresh fetch re-caches
+        // with correct AniList images, then fall through to the live fetch below.
+        if (hadBadImages) {
+          db.delete(characterCacheTable).where(eq(characterCacheTable.tmdbId, tmdbId)).catch(() => {});
         }
       }
     } catch { /* ignore DB errors — fall through to live fetch */ }

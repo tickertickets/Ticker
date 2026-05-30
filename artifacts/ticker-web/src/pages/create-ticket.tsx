@@ -680,7 +680,7 @@ export default function CreateTicket() {
           episodeLabel: selectedEpisodeLabel || undefined,
           watchedAt: watchDate || undefined,
           location: watchLocation || undefined,
-          rating: rating,
+          rating: rating > 0 ? rating : null,
           ratingType: isDyingStar ? "blackhole" : "star",
           isPrivateMemory: isPrivateMemory || undefined,
           isPrivate,

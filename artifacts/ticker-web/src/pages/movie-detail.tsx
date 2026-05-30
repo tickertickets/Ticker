@@ -857,25 +857,6 @@ export default function MovieDetail() {
   return (
     <div ref={scrollRef} className="h-full overflow-y-auto overscroll-y-none" style={{ overflowAnchor: "none" }}>
 
-      {/* ── Sticky nav overlay — height:0 so hero image is not pushed down ── */}
-      <div className="sticky top-0 z-20 h-0 overflow-visible pointer-events-none">
-        <button
-          onClick={() => navBack(navigate)}
-          className="absolute left-4 w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center border border-white/20 pointer-events-auto"
-          style={{ top: "max(1rem, env(safe-area-inset-top, 0px))" }}
-        >
-          <ChevronLeft className="w-5 h-5 text-white translate-x-[-1px]" />
-        </button>
-        <button
-          onClick={() => { if (!user) { toast({ title: t.signInToLike, duration: 1500 }); return; } bookmarkMutation.mutate(); }}
-          disabled={bookmarkLoading || bookmarkMutation.isPending}
-          className="absolute right-4 w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center border border-white/20 pointer-events-auto"
-          style={{ top: "max(1rem, env(safe-area-inset-top, 0px))" }}
-        >
-          <Bookmark className={cn("w-4.5 h-4.5", isBookmarked ? "fill-white text-white" : "text-white")} />
-        </button>
-      </div>
-
       {/* ── Hero poster — full 2:3 ratio ── */}
       <div className="relative w-full overflow-hidden">
         {(srcposter || movie.posterUrl) ? (
@@ -892,6 +873,23 @@ export default function MovieDetail() {
         )}
 
         <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/60 to-transparent" />
+        {/* ── Nav buttons — inside hero so they scroll away naturally ── */}
+        <div className="absolute inset-x-0 top-0 flex items-start justify-between pointer-events-none z-10"
+          style={{ paddingTop: "max(1rem, env(safe-area-inset-top, 0px))" }}>
+          <button
+            onClick={() => navBack(navigate)}
+            className="ml-4 w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center border border-white/20 pointer-events-auto"
+          >
+            <ChevronLeft className="w-5 h-5 text-white translate-x-[-1px]" />
+          </button>
+          <button
+            onClick={() => { if (!user) { toast({ title: t.signInToLike, duration: 1500 }); return; } bookmarkMutation.mutate(); }}
+            disabled={bookmarkLoading || bookmarkMutation.isPending}
+            className="mr-4 w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center border border-white/20 pointer-events-auto"
+          >
+            <Bookmark className={cn("w-4.5 h-4.5", isBookmarked ? "fill-white text-white" : "text-white")} />
+          </button>
+        </div>
         <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-white via-white/85 dark:from-black dark:via-black/85 to-transparent" />
 
 
@@ -1350,6 +1348,9 @@ export default function MovieDetail() {
                   // Target movie should always start fresh at top
                   scrollStore.delete(`movie-${targetImdbId}`);
                   scrollStore.delete(`movie-${targetImdbId}-details`);
+                  // Clear any pending back-nav restore so forward nav is never
+                  // mistakenly treated as back navigation in the target movie.
+                  clearMovieRestore(targetImdbId);
                 };
                 return (
                   <>

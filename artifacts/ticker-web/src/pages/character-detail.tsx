@@ -246,29 +246,6 @@ export default function CharacterDetail() {
     <div className="absolute inset-0 bg-background flex flex-col overflow-hidden">
       <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto overscroll-y-none">
 
-        {/* ── Sticky nav overlay — height:0 so hero image is not pushed down ── */}
-        <div className="sticky top-0 z-20 h-0 overflow-visible pointer-events-none">
-          <button
-            onClick={() => navBack(navigate)}
-            className="absolute left-4 w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center border border-white/20 pointer-events-auto"
-            style={{ top: "max(1rem, env(safe-area-inset-top, 0px))" }}
-            aria-label="Back"
-          >
-            <ChevronLeft className="w-5 h-5 text-white" style={{ transform: "translateX(-1px)" }} />
-          </button>
-          {user !== undefined && (
-            <button
-              onClick={handleBookmark}
-              disabled={bookmarkMutation.isPending}
-              className="absolute right-4 w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center border border-white/20 pointer-events-auto"
-              style={{ top: "max(1rem, env(safe-area-inset-top, 0px))" }}
-              aria-label={isBookmarked ? "Remove bookmark" : "Bookmark"}
-            >
-              <Bookmark className={cn("w-4.5 h-4.5 transition-all", isBookmarked ? "fill-white text-white" : "text-white")} />
-            </button>
-          )}
-        </div>
-
         {/* ── Hero ── */}
         <div className="relative w-full bg-secondary overflow-hidden" style={{ height: 280 }}>
           {data?.imageUrl && (
@@ -288,6 +265,27 @@ export default function CharacterDetail() {
             </div>
           )}
           <div className="absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-black/60 to-transparent pointer-events-none" />
+          {/* ── Nav buttons — inside hero so they scroll away naturally ── */}
+          <div className="absolute inset-x-0 top-0 flex items-start justify-between pointer-events-none z-10"
+            style={{ paddingTop: "max(1rem, env(safe-area-inset-top, 0px))" }}>
+            <button
+              onClick={() => navBack(navigate)}
+              className="ml-4 w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center border border-white/20 pointer-events-auto"
+              aria-label="Back"
+            >
+              <ChevronLeft className="w-5 h-5 text-white" style={{ transform: "translateX(-1px)" }} />
+            </button>
+            {user !== undefined && (
+              <button
+                onClick={handleBookmark}
+                disabled={bookmarkMutation.isPending}
+                className="mr-4 w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center border border-white/20 pointer-events-auto"
+                aria-label={isBookmarked ? "Remove bookmark" : "Bookmark"}
+              >
+                <Bookmark className={cn("w-4.5 h-4.5 transition-all", isBookmarked ? "fill-white text-white" : "text-white")} />
+              </button>
+            )}
+          </div>
           <div
             className="absolute inset-x-0 bottom-0"
             style={{ height: "60%", background: "linear-gradient(to top, hsl(var(--background)) 20%, transparent 100%)" }}

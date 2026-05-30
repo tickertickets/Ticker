@@ -1069,7 +1069,7 @@ router.patch(
         caption: typeof caption === "string" ? caption.trim() || null : ticket.caption,
         captionAlign: ["left", "center", "right"].includes(captionAlign) ? captionAlign : ticket.captionAlign,
         memoryNote: typeof memoryNote === "string" ? memoryNote.trim() || null : ticket.memoryNote,
-        rating: typeof rating === "number" && rating >= 1 && rating <= 5 ? String(rating) : ticket.rating,
+        rating: rating === null ? null : (typeof rating === "number" && rating >= 1 && rating <= 5 ? String(rating) : ticket.rating),
         watchedAt: typeof watchedAt === "string" && watchedAt ? watchedAt : watchedAt === "" ? null : ticket.watchedAt,
         location: typeof location === "string" ? location.trim() || null : ticket.location,
         isSpoiler: typeof isSpoiler === "boolean" ? isSpoiler : ticket.isSpoiler,
