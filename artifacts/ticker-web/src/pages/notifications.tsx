@@ -96,7 +96,6 @@ function PartyAcceptModal({
 
   const handleAccept = () => {
     if (!seatNumber) { setError(t.errChooseSeat); return; }
-    if (!rating) { setError(t.errGiveRating); return; }
     setError("");
     accept.mutate();
   };

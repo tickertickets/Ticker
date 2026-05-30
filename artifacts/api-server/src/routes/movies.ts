@@ -1477,11 +1477,7 @@ router.get(
       };
     });
 
-    scored.sort((a, b) => {
-      const aTime = (a.ticket.createdAt instanceof Date ? a.ticket.createdAt : new Date(a.ticket.createdAt)).getTime();
-      const bTime = (b.ticket.createdAt instanceof Date ? b.ticket.createdAt : new Date(b.ticket.createdAt)).getTime();
-      return bTime - aTime;
-    });
+    scored.sort((a, b) => b.score - a.score);
     const topTickets = scored.slice(0, limit).map((s) => s.ticket);
 
     // Resolve users

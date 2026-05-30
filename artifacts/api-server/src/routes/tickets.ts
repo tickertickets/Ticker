@@ -1116,7 +1116,7 @@ router.patch(
     const ticketId = String(req.params["ticketId"]);
     const { rating } = req.body;
 
-    if (typeof rating !== "number" || rating < 1 || rating > 5) {
+    if (rating != null && (typeof rating !== "number" || rating < 1 || rating > 5)) {
       throw new ValidationError("rating ต้องอยู่ระหว่าง 1–5");
     }
 

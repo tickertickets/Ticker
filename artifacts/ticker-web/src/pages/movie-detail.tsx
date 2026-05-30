@@ -437,23 +437,25 @@ export default function MovieDetail() {
       // may already be detached from the DOM when cleanup runs.
       scrollStore.set(key, lastScrollTop);
     };
-  // Re-run when movie data first loads — if scrollRef was null at mount time
-  // (data was still fetching), the listener was never registered and scroll
-  // position would not be tracked.  Adding !!movie re-runs the effect the
-  // moment the movie object becomes available, so the listener is registered.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [movieId, !!movie]);
+  }, [movieId]);
 
-  // PENDING-RESET: when data was still loading at FORCE-TOP time, apply the
-  // scroll reset now that scrollRef is first available (movie just loaded).
-  // This is a ref-based approach so it doesn't cause unnecessary re-renders.
+  // PENDING-RESET: when data was still loading at FORCE-TOP time, retry the
+  // scroll-to-top once the scroll container becomes available (data loads).
+  // Uses timed retries so we don't reference `movie` before its declaration.
   useEffect(() => {
-    if (needsScrollResetRef.current && scrollRef.current) {
-      scrollRef.current.scrollTop = 0;
-      needsScrollResetRef.current = false;
-    }
+    const tryReset = () => {
+      if (needsScrollResetRef.current && scrollRef.current) {
+        scrollRef.current.scrollTop = 0;
+        needsScrollResetRef.current = false;
+      }
+    };
+    const t1 = setTimeout(tryReset, 100);
+    const t2 = setTimeout(tryReset, 500);
+    const t3 = setTimeout(tryReset, 1200);
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [movie]);
+  }, [movieId]);
 
   // RESTORE: scroll to the saved position once there is enough content.
   // Strategy: ResizeObserver fires whenever scrollHeight grows (images load,
