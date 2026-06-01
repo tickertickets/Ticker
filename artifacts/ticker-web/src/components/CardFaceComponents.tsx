@@ -263,7 +263,7 @@ export function PosterCardFront({
               <Star className="w-5 h-5" style={{ color: POSTER_DARK, opacity: 0.35 }} />
             </div>
           )}
-          {ticket.rating != null && (
+          {ticket.rating != null && !(t["hideRating"] as boolean) && (
             <div style={{ position: "absolute", top: compact ? 1 : 3, right: compact ? 1 : 3 }}>
               <RatingBadge rating={ticket.rating} ratingType={ratingType} size={16} />
             </div>
@@ -356,7 +356,7 @@ export function ClassicCardFront({
         style={{ background: "linear-gradient(to top, rgba(0,0,0,0.65) 0%, transparent 55%, transparent 100%)" }}
       />
 
-      {ticket.rating != null && (
+      {ticket.rating != null && !(t["hideRating"] as boolean) && (
         <div className="absolute top-2 right-2">
           <RatingBadge rating={ticket.rating} ratingType={ratingType} size={16} />
         </div>

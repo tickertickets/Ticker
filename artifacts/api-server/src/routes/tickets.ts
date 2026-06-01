@@ -500,6 +500,7 @@ router.post(
       clipUrl,
       episodeLabel,
       cardData,
+      hideRating,
     } = req.body;
 
     const isReel = cardTheme === "reel";
@@ -616,6 +617,7 @@ router.post(
       rating: isReel ? null : rating ? String(rating) : null,
       ratingType:
         isReel ? "star" : ratingType === "blackhole" ? "blackhole" : "star",
+      hideRating: isReel ? false : (hideRating === true),
       isPrivateMemory: isPrivateMemory === true,
       isSpoiler: isSpoiler === true,
       rankTier: tier,
@@ -1062,7 +1064,7 @@ router.patch(
       .limit(1);
     if (!ticket) throw new NotFoundError("Ticket");
     if (ticket.userId !== currentUserId) throw new ForbiddenError();
-    const { caption, captionAlign, memoryNote, rating, watchedAt, location, isSpoiler } = req.body;
+    const { caption, captionAlign, memoryNote, rating, watchedAt, location, isSpoiler, hideRating } = req.body;
     await db
       .update(ticketsTable)
       .set({
@@ -1073,6 +1075,7 @@ router.patch(
         watchedAt: typeof watchedAt === "string" && watchedAt ? watchedAt : watchedAt === "" ? null : ticket.watchedAt,
         location: typeof location === "string" ? location.trim() || null : ticket.location,
         isSpoiler: typeof isSpoiler === "boolean" ? isSpoiler : ticket.isSpoiler,
+        hideRating: typeof hideRating === "boolean" ? hideRating : ticket.hideRating,
       })
       .where(eq(ticketsTable.id, ticketId));
     res.json({ success: true });

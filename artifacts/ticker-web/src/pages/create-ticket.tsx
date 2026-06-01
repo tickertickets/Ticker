@@ -232,6 +232,7 @@ export default function CreateTicket() {
   const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
   const [isDyingStar, setIsDyingStar] = useState(false);
+  const [hideRating, setHideRating] = useState(false);
   const [isPrivate, setIsPrivate] = useState(false);
   const [isSpoiler, setIsSpoiler] = useState(false);
   const [isPrivateMemory, setIsPrivateMemory] = useState(false);
@@ -653,6 +654,10 @@ export default function CreateTicket() {
   const handleSubmit = async () => {
     if (!selectedMovieId || !movieDetails) return;
     setSubmitError("");
+    if (cardTheme !== "reel" && rating === 0) {
+      setSubmitError(t.errNoRating);
+      return;
+    }
     // Fresh-fetch trash list at submit time to catch stale cache
     try {
       const trashRes = await fetch("/api/tickets/trash/list", { credentials: "include", cache: "no-store" });
@@ -682,6 +687,7 @@ export default function CreateTicket() {
           location: watchLocation || undefined,
           rating: rating > 0 ? rating : null,
           ratingType: isDyingStar ? "blackhole" : "star",
+          hideRating: hideRating || undefined,
           isPrivateMemory: isPrivateMemory || undefined,
           isPrivate,
           isSpoiler: isSpoiler || undefined,
@@ -956,7 +962,7 @@ export default function CreateTicket() {
                             style={{ background: "#b0ada8" }}
                           />
                         )}
-                        {rating > 0 && (
+                        {rating > 0 && !hideRating && (
                           <div style={{ position: "absolute", top: 4, right: 4 }}>
                             <RatingBadge rating={rating} ratingType={isDyingStar ? "blackhole" : "star"} size={16} />
                           </div>
@@ -1020,7 +1026,7 @@ export default function CreateTicket() {
                       @{user.username}
                     </p>
                   )}
-                  {rating > 0 && (
+                  {rating > 0 && !hideRating && (
                     <div className="absolute top-2 right-2">
                       <RatingBadge rating={rating} ratingType={isDyingStar ? "blackhole" : "star"} size={16} />
                     </div>
@@ -1205,6 +1211,30 @@ export default function CreateTicket() {
                   )} />
                 </div>
                 <span className="text-sm font-bold text-foreground">{t.dyingStarLabel}</span>
+              </button>
+
+              {/* ── Hide Rating toggle switch ── */}
+              <button
+                type="button"
+                role="switch"
+                aria-checked={hideRating}
+                onClick={() => setHideRating(v => !v)}
+                className="flex items-center gap-2 select-none active:opacity-70"
+                style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}
+              >
+                <div className={cn(
+                  "w-11 h-6 rounded-full transition-colors flex items-center px-0.5 flex-shrink-0",
+                  hideRating ? "bg-foreground" : "bg-border"
+                )}>
+                  <div className={cn(
+                    "w-5 h-5 rounded-full bg-white shadow transition-transform",
+                    hideRating ? "translate-x-5" : "translate-x-0"
+                  )} />
+                </div>
+                <div className="flex flex-col items-start">
+                  <span className="text-sm font-bold text-foreground leading-tight">{t.hideRatingLabel}</span>
+                  <span className="text-xs text-muted-foreground leading-tight">{t.hideRatingDesc}</span>
+                </div>
               </button>
             </div>
 

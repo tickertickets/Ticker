@@ -237,6 +237,8 @@ export interface Strings {
   aboutTickerBody: string;
   communityRulesCancel: string;
   dyingStarLabel: string;
+  hideRatingLabel: string;
+  hideRatingDesc: string;
   report: string;
   reportReasons: string[];
   youPrefix: string;
@@ -876,6 +878,8 @@ const TH: Strings = {
   aboutTickerBody: "Ticker คือแพลตฟอร์มโซเชียลสำหรับคนรักหนัง ซีรีส์ และอนิเมะ — พื้นที่แบ่งปันรีวิว ให้คะแนน และค้นพบสิ่งที่อยากดูต่อไป\n\nรีวิว คะแนน และเนื้อหาทั้งหมดที่โพสต์บน Ticker เป็นความรับผิดชอบของผู้ใช้แต่ละคนแต่เพียงผู้เดียว Ticker และผู้พัฒนาไม่รับรองและไม่รับผิดชอบต่อเนื้อหาที่ผู้ใช้สร้างขึ้น\n\nข้อมูลหนังและซีรีส์ดึงมาจาก TMDB ข้อมูลตัวละครดึงมาจาก AniList และ Comic Vine Ticker เป็นแพลตฟอร์มอิสระ ไม่มีส่วนเกี่ยวข้องและไม่ได้รับการรับรองจากบริการเหล่านั้นแต่อย่างใด\n\nเวอร์ชัน 1.0 · 2569",
   communityRulesCancel: "ยกเลิก",
   dyingStarLabel: "ดาวเน่า",
+  hideRatingLabel: "ซ่อนคะแนนบนตั๋ว",
+  hideRatingDesc: "ดาวคะแนนจะไม่แสดงบนการ์ด",
   report: "รายงาน",
   reportReasons: ["สแปม", "ไม่เหมาะสม", "การคุกคาม", "สปอยล์โดยไม่เตือน", "อื่นๆ"],
   youPrefix: "คุณ: ",
@@ -1465,6 +1469,8 @@ const EN: Strings = {
   aboutTickerBody: "Ticker is a social platform for film, series, and anime fans — a space to share reviews, rate what you've watched, and discover what to watch next.\n\nAll reviews, ratings, and content posted on Ticker are the sole responsibility of each individual user. Ticker and its developers make no representations and assume no liability for user-generated content.\n\nMovie and series data is provided by TMDB. Character data is sourced from AniList and Comic Vine. Ticker is an independent platform, not affiliated with, endorsed by, or certified by any of these services.\n\nVersion 1.0 · 2026",
   communityRulesCancel: "Cancel",
   dyingStarLabel: "Dying Star",
+  hideRatingLabel: "Hide rating on ticket",
+  hideRatingDesc: "Star rating won't appear on the card",
   report: "Report",
   reportReasons: ["Spam", "Inappropriate", "Harassment", "Spoiler without warning", "Other"],
   youPrefix: "You: ",

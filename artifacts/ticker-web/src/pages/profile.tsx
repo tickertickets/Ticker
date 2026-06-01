@@ -507,7 +507,7 @@ function SortableTicketItem({ ticket }: { ticket: Ticket }) {
     opacity: isDragging ? 0.5 : 1,
     zIndex: isDragging ? 10 : undefined,
     width: "calc(33.333% - 7px)",
-    touchAction: "none",
+    touchAction: isDragging ? "none" : "pan-y",
     position: "relative",
   };
   return (
@@ -538,8 +538,8 @@ function FilmsGrid({ tickets, isOwn, username }: { tickets: Ticket[]; isOwn: boo
   }, [tickets]);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
+    useSensor(PointerSensor, { activationConstraint: { delay: 500, tolerance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 500, tolerance: 8 } }),
   );
 
   const handleTicketDragEnd = async (event: DragEndEvent) => {
@@ -1387,6 +1387,16 @@ export default function Profile() {
   useEffect(() => {
     setBioLinks(((profile as any)?.bioLinks ?? []) as SocialLink[]);
   }, [(profile as any)?.bioLinks]);
+
+  // Update document title when profile loads
+  useEffect(() => {
+    if (!profile) return;
+    const name = (profile as any)?.displayName ?? username;
+    document.title = name
+      ? `${name} (@${username}) | Ticker`
+      : `@${username} | Ticker`;
+    return () => { document.title = "Ticker"; };
+  }, [(profile as any)?.displayName, username]);
 
   const handleFollow = async () => {
     if (!profile) return;

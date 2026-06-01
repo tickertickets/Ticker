@@ -159,6 +159,19 @@ export default function TicketDetail() {
     if (mine !== null) setTagRating(mine);
   }, [ticket?.id, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Update document title when ticket loads
+  useEffect(() => {
+    if (!ticket) return;
+    const movieTitle = (ticket as any)?.movieTitle ?? "";
+    const ownerUsername = (ticket as any)?.user?.username ?? "";
+    if (movieTitle) {
+      document.title = ownerUsername
+        ? `${movieTitle} — @${ownerUsername} | Ticker`
+        : `${movieTitle} | Ticker`;
+    }
+    return () => { document.title = "Ticker"; };
+  }, [(ticket as any)?.id, (ticket as any)?.movieTitle]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Reactions ────────────────────────────────────────────────────────────────
   const REACTION_PTS: Record<string, number> = { heart: 1, fire: 2, lightning: 3, sparkle: 4, popcorn: 5 };
 

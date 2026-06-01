@@ -625,6 +625,16 @@ export default function MovieDetail() {
     ? (langMovie?.plot || movie?.plot || null)
     : (movie?.plot || null);
 
+  // Update document title when movie loads
+  useEffect(() => {
+    if (!displayTitle) return;
+    const year = movie?.year;
+    document.title = year
+      ? `${displayTitle} (${year}) | Ticker`
+      : `${displayTitle} | Ticker`;
+    return () => { document.title = "Ticker"; };
+  }, [displayTitle, movie?.year]);
+
   const { data: communityData } = useQuery<{ tickets: CommunityTicket[] }>({
     queryKey: ["/api/movies", movieId, "community"],
     queryFn: async () => {
@@ -1318,12 +1328,33 @@ export default function MovieDetail() {
                     </div>
                   )}
 
-                  {/* Loaded — no characters found from AniList/CV */}
+                  {/* Loaded — no AniList/CV data, fall back to TMDB cast with character names */}
                   {charsData && (charsData.results ?? []).length === 0 && (
-                    <div className="flex items-center justify-center py-6">
-                      <p className="text-xs text-muted-foreground">
-                        {lang === "th" ? "ไม่มีข้อมูลตัวละคร" : "No character data"}
-                      </p>
+                    <div
+                      ref={charScrollRef}
+                      className="flex overflow-x-auto gap-2.5 pb-1 scrollbar-hide"
+                      style={{ WebkitOverflowScrolling: "touch", marginLeft: -20, marginRight: -20, paddingLeft: 20, paddingRight: 20 }}
+                    >
+                      {(creditsData?.cast ?? [])
+                        .filter(p => p.character && p.character.trim())
+                        .slice(0, 12)
+                        .map((person) => (
+                          <div key={person.id} className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border">
+                            <div className="relative" style={{ aspectRatio: "2/3" }}>
+                              {person.profileUrl ? (
+                                <img src={person.profileUrl} alt={person.name} className="w-full h-full object-cover object-top" loading="eager" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center bg-zinc-900">
+                                  <User className="w-4 h-4 text-muted-foreground opacity-30" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="p-1.5 pb-2 min-h-[44px] overflow-hidden">
+                              <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{person.character}</p>
+                              <p className="text-[8px] text-muted-foreground line-clamp-1 leading-tight mt-0.5">{person.name}</p>
+                            </div>
+                          </div>
+                        ))}
                     </div>
                   )}
                 </>

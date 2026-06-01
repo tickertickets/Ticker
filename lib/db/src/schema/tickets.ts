@@ -64,6 +64,7 @@ export const ticketsTable = pgTable("tickets", {
   cardDirector: text("card_director"),
   cardProducer: text("card_producer"),
   cardActors: text("card_actors"),
+  hideRating: boolean("hide_rating").notNull().default(false),
   clipUrl: text("clip_url"),
   episodeLabel: text("episode_label"),
   displayOrder: integer("display_order"),

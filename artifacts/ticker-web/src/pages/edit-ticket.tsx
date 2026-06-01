@@ -41,6 +41,7 @@ export default function EditTicket() {
   const [watchDate, setWatchDate] = useState(() => (src as any)?.watchedAt ?? "");
   const [watchLocation, setWatchLocation] = useState(() => (src as any)?.location ?? "");
   const [isSpoiler, setIsSpoiler] = useState(() => Boolean((src as any)?.isSpoiler));
+  const [hideRating, setHideRating] = useState(() => Boolean((src as any)?.hideRating));
   const [saving, setSaving] = useState(false);
   const [showCommunityWarning, setShowCommunityWarning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,11 +62,17 @@ export default function EditTicket() {
     setWatchDate((tk["watchedAt"] as string) ?? "");
     setWatchLocation((tk["location"] as string) ?? "");
     setIsSpoiler(Boolean(tk["isSpoiler"]));
+    setHideRating(Boolean(tk["hideRating"]));
     setSeeded(true);
   }, [ticket, seeded]);
 
   const handleSave = async () => {
     if (saving) return;
+    const isReel = (src as any)?.imdbId === "reel";
+    if (!isReel && rating === 0) {
+      setError(t.errNoRating);
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -73,7 +80,7 @@ export default function EditTicket() {
         method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ caption, captionAlign, memoryNote, rating: rating > 0 ? rating : null, watchedAt: watchDate || "", location: watchLocation, isSpoiler }),
+        body: JSON.stringify({ caption, captionAlign, memoryNote, rating: rating > 0 ? rating : null, watchedAt: watchDate || "", location: watchLocation, isSpoiler, hideRating }),
       });
       if (!res.ok) throw new Error(t.errSaveFailed);
       queryClient.removeQueries({ queryKey: [`/api/tickets/${ticketId}`] });
@@ -255,6 +262,18 @@ export default function EditTicket() {
           <button onClick={() => setIsSpoiler(v => !v)}
             className={cn("shrink-0 w-11 h-6 rounded-full transition-colors relative", isSpoiler ? "bg-foreground" : "bg-border")}>
             <div className={cn("absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all", isSpoiler ? "left-5" : "left-0.5")} />
+          </button>
+        </div>
+
+        {/* Hide rating toggle */}
+        <div className="flex items-center justify-between py-3 px-4 bg-secondary rounded-2xl">
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-foreground">{t.hideRatingLabel}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{t.hideRatingDesc}</p>
+          </div>
+          <button onClick={() => setHideRating(v => !v)}
+            className={cn("shrink-0 w-11 h-6 rounded-full transition-colors relative", hideRating ? "bg-foreground" : "bg-border")}>
+            <div className={cn("absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all", hideRating ? "left-5" : "left-0.5")} />
           </button>
         </div>
 

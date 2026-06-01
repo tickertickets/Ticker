@@ -96,6 +96,7 @@ export interface Ticket {
   isPrivate: boolean;
   hideWatchedAt: boolean;
   hideLocation: boolean;
+  hideRating?: boolean;
   isSpoiler?: boolean;
   rating?: number | null;
   likeCount: number;
@@ -128,6 +129,7 @@ export interface CreateTicketRequest {
   isPrivate?: boolean;
   hideWatchedAt?: boolean;
   hideLocation?: boolean;
+  hideRating?: boolean;
   isSpoiler?: boolean;
   rating?: number | null;
   taggedUserIds?: string[];

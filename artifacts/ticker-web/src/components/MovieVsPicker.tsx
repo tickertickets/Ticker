@@ -328,7 +328,6 @@ export function MovieVsPicker({ onClose }: { onClose: () => void }) {
                   placeholder={s.searchPlaceholder}
                   value={query}
                   onChange={e => setQuery(e.target.value)}
-                  autoFocus
                 />
                 {query && (
                   <button
