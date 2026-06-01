@@ -29,21 +29,21 @@ export type RandomMovie = {
 type SectionConfig = { title: string; desc: string; icon: LucideIcon; color: string };
 
 export const RANDOM_SECTION_META: Record<string, SectionConfig> = {
-  trending:          { title: "ยอดนิยม",            desc: "ดูเถอะ จะได้คุยกับชาวบ้านเขารู้เรื่อง",                  icon: TrendingUp,   color: "text-red-500"    },
-  now_playing:       { title: "กำลังฉาย",            desc: "กำเงินไปโรงหนังเดี๋ยวนี้เลย!",                          icon: Clapperboard, color: "text-blue-400"   },
-  legendary:         { title: "LEGENDARY",           desc: "ดูแล้วเข้าใจว่าทำไมคนยังพูดถึง",                        icon: Crown,        color: "text-amber-400"  },
-  cult_classic:      { title: "CULT CLASSIC",        desc: "พล็อตล้ำจนต้องร้อง ห้ะ?",                               icon: Skull,        color: "text-rose-400"   },
-  "2am_deep_talk":   { title: "2 AM Deep Talk",      desc: "ตีสองแล้วยังไม่นอน มาหาเรื่องให้คิดจนเช้ากัน",          icon: Moon,         color: "text-indigo-400" },
-  brain_rot:         { title: "Brain Rot",           desc: "ปล่อยสมองไหลไปกับหนัง พลังงานเหลือล้น",                 icon: Zap,          color: "text-orange-400" },
-  main_character:    { title: "Main Character",      desc: "ดูจบแล้วรู้สึกเหมือนเป็นพระเอก... จนกว่าจะส่องกระจก",   icon: Smile,        color: "text-cyan-400"   },
-  heartbreak:        { title: "อกหัก โรแมนติก",      desc: "เจ็บแล้วไม่จำ เดี๋ยวพี่ซ้ำให้เอง",                      icon: HeartCrack,   color: "text-rose-400"   },
-  chaos_red_flags:   { title: "Chaos & Red Flags",   desc: "ประสาทกินอย่างมีสไตล์ ใครชอบแนวนี้คือพวกเดียวกัน",      icon: AlertCircle,  color: "text-pink-400"   },
-  anime:             { title: "Anime",               desc: "เข้าแล้วออกยาก วงการนี้ไม่มีคำว่าพัก",                   icon: Sparkles,     color: "text-purple-400" },
-  tokusatsu:         { title: "โทคุทัสสึ",            desc: "ระเบิดทุกตอน ไม่มีข้ออ้าง",                             icon: Sword,        color: "text-green-400"  },
-  disney_dreamworks: { title: "Disney & DreamWorks", desc: "ใจฟูเบอร์แรก ดูแล้วเหมือนได้ชาร์จแบต",                 icon: Wand2,        color: "text-yellow-400" },
-  k_wave:            { title: "K-Wave",              desc: "เตรียมรามยอนให้พร้อม แล้วไปโอปป้ากัน",                  icon: Globe,        color: "text-teal-400"   },
-  midnight_horror:   { title: "Midnight Horror",     desc: "ไม่ได้น่ากลัวอย่างที่คิด... แต่นอนเปิดไฟด้วยก็ดี",      icon: Ghost,        color: "text-red-400"    },
-  marvel_dc:         { title: "Marvel & DC",         desc: "ดูทุกภาค หรือไม่ต้องก็ยังได้",                          icon: Shield,       color: "text-sky-400"    },
+  trending:          { title: "Trending",            desc: "Everyone's watching — join the conversation",              icon: TrendingUp,   color: "text-red-500"    },
+  now_playing:       { title: "Now Playing",         desc: "Grab your wallet and head to the cinema now!",            icon: Clapperboard, color: "text-blue-400"   },
+  legendary:         { title: "LEGENDARY",           desc: "Watch them and understand why people still talk about them", icon: Crown,      color: "text-amber-400"  },
+  cult_classic:      { title: "CULT CLASSIC",        desc: "Plots so wild you'll go 'wait, what?'",                   icon: Skull,        color: "text-rose-400"   },
+  "2am_deep_talk":   { title: "2 AM Deep Talk",      desc: "Still up at 2am? Something to keep you thinking till dawn", icon: Moon,       color: "text-indigo-400" },
+  brain_rot:         { title: "Brain Rot",           desc: "Let your brain melt — pure unfiltered energy",             icon: Zap,          color: "text-orange-400" },
+  main_character:    { title: "Main Character",      desc: "Watch it and feel like the hero... until you look in the mirror", icon: Smile, color: "text-cyan-400"   },
+  heartbreak:        { title: "Heartbreak Romance",  desc: "It hurts, you forget — then it hurts again",              icon: HeartCrack,   color: "text-rose-400"   },
+  chaos_red_flags:   { title: "Chaos & Red Flags",   desc: "Chaos with style — if you love this, we're the same",     icon: AlertCircle,  color: "text-pink-400"   },
+  anime:             { title: "Anime",               desc: "Easy to get in, impossible to leave",                      icon: Sparkles,     color: "text-purple-400" },
+  tokusatsu:         { title: "Tokusatsu",           desc: "Explosions every episode, no excuses needed",              icon: Sword,        color: "text-green-400"  },
+  disney_dreamworks: { title: "Disney & DreamWorks", desc: "Heart-filling content that recharges your battery",        icon: Wand2,        color: "text-yellow-400" },
+  k_wave:            { title: "K-Wave",              desc: "Get your ramen ready and meet your oppas",                 icon: Globe,        color: "text-teal-400"   },
+  midnight_horror:   { title: "Midnight Horror",     desc: "Not as scary as you'd think... but keep the lights on",   icon: Ghost,        color: "text-red-400"    },
+  marvel_dc:         { title: "Marvel & DC",         desc: "Watch every film, or just jump in — either works",        icon: Shield,       color: "text-sky-400"    },
 };
 
 // All categories by id → metadata (for lookup)

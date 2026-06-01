@@ -159,17 +159,47 @@ export default function TicketDetail() {
     if (mine !== null) setTagRating(mine);
   }, [ticket?.id, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Update document title when ticket loads
+  // Update document title + og meta tags when ticket loads
   useEffect(() => {
     if (!ticket) return;
     const movieTitle = (ticket as any)?.movieTitle ?? "";
     const ownerUsername = (ticket as any)?.user?.username ?? "";
+    const posterUrl = (ticket as any)?.posterUrl ?? (ticket as any)?.moviePosterUrl ?? "";
+    const memo = (ticket as any)?.memo ?? "";
     if (movieTitle) {
-      document.title = ownerUsername
+      const title = ownerUsername
         ? `${movieTitle} — @${ownerUsername} | Ticker`
         : `${movieTitle} | Ticker`;
+      document.title = title;
+      const desc = memo
+        ? `${memo.slice(0, 150)}${memo.length > 150 ? "…" : ""}`
+        : `${ownerUsername ? `@${ownerUsername}'s ` : ""}ticket for ${movieTitle} on Ticker`;
+      const setMeta = (prop: string, val: string, isName = false) => {
+        const sel = isName ? `meta[name="${prop}"]` : `meta[property="${prop}"]`;
+        let el = document.querySelector(sel) as HTMLMetaElement | null;
+        if (!el) {
+          el = document.createElement("meta");
+          if (isName) el.setAttribute("name", prop); else el.setAttribute("property", prop);
+          document.head.appendChild(el);
+        }
+        el.setAttribute("content", val);
+      };
+      setMeta("og:title", title);
+      setMeta("og:description", desc);
+      setMeta("og:type", "article");
+      if (posterUrl) setMeta("og:image", posterUrl);
+      setMeta("twitter:card", "summary_large_image", true);
+      setMeta("twitter:title", title, true);
+      setMeta("twitter:description", desc, true);
+      if (posterUrl) setMeta("twitter:image", posterUrl, true);
     }
-    return () => { document.title = "Ticker"; };
+    return () => {
+      document.title = "Ticker";
+      ["og:title","og:description","og:type","og:image"].forEach(p => {
+        const el = document.querySelector(`meta[property="${p}"]`) as HTMLMetaElement | null;
+        if (el) el.setAttribute("content", "");
+      });
+    };
   }, [(ticket as any)?.id, (ticket as any)?.movieTitle]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Reactions ────────────────────────────────────────────────────────────────

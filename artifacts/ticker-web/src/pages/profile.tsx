@@ -28,7 +28,7 @@ import type { ChainItem } from "@/components/ChainsSection";
 import {
   Loader2, Settings, Link2, Users, X, User as UserIcon,
   Camera, MessageCircle, Lock, Unlock, Flag, MoreHorizontal, ChevronLeft, Bookmark, Share2,
-  Heart, Send, Pencil, Trash2, Ticket as TicketIcon, AtSign, Check, Search, EyeOff, Eye, Plus, Globe,
+  Heart, Send, Pencil, Trash2, Ticket as TicketIcon, AtSign, Check, Search, EyeOff, Eye, Plus, Globe, GripVertical,
 } from "lucide-react";
 import { cn, fmtCount } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
@@ -507,12 +507,33 @@ function SortableTicketItem({ ticket }: { ticket: Ticket }) {
     opacity: isDragging ? 0.5 : 1,
     zIndex: isDragging ? 10 : undefined,
     width: "calc(33.333% - 7px)",
-    touchAction: isDragging ? "none" : "pan-y",
+    touchAction: "pan-y",
     position: "relative",
   };
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+    <div ref={setNodeRef} style={style} {...attributes}>
       <TicketCard ticket={ticket} compact />
+      {/* Dedicated drag handle — small grip in top-right corner */}
+      <div
+        {...listeners}
+        style={{
+          position: "absolute",
+          top: 4,
+          right: 4,
+          width: 24,
+          height: 24,
+          borderRadius: 6,
+          background: "rgba(0,0,0,0.45)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          touchAction: "none",
+          cursor: isDragging ? "grabbing" : "grab",
+          zIndex: 20,
+        }}
+      >
+        <GripVertical style={{ width: 13, height: 13, color: "#fff", opacity: 0.85 }} />
+      </div>
     </div>
   );
 }
@@ -538,8 +559,8 @@ function FilmsGrid({ tickets, isOwn, username }: { tickets: Ticket[]; isOwn: boo
   }, [tickets]);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { delay: 500, tolerance: 8 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 500, tolerance: 8 } }),
+    useSensor(PointerSensor, { activationConstraint: { delay: 600, tolerance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 600, tolerance: 5 } }),
   );
 
   const handleTicketDragEnd = async (event: DragEndEvent) => {
@@ -1388,15 +1409,45 @@ export default function Profile() {
     setBioLinks(((profile as any)?.bioLinks ?? []) as SocialLink[]);
   }, [(profile as any)?.bioLinks]);
 
-  // Update document title when profile loads
+  // Update document title + og meta tags when profile loads
   useEffect(() => {
     if (!profile) return;
     const name = (profile as any)?.displayName ?? username;
-    document.title = name
+    const title = name
       ? `${name} (@${username}) | Ticker`
       : `@${username} | Ticker`;
-    return () => { document.title = "Ticker"; };
-  }, [(profile as any)?.displayName, username]);
+    document.title = title;
+    const bio = (profile as any)?.bio ?? "";
+    const avatarUrl = (profile as any)?.avatarUrl ?? "";
+    const desc = bio
+      ? `${bio.slice(0, 150)}${bio.length > 150 ? "…" : ""}`
+      : `Check out @${username}'s movie tickets on Ticker`;
+    const setMeta = (prop: string, val: string, isName = false) => {
+      const sel = isName ? `meta[name="${prop}"]` : `meta[property="${prop}"]`;
+      let el = document.querySelector(sel) as HTMLMetaElement | null;
+      if (!el) {
+        el = document.createElement("meta");
+        if (isName) el.setAttribute("name", prop); else el.setAttribute("property", prop);
+        document.head.appendChild(el);
+      }
+      el.setAttribute("content", val);
+    };
+    setMeta("og:title", title);
+    setMeta("og:description", desc);
+    setMeta("og:type", "profile");
+    if (avatarUrl) setMeta("og:image", avatarUrl);
+    setMeta("twitter:card", "summary", true);
+    setMeta("twitter:title", title, true);
+    setMeta("twitter:description", desc, true);
+    if (avatarUrl) setMeta("twitter:image", avatarUrl, true);
+    return () => {
+      document.title = "Ticker";
+      ["og:title","og:description","og:type","og:image"].forEach(p => {
+        const el = document.querySelector(`meta[property="${p}"]`) as HTMLMetaElement | null;
+        if (el) el.setAttribute("content", "");
+      });
+    };
+  }, [(profile as any)?.displayName, username, (profile as any)?.bio, (profile as any)?.avatarUrl]);
 
   const handleFollow = async () => {
     if (!profile) return;

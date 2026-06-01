@@ -1187,6 +1187,8 @@ export default function Settings() {
       return res.json();
     },
     onSuccess: () => {
+      // Advance carousel to new level immediately, before the refetch lands
+      setActiveDot(prev => Math.min(MAX_DOT - 1, prev + 1));
       queryClient.invalidateQueries({ queryKey: ["badge-me"] });
       if (user?.id) queryClient.invalidateQueries({ queryKey: ["badge-user", user.id] });
     },

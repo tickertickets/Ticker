@@ -725,6 +725,7 @@ export async function buildTicket(
     captionLinks: Array.isArray(ticket.captionLinks) ? ticket.captionLinks : [],
     clipUrl: ticket.clipUrl,
     episodeLabel: ticket.episodeLabel,
+    hideRating: ticket.hideRating,
     createdAt: ticket.createdAt,
     movieLiveSnapshot,
   };

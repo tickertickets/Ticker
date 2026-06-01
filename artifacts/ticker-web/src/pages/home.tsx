@@ -570,7 +570,7 @@ export default function Home() {
             <SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none z-10" />
             <input
               type="text"
-              placeholder="ค้นหา Users, Tickets, Chains..."
+              placeholder={t.searchHomePlaceholder ?? "Search Users, Tickets, Chains..."}
               value={searchQuery}
               onChange={e => { setSearchQuery(e.target.value); setHeaderHidden(false); }}
               className="search-bar w-full"

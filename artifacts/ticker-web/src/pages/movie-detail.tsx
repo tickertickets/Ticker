@@ -625,15 +625,45 @@ export default function MovieDetail() {
     ? (langMovie?.plot || movie?.plot || null)
     : (movie?.plot || null);
 
-  // Update document title when movie loads
+  // Update document title + og meta tags when movie loads
   useEffect(() => {
     if (!displayTitle) return;
     const year = movie?.year;
-    document.title = year
+    const title = year
       ? `${displayTitle} (${year}) | Ticker`
       : `${displayTitle} | Ticker`;
-    return () => { document.title = "Ticker"; };
-  }, [displayTitle, movie?.year]);
+    document.title = title;
+    const posterUrl = (movie as any)?.posterUrl ?? "";
+    const plot = displayPlot ?? "";
+    const desc = plot
+      ? `${plot.slice(0, 150)}${plot.length > 150 ? "…" : ""}`
+      : `Discover ${displayTitle} on Ticker — the movie social platform.`;
+    const setMeta = (prop: string, val: string, isName = false) => {
+      const sel = isName ? `meta[name="${prop}"]` : `meta[property="${prop}"]`;
+      let el = document.querySelector(sel) as HTMLMetaElement | null;
+      if (!el) {
+        el = document.createElement("meta");
+        if (isName) el.setAttribute("name", prop); else el.setAttribute("property", prop);
+        document.head.appendChild(el);
+      }
+      el.setAttribute("content", val);
+    };
+    setMeta("og:title", title);
+    setMeta("og:description", desc);
+    setMeta("og:type", "video.movie");
+    if (posterUrl) setMeta("og:image", posterUrl);
+    setMeta("twitter:card", "summary_large_image", true);
+    setMeta("twitter:title", title, true);
+    setMeta("twitter:description", desc, true);
+    if (posterUrl) setMeta("twitter:image", posterUrl, true);
+    return () => {
+      document.title = "Ticker";
+      ["og:title","og:description","og:type","og:image"].forEach(p => {
+        const el = document.querySelector(`meta[property="${p}"]`) as HTMLMetaElement | null;
+        if (el) el.setAttribute("content", "");
+      });
+    };
+  }, [displayTitle, movie?.year, displayPlot, (movie as any)?.posterUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data: communityData } = useQuery<{ tickets: CommunityTicket[] }>({
     queryKey: ["/api/movies", movieId, "community"],

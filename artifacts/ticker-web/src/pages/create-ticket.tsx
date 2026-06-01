@@ -759,9 +759,9 @@ export default function CreateTicket() {
       const errMsg: string = typeof errData?.message === "string" ? errData.message : (err instanceof Error ? err.message : "");
       const isDuplicate = errCode === "duplicate_movie" || errMsg.includes("duplicate_movie");
       if (isDuplicate) {
-        if (errMsg.includes("คุณโพสต์ตอนนี้ไปแล้ว")) {
+        if (errMsg.includes("duplicate_episode")) {
           setSubmitError(t.errDuplicateEpisode);
-        } else if (errMsg.includes("คุณโพสต์ดูทั่วไปของซีรีส์นี้ไปแล้ว")) {
+        } else if (errMsg.includes("duplicate_general")) {
           setSubmitError(t.errDuplicateGeneral);
         } else {
           setSubmitError(t.errDuplicateMovie);

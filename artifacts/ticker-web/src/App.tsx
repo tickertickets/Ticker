@@ -43,6 +43,7 @@ import CharacterDetail  from "@/pages/character-detail";
 import WikiDetail       from "@/pages/wiki-detail";
 import { TicketLarge, BadgeIconStatic } from "@/components/BadgeIcon";
 import { PushPermissionPrompt } from "@/components/PushPermissionPrompt";
+import { PwaInstallPrompt } from "@/components/PwaInstallPrompt";
 function BadgePreview() {
   return (
     <div style={{ background: "#111", minHeight: "100dvh", display: "flex", flexDirection: "column", alignItems: "center", padding: 32, gap: 40 }}>
@@ -379,6 +380,7 @@ function AppRoutes() {
         </ShimmerActiveWrapper>
       )}
       <PushPermissionPrompt />
+      <PwaInstallPrompt />
     </Layout>
   );
 }

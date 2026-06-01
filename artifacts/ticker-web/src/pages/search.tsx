@@ -112,31 +112,33 @@ type SectionConfig = {
 };
 
 const SECTION_META: Record<string, SectionConfig> = {
-  trending:          { title: "ยอดนิยม",            desc: "ดูเถอะ จะได้คุยกับชาวบ้านเขารู้เรื่อง",                  icon: TrendingUp,   color: "text-red-500"    },
-  now_playing:       { title: "กำลังฉาย",            desc: "กำเงินไปโรงหนังเดี๋ยวนี้เลย!",                          icon: Clapperboard, color: "text-blue-400"   },
-  legendary:         { title: "LEGENDARY",           desc: "ดูแล้วเข้าใจว่าทำไมคนยังพูดถึง",                        icon: Crown,        color: "text-amber-400"  },
-  cult_classic:      { title: "CULT CLASSIC",        desc: "พล็อตล้ำจนต้องร้อง ห้ะ?",                               icon: Skull,        color: "text-rose-400"   },
-  "2am_deep_talk":   { title: "2 AM Deep Talk",      desc: "ตีสองแล้วยังไม่นอน มาหาเรื่องให้คิดจนเช้ากัน",          icon: Moon,         color: "text-indigo-400" },
-  brain_rot:         { title: "Brain Rot",           desc: "ปล่อยสมองไหลไปกับหนัง พลังงานเหลือล้น",                 icon: Zap,          color: "text-orange-400" },
-  main_character:    { title: "Main Character",      desc: "ดูจบแล้วรู้สึกเหมือนเป็นพระเอก... จนกว่าจะส่องกระจก",   icon: Smile,        color: "text-cyan-400"   },
-  heartbreak:        { title: "อกหัก โรแมนติก",      desc: "เจ็บแล้วไม่จำ เดี๋ยวพี่ซ้ำให้เอง",                      icon: HeartCrack,   color: "text-rose-400"   },
-  chaos_red_flags:   { title: "Chaos & Red Flags",   desc: "ประสาทกินอย่างมีสไตล์ ใครชอบแนวนี้คือพวกเดียวกัน",      icon: AlertCircle,  color: "text-pink-400"   },
-  anime:             { title: "Anime",               desc: "เข้าแล้วออกยาก วงการนี้ไม่มีคำว่าพัก",                   icon: Sparkles,     color: "text-purple-400" },
-  tokusatsu:         { title: "โทคุทัสสึ",            desc: "ระเบิดทุกตอน ไม่มีข้ออ้าง",                             icon: Sword,        color: "text-green-400"  },
-  disney_dreamworks: { title: "Disney & DreamWorks", desc: "ใจฟูเบอร์แรง ดูแล้วเหมือนได้ชาร์จแบต",                 icon: Wand2,        color: "text-yellow-400" },
-  k_wave:            { title: "K-Wave",              desc: "เตรียมรามยอนให้พร้อม แล้วไปโอปป้ากัน",                  icon: Globe,        color: "text-teal-400"   },
-  midnight_horror:   { title: "Midnight Horror",     desc: "ไม่ได้น่ากลัวอย่างที่คิด... แต่นอนเปิดไฟด้วยก็ดี",      icon: Ghost,        color: "text-red-400"    },
-  marvel_dc:         { title: "Marvel & DC",         desc: "ดูทุกภาค หรือไม่ต้องก็ยังได้",                          icon: Shield,       color: "text-sky-400"    },
+  trending:          { title: "Trending",            desc: "Everyone's watching — join the conversation",              icon: TrendingUp,   color: "text-red-500"    },
+  now_playing:       { title: "Now Playing",         desc: "Grab your wallet and head to the cinema now!",            icon: Clapperboard, color: "text-blue-400"   },
+  legendary:         { title: "LEGENDARY",           desc: "Watch them and understand why people still talk about them", icon: Crown,      color: "text-amber-400"  },
+  cult_classic:      { title: "CULT CLASSIC",        desc: "Plots so wild you'll go 'wait, what?'",                   icon: Skull,        color: "text-rose-400"   },
+  "2am_deep_talk":   { title: "2 AM Deep Talk",      desc: "Still up at 2am? Something to keep you thinking till dawn", icon: Moon,       color: "text-indigo-400" },
+  brain_rot:         { title: "Brain Rot",           desc: "Let your brain melt — pure unfiltered energy",             icon: Zap,          color: "text-orange-400" },
+  main_character:    { title: "Main Character",      desc: "Watch it and feel like the hero... until you look in the mirror", icon: Smile, color: "text-cyan-400"   },
+  heartbreak:        { title: "Heartbreak Romance",  desc: "It hurts, you forget — then it hurts again",              icon: HeartCrack,   color: "text-rose-400"   },
+  chaos_red_flags:   { title: "Chaos & Red Flags",   desc: "Chaos with style — if you love this, we're the same",     icon: AlertCircle,  color: "text-pink-400"   },
+  anime:             { title: "Anime",               desc: "Easy to get in, impossible to leave",                      icon: Sparkles,     color: "text-purple-400" },
+  tokusatsu:         { title: "Tokusatsu",           desc: "Explosions every episode, no excuses needed",              icon: Sword,        color: "text-green-400"  },
+  disney_dreamworks: { title: "Disney & DreamWorks", desc: "Heart-filling content that recharges your battery",        icon: Wand2,        color: "text-yellow-400" },
+  k_wave:            { title: "K-Wave",              desc: "Get your ramen ready and meet your oppas",                 icon: Globe,        color: "text-teal-400"   },
+  midnight_horror:   { title: "Midnight Horror",     desc: "Not as scary as you'd think... but keep the lights on",   icon: Ghost,        color: "text-red-400"    },
+  marvel_dc:         { title: "Marvel & DC",         desc: "Watch every film, or just jump in — either works",        icon: Shield,       color: "text-sky-400"    },
+  ticker_top:        { title: "Ticker Top Picks",    desc: "Highest rated by the Ticker community",                   icon: TrendingUp,   color: "text-amber-500"  },
+  ticker_bottom:     { title: "Ticker Bottom Shelf", desc: "Lowest rated — enter at your own risk",                   icon: TrendingUp,   color: "text-zinc-400"   },
 };
 
 const MIDDLE_CAT_MAP: Record<string, { id: string; label: string; icon: LucideIcon }> = {
   "2am_deep_talk":   { id: "2am_deep_talk",    label: "2 AM Deep Talk",     icon: Moon        },
   brain_rot:         { id: "brain_rot",         label: "Brain Rot",          icon: Zap         },
   main_character:    { id: "main_character",    label: "Main Character",     icon: Smile       },
-  heartbreak:        { id: "heartbreak",        label: "อกหัก โรแมนติก",    icon: HeartCrack  },
+  heartbreak:        { id: "heartbreak",        label: "Heartbreak",         icon: HeartCrack  },
   chaos_red_flags:   { id: "chaos_red_flags",   label: "Chaos & Red Flags",  icon: AlertCircle },
   anime:             { id: "anime",             label: "Anime",              icon: Sparkles    },
-  tokusatsu:         { id: "tokusatsu",         label: "โทคุทัสสึ",          icon: Sword       },
+  tokusatsu:         { id: "tokusatsu",         label: "Tokusatsu",          icon: Sword       },
   disney_dreamworks: { id: "disney_dreamworks", label: "Disney & DreamWorks",icon: Wand2       },
   k_wave:            { id: "k_wave",            label: "K-Wave",             icon: Globe       },
   midnight_horror:   { id: "midnight_horror",   label: "Midnight Horror",    icon: Ghost       },
@@ -153,11 +155,13 @@ function getTimedMiddleOrder(): string[] {
 
 // All pill categories in display order — movie categories only
 const ALL_CATEGORIES = [
-  { id: "trending",     label: "ยอดนิยม",         icon: TrendingUp  },
-  { id: "now_playing",  label: "กำลังฉาย",         icon: Clapperboard},
+  { id: "trending",      label: "Trending",        icon: TrendingUp  },
+  { id: "now_playing",   label: "Now Playing",     icon: Clapperboard},
   ...getTimedMiddleOrder().map(id => MIDDLE_CAT_MAP[id]),
-  { id: "legendary",    label: "LEGENDARY",       icon: Crown       },
-  { id: "cult_classic", label: "CULT CLASSIC",    icon: Skull       },
+  { id: "legendary",     label: "LEGENDARY",       icon: Crown       },
+  { id: "cult_classic",  label: "CULT CLASSIC",    icon: Skull       },
+  { id: "ticker_top",    label: "Top Picks",       icon: TrendingUp  },
+  { id: "ticker_bottom", label: "Bottom Shelf",    icon: TrendingUp  },
 ];
 
 // Movie grid categories
@@ -166,6 +170,7 @@ const MOVIE_GRID_IDS = new Set([
   "2am_deep_talk", "brain_rot", "main_character", "heartbreak",
   "chaos_red_flags", "anime", "tokusatsu", "disney_dreamworks",
   "k_wave", "midnight_horror", "marvel_dc",
+  "ticker_top", "ticker_bottom",
 ]);
 
 // ── API helpers ──────────────────────────────────────────────────────────────
@@ -173,10 +178,12 @@ const MOVIE_GRID_IDS = new Set([
 function buildFetchFn(categoryId: string, lang: string) {
   const apiLang = lang === "en" ? "en-US" : "th";
   const langQs = `&lang=${apiLang}`;
-  if (categoryId === "trending")     return (p: number) => fetch(`/api/movies/trending?page=${p}${langQs}`).then(r => r.json());
-  if (categoryId === "legendary")    return (p: number) => fetch(`/api/movies/top-rated?page=${p}${langQs}`).then(r => r.json());
-  if (categoryId === "cult_classic") return (p: number) => fetch(`/api/movies/rare-finds?page=${p}${langQs}`).then(r => r.json());
-  if (categoryId === "now_playing")  return (p: number) => fetch(`/api/movies/mood/now_playing?page=${p}${langQs}`).then(r => r.json());
+  if (categoryId === "trending")      return (p: number) => fetch(`/api/movies/trending?page=${p}${langQs}`).then(r => r.json());
+  if (categoryId === "legendary")     return (p: number) => fetch(`/api/movies/top-rated?page=${p}${langQs}`).then(r => r.json());
+  if (categoryId === "cult_classic")  return (p: number) => fetch(`/api/movies/rare-finds?page=${p}${langQs}`).then(r => r.json());
+  if (categoryId === "now_playing")   return (p: number) => fetch(`/api/movies/mood/now_playing?page=${p}${langQs}`).then(r => r.json());
+  if (categoryId === "ticker_top")    return (p: number) => fetch(`/api/movies/ticker-community?sort=top&page=${p}`).then(r => r.json());
+  if (categoryId === "ticker_bottom") return (p: number) => fetch(`/api/movies/ticker-community?sort=bottom&page=${p}`).then(r => r.json());
   return (p: number) => fetch(`/api/movies/mood/${categoryId}?page=${p}${langQs}`).then(r => r.json());
 }
 
@@ -298,10 +305,7 @@ function MovieSectionVertical({ categoryId }: { categoryId: string }) {
       ) : (
         <>
           <div className="grid grid-cols-3 gap-2.5 px-4 pt-3 pb-2.5">
-            {(hasNextPage
-              ? movies.slice(0, Math.floor(movies.length / 3) * 3)
-              : movies
-            ).map(movie => <MovieCard key={movie.imdbId} movie={movie} grid srclang={lang} />)}
+            {movies.map(movie => <MovieCard key={movie.imdbId} movie={movie} grid srclang={lang} />)}
             {!isFetchingNextPage && !hasNextPage && movies.length % 3 !== 0 && Array.from({ length: 3 - (movies.length % 3) }).map((_, i) => (
               <div key={`placeholder-${i}`} aria-hidden="true" />
             ))}

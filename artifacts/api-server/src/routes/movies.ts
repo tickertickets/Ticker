@@ -27,7 +27,7 @@ import {
   chainCommentsTable,
   movieFollowsTable,
 } from "@workspace/db/schema";
-import { eq, desc, count, max, and, inArray, isNull } from "drizzle-orm";
+import { eq, desc, count, max, and, inArray, isNull, sql } from "drizzle-orm";
 import { asyncHandler } from "../middlewares/error-handler";
 import { hotScore } from "../lib/hot-score";
 import {
@@ -586,6 +586,81 @@ router.get(
     };
     await setCached(cacheKey, result);
     res.json(result);
+  }),
+);
+
+// ── GET /movies/ticker-community — Top/Bottom rated by Ticker community ───────
+router.get(
+  "/ticker-community",
+  asyncHandler(async (req, res) => {
+    const sort  = (req.query["sort"] as string) === "bottom" ? "bottom" : "top";
+    const page  = Math.max(1, parseInt((req.query["page"] as string) || "1", 10));
+    const limit = 20;
+    const offset = (page - 1) * limit;
+
+    const communityRows = await db
+      .select({
+        imdbId:      ticketsTable.imdbId,
+        avgRating:   sql<number>`avg(cast(${ticketsTable.rating} as numeric))`,
+        ticketCount: count(ticketsTable.id),
+      })
+      .from(ticketsTable)
+      .where(
+        and(
+          isNull(ticketsTable.deletedAt),
+          eq(ticketsTable.hideRating, false),
+          eq(ticketsTable.ratingType, "star"),
+          sql`${ticketsTable.rating} is not null`,
+        ),
+      )
+      .groupBy(ticketsTable.imdbId)
+      .having(sql`count(${ticketsTable.id}) >= 3`)
+      .orderBy(
+        sort === "top"
+          ? desc(sql`avg(cast(${ticketsTable.rating} as numeric))`)
+          : sql`avg(cast(${ticketsTable.rating} as numeric)) asc`,
+      )
+      .limit(limit + offset);
+
+    const paged = communityRows.slice(offset, offset + limit);
+
+    // Look up movie details from moviesTable cache
+    const imdbIds = paged.map((r: any) => r.imdbId);
+    const movieRows: any[] = imdbIds.length > 0
+      ? await db.select().from(moviesTable).where(inArray(moviesTable.imdbId, imdbIds))
+      : [];
+
+    const movieMap = new Map(movieRows.map((m: any) => [m.imdbId, m]));
+
+    const movies = paged
+      .map((r: any) => {
+        const m = movieMap.get(r.imdbId) as any;
+        if (!m) return null;
+        return {
+          tmdbId:         m.tmdbId,
+          imdbId:         m.imdbId,
+          mediaType:      m.mediaType,
+          title:          m.title,
+          year:           m.year,
+          posterPath:     m.posterPath,
+          tmdbRating:     m.tmdbRating,
+          voteCount:      m.voteCount,
+          popularity:     m.popularity,
+          genreIds:       m.genreIds,
+          releaseDate:    m.releaseDate,
+          franchiseIds:   m.franchiseIds,
+          communityAvg:   Number(r.avgRating).toFixed(1),
+          communityCount: Number(r.ticketCount),
+        };
+      })
+      .filter(Boolean);
+
+    res.json({
+      movies,
+      page,
+      totalPages: Math.ceil(communityRows.length / limit) || 1,
+      totalResults: communityRows.length,
+    });
   }),
 );
 

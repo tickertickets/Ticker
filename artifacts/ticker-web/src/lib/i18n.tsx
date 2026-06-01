@@ -63,6 +63,10 @@ export interface Strings {
   pushPromptBody: string;
   pushPromptEnable: string;
   pushPromptLater: string;
+  pwaInstallTitle: string;
+  pwaInstallBody: string;
+  pwaInstallBtn: string;
+  pwaInstallLater: string;
   adminPanel: string;
   adminPanelDesc: string;
   contactTicker: string;
@@ -152,6 +156,7 @@ export interface Strings {
   noUserFound: string;
   noUserFoundDesc: string;
   searchUsersPlaceholder: string;
+  searchHomePlaceholder: string;
   // ── Search ───────────────────────────────────────────────────────
   searchMoviePlaceholder: string;
   noSearchResults: string;
@@ -620,6 +625,10 @@ const TH: Strings = {
   pushPromptBody: "รับแจ้งเตือนเมื่อมีคนตอบ ส่งข้อความ หรือมีหนังใหม่ที่น่าสนใจ คุณสามารถปิดได้ทุกเมื่อในหน้าตั้งค่า",
   pushPromptEnable: "เปิดการแจ้งเตือน",
   pushPromptLater: "ไว้ทีหลัง",
+  pwaInstallTitle: "ติดตั้ง Ticker",
+  pwaInstallBody: "เพิ่ม Ticker ไว้ที่หน้าจอหลักเพื่อประสบการณ์ที่ดียิ่งขึ้น",
+  pwaInstallBtn: "ติดตั้ง",
+  pwaInstallLater: "ไว้ทีหลัง",
   adminPanel: "ผู้ดูแลระบบ",
   adminPanelDesc: "จัดการคำขอและส่งประกาศ",
   contactTicker: "ติดต่อ Ticker",
@@ -771,6 +780,7 @@ const TH: Strings = {
   noUserFound: "ไม่พบผู้ใช้ที่ค้นหา",
   noUserFoundDesc: "ลองค้นหาด้วยชื่ออื่น",
   searchUsersPlaceholder: "ค้นหาผู้ใช้...",
+  searchHomePlaceholder: "ค้นหา Users, Tickets, Chains...",
   // Search — section titles always English (loanwords), descriptions follow language
   searchMoviePlaceholder: "ค้นหาหนัง ซีรีส์...",
   noSearchResults: "ไม่พบผลการค้นหา",
@@ -791,6 +801,8 @@ const TH: Strings = {
     k_wave:            { title: "K-Wave",              desc: "เตรียมรามยอนให้พร้อม แล้วไปโอปป้ากัน" },
     midnight_horror:   { title: "Midnight Horror",     desc: "ไม่ได้น่ากลัวอย่างที่คิด... แต่นอนเปิดไฟด้วยก็ดี" },
     marvel_dc:         { title: "Marvel & DC",         desc: "ดูทุกภาค หรือไม่ต้องก็ยังได้" },
+    ticker_top:        { title: "Ticker Top Picks",    desc: "คะแนนสูงสุดในชุมชน Ticker" },
+    ticker_bottom:     { title: "Ticker Bottom Shelf", desc: "คะแนนต่ำสุด — เข้าไปด้วยความเสี่ยงของตัวเอง" },
   },
   // Following feed
   noPostsYet: "ยังไม่มีโพสต์",
@@ -1211,6 +1223,10 @@ const EN: Strings = {
   pushPromptBody: "Get alerts when someone replies, messages you, or when there's a new movie worth watching. You can turn this off anytime in Settings.",
   pushPromptEnable: "Enable notifications",
   pushPromptLater: "Maybe later",
+  pwaInstallTitle: "Install Ticker",
+  pwaInstallBody: "Add Ticker to your home screen for a better experience",
+  pwaInstallBtn: "Install",
+  pwaInstallLater: "Maybe later",
   adminPanel: "Admin Panel",
   adminPanelDesc: "Manage requests and send announcements",
   contactTicker: "Contact Ticker",
@@ -1362,26 +1378,29 @@ const EN: Strings = {
   noUserFound: "No users found",
   noUserFoundDesc: "Try searching with a different name",
   searchUsersPlaceholder: "Search users...",
+  searchHomePlaceholder: "Search Users, Tickets, Chains...",
   // Search
   searchMoviePlaceholder: "Search movies, series...",
   noSearchResults: "No results found",
   emptySection: "No items available right now",
   sections: {
-    trending:          { title: "Trending",           desc: "Everyone's watching these — join the conversation" },
+    trending:          { title: "Trending",           desc: "Everyone's watching — join the conversation" },
     now_playing:       { title: "Now Playing",        desc: "Grab your wallet and head to the cinema now!" },
     legendary:         { title: "LEGENDARY",          desc: "Watch them and understand why people still talk about them" },
     cult_classic:      { title: "CULT CLASSIC",       desc: "Plots so wild you'll go 'wait, what?'" },
     "2am_deep_talk":   { title: "2 AM Deep Talk",     desc: "Still up at 2am? Here's something to keep you thinking till dawn" },
     brain_rot:         { title: "Brain Rot",          desc: "Let your brain melt — pure unfiltered energy" },
     main_character:    { title: "Main Character",     desc: "Watch it and feel like the hero... until you look in the mirror" },
-    heartbreak:        { title: "Heartbreak Romance", desc: "Hurt once, forget it — here's round two" },
-    chaos_red_flags:   { title: "Chaos & Red Flags",  desc: "Chaos with style — if you love this genre, we're the same" },
-    anime:             { title: "Anime",              desc: "Easy to get in, impossible to leave — no breaks in this fandom" },
+    heartbreak:        { title: "Heartbreak Romance", desc: "It hurts, you forget — then it hurts again" },
+    chaos_red_flags:   { title: "Chaos & Red Flags",  desc: "Chaos with style — if you love this, we're the same" },
+    anime:             { title: "Anime",              desc: "Easy to get in, impossible to leave" },
     tokusatsu:         { title: "Tokusatsu",          desc: "Explosions every episode, no excuses needed" },
     disney_dreamworks: { title: "Disney & DreamWorks", desc: "Heart-filling content that recharges your battery" },
     k_wave:            { title: "K-Wave",             desc: "Get your ramen ready and meet your oppas" },
     midnight_horror:   { title: "Midnight Horror",    desc: "Not as scary as you'd think... but keep the lights on anyway" },
     marvel_dc:         { title: "Marvel & DC",        desc: "Watch every film, or just jump in — either works" },
+    ticker_top:        { title: "Ticker Top Picks",   desc: "Highest rated by the Ticker community" },
+    ticker_bottom:     { title: "Ticker Bottom Shelf", desc: "Lowest rated — enter at your own risk" },
   },
   // Following feed
   noPostsYet: "No posts yet",

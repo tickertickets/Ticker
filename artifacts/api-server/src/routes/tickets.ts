@@ -557,8 +557,8 @@ router.post(
         throw new ConflictError(
           "duplicate_movie",
           isSeries
-            ? (normalizedEpisodeLabel ? "คุณโพสต์ตอนนี้ไปแล้ว" : "คุณโพสต์ดูทั่วไปของซีรีส์นี้ไปแล้ว ลองเลือกตอนเพื่อโพสต์ใหม่")
-            : "คุณโพสต์หนังเรื่องนี้ไปแล้ว",
+            ? (normalizedEpisodeLabel ? "duplicate_episode" : "duplicate_general")
+            : "duplicate_movie",
         );
       }
     }

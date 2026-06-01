@@ -25,6 +25,11 @@ function sitemapNoindex(): Plugin {
         if (req.url === "/sitemap.xml" || req.url?.startsWith("/sitemap.xml?")) {
           res.setHeader("X-Robots-Tag", "noindex");
         }
+        // Rewrite /@username → /profile/:username so Vite's SPA fallback handles it
+        if (req.url && /^\/@[^/]+\/?$/.test(req.url.split("?")[0])) {
+          const username = req.url.split("?")[0].replace(/^\/@/, "").replace(/\/$/, "");
+          req.url = `/profile/${username}`;
+        }
         next();
       });
     },
