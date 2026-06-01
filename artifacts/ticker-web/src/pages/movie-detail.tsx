@@ -1358,35 +1358,7 @@ export default function MovieDetail() {
                     </div>
                   )}
 
-                  {/* Loaded — no AniList/CV data, fall back to TMDB cast with character names */}
-                  {charsData && (charsData.results ?? []).length === 0 && (
-                    <div
-                      ref={charScrollRef}
-                      className="flex overflow-x-auto gap-2.5 pb-1 scrollbar-hide"
-                      style={{ WebkitOverflowScrolling: "touch", marginLeft: -20, marginRight: -20, paddingLeft: 20, paddingRight: 20 }}
-                    >
-                      {(creditsData?.cast ?? [])
-                        .filter(p => p.character && p.character.trim())
-                        .slice(0, 12)
-                        .map((person) => (
-                          <div key={person.id} className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border">
-                            <div className="relative" style={{ aspectRatio: "2/3" }}>
-                              {person.profileUrl ? (
-                                <img src={person.profileUrl} alt={person.name} className="w-full h-full object-cover object-top" loading="eager" />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center bg-zinc-900">
-                                  <User className="w-4 h-4 text-muted-foreground opacity-30" />
-                                </div>
-                              )}
-                            </div>
-                            <div className="p-1.5 pb-2 min-h-[44px] overflow-hidden">
-                              <p className="text-[9px] font-bold text-foreground line-clamp-2 leading-tight">{person.character}</p>
-                              <p className="text-[8px] text-muted-foreground line-clamp-1 leading-tight mt-0.5">{person.name}</p>
-                            </div>
-                          </div>
-                        ))}
-                    </div>
-                  )}
+                  {/* No AniList/CV data — render nothing; actor photos must not appear as character images */}
                 </>
               )}
 

@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { usersTable, followsTable, ticketsTable, followRequestsTable, chainsTable, chainRunsTable, chainMoviesTable, likesTable, commentsTable, chainLikesTable, chainCommentsTable, bookmarksTable, usernameChangesTable, USERNAME_CHANGE_COOLDOWN_DAYS } from "@workspace/db/schema";
+import { usersTable, followsTable, ticketsTable, followRequestsTable, chainsTable, chainRunsTable, chainMoviesTable, likesTable, commentsTable, chainLikesTable, chainCommentsTable, bookmarksTable, usernameChangesTable, USERNAME_CHANGE_COOLDOWN_DAYS, notifSubscriptionsTable } from "@workspace/db/schema";
 import { eq, and, count, desc, asc, lt, or, ilike, isNull, inArray, sql, gte } from "drizzle-orm";
 import { sanitize } from "../lib/sanitize";
 import { nanoid } from "nanoid";
@@ -720,6 +720,65 @@ router.get("/me/activities", async (req, res) => {
     chainComments: chainCommentsRows.map(r => ({ ...r, posterUrl: chainPosterMap.get(r.chainId) ?? null })),
     ownTickets: ownTicketRows,
   });
+});
+
+// ── GET /users/:username/notify-subscription ─────────────────────────────────
+// Returns whether the logged-in user has subscribed to this user's post notifications.
+router.get("/:username/notify-subscription", async (req, res) => {
+  const currentUserId = req.session?.userId;
+  if (!currentUserId) { res.json({ subscribed: false }); return; }
+  const { username } = req.params;
+  const [target] = await db.select({ id: usersTable.id }).from(usersTable)
+    .where(ilike(usersTable.username, username)).limit(1);
+  if (!target) { res.json({ subscribed: false }); return; }
+  const [row] = await db.select({ subscriberId: notifSubscriptionsTable.subscriberId })
+    .from(notifSubscriptionsTable)
+    .where(and(
+      eq(notifSubscriptionsTable.subscriberId, currentUserId),
+      eq(notifSubscriptionsTable.targetUserId, target.id),
+    )).limit(1);
+  res.json({ subscribed: !!row });
+});
+
+// ── POST /users/:username/notify-subscription ────────────────────────────────
+// Subscribe to this user's post notifications (bell on).
+router.post("/:username/notify-subscription", async (req, res) => {
+  const currentUserId = req.session?.userId;
+  if (!currentUserId) { res.status(401).json({ error: "unauthorized" }); return; }
+  const { username } = req.params;
+  const [target] = await db.select({ id: usersTable.id, isPrivate: usersTable.isPrivate })
+    .from(usersTable).where(ilike(usersTable.username, username)).limit(1);
+  if (!target) { res.status(404).json({ error: "not_found" }); return; }
+  if (target.id === currentUserId) { res.status(400).json({ error: "cannot_subscribe_self" }); return; }
+  // For private accounts, only allow if already following
+  if (target.isPrivate) {
+    const [follow] = await db.select({ followerId: followsTable.followerId })
+      .from(followsTable)
+      .where(and(eq(followsTable.followerId, currentUserId), eq(followsTable.followingId, target.id)))
+      .limit(1);
+    if (!follow) { res.status(403).json({ error: "not_following_private" }); return; }
+  }
+  await db.insert(notifSubscriptionsTable)
+    .values({ subscriberId: currentUserId, targetUserId: target.id })
+    .onConflictDoNothing();
+  res.json({ subscribed: true });
+});
+
+// ── DELETE /users/:username/notify-subscription ───────────────────────────────
+// Unsubscribe from this user's post notifications (bell off).
+router.delete("/:username/notify-subscription", async (req, res) => {
+  const currentUserId = req.session?.userId;
+  if (!currentUserId) { res.status(401).json({ error: "unauthorized" }); return; }
+  const { username } = req.params;
+  const [target] = await db.select({ id: usersTable.id }).from(usersTable)
+    .where(ilike(usersTable.username, username)).limit(1);
+  if (!target) { res.status(404).json({ error: "not_found" }); return; }
+  await db.delete(notifSubscriptionsTable)
+    .where(and(
+      eq(notifSubscriptionsTable.subscriberId, currentUserId),
+      eq(notifSubscriptionsTable.targetUserId, target.id),
+    ));
+  res.json({ subscribed: false });
 });
 
 export { buildUserProfile };

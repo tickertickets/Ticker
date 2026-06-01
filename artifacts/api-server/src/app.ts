@@ -217,7 +217,24 @@ async function ensureSocialLinksColumns(): Promise<void> {
   }
 }
 
-export { ensureSessionTable, ensureTicketTagRatingsTable, ensureBadgeXpLogTable, ensureChainMoviesColumns, ensureUserBadgeTable, ensureSupporterRequestsTable, ensureSupporterApprovedColumn, ensureSocialLinksColumns };
+async function ensureNotifSubscriptionsTable(): Promise<void> {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS "notif_subscriptions" (
+        "subscriber_id" text NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+        "target_user_id" text NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+        "created_at" timestamptz NOT NULL DEFAULT now(),
+        PRIMARY KEY ("subscriber_id", "target_user_id")
+      );
+      CREATE INDEX IF NOT EXISTS "notif_sub_subscriber_idx" ON "notif_subscriptions" ("subscriber_id");
+      CREATE INDEX IF NOT EXISTS "notif_sub_target_idx" ON "notif_subscriptions" ("target_user_id");
+    `);
+  } catch (err) {
+    logger.warn({ err }, "notif_subscriptions table setup warning (non-fatal)");
+  }
+}
+
+export { ensureSessionTable, ensureTicketTagRatingsTable, ensureBadgeXpLogTable, ensureChainMoviesColumns, ensureUserBadgeTable, ensureSupporterRequestsTable, ensureSupporterApprovedColumn, ensureSocialLinksColumns, ensureNotifSubscriptionsTable };
 
 const app: Express = express();
 

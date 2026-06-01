@@ -18,3 +18,4 @@ export * from "./siteSettings";
 export * from "./wiki";
 export * from "./movieFollows";
 export * from "./characterCache";
+export * from "./notifSubscriptions";

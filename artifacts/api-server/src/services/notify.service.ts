@@ -1,5 +1,5 @@
 import { db } from "@workspace/db";
-import { notificationsTable, usersTable, followsTable, type InsertNotification } from "@workspace/db/schema";
+import { notificationsTable, usersTable, followsTable, notifSubscriptionsTable, type InsertNotification } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { emitNotificationNew } from "../lib/socket";
 import { sendPushToUser, sendPushToUsers, type PushPayload } from "./push.service";
@@ -56,10 +56,10 @@ export async function createNotification(payload: InsertNotification): Promise<v
 }
 
 /**
- * Push-only notification to all followers of `authorId` when they create a new
- * post. Does NOT insert in-app notification rows (would spam the bell).
- * Uses tag `new_post:<authorId>` so the latest one collapses earlier ones on
- * the device.
+ * Push-only notification to users who explicitly subscribed (bell) to `authorId`
+ * when they create a new non-private post.
+ * Does NOT insert in-app notification rows (would spam the bell).
+ * Uses tag `new_post:<authorId>` so the latest one collapses earlier ones.
  */
 export async function notifyFollowersNewPost(opts: {
   authorId: string;
@@ -78,24 +78,24 @@ export async function notifyFollowersNewPost(opts: {
     }).from(usersTable).where(eq(usersTable.id, authorId)).limit(1);
     if (!author) return;
 
-    const followers = await db
-      .select({ followerId: followsTable.followerId })
-      .from(followsTable)
-      .where(eq(followsTable.followingId, authorId));
-    const followerIds = followers.map((f) => f.followerId).filter((id): id is string => Boolean(id));
-    if (followerIds.length === 0) return;
+    // Only send to users who explicitly subscribed (pressed bell), not all followers
+    const subscribers = await db
+      .select({ subscriberId: notifSubscriptionsTable.subscriberId })
+      .from(notifSubscriptionsTable)
+      .where(eq(notifSubscriptionsTable.targetUserId, authorId));
+    const subscriberIds = subscribers.map((s) => s.subscriberId).filter((id): id is string => Boolean(id));
+    if (subscriberIds.length === 0) return;
 
     const name = author.displayName || (author.username ? `@${author.username}` : "Someone");
     const url = kind === "ticket" ? `${APP_BASE_URL}ticket/${postId}` : `${APP_BASE_URL}chain/${postId}`;
     const icon = opts.posterUrl ?? undefined;
 
-    // Group followers by their preferred language so each gets a localized push.
-    const langMap = await getUserLangs(followerIds);
+    const langMap = await getUserLangs(subscriberIds);
     const buckets = new Map<"th" | "en", string[]>();
-    for (const fid of followerIds) {
-      const lang = langMap.get(fid) ?? "en";
+    for (const sid of subscriberIds) {
+      const lang = langMap.get(sid) ?? "en";
       const arr = buckets.get(lang) ?? [];
-      arr.push(fid);
+      arr.push(sid);
       buckets.set(lang, arr);
     }
 

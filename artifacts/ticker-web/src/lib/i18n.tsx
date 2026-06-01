@@ -575,6 +575,10 @@ export interface Strings {
   sendInChatBtn: string;
   copiedLabel: string;
   copyLinkBtn: string;
+  bellSubscribeLabel: string;
+  bellUnsubscribeLabel: string;
+  bellSubscribedToast: string;
+  bellUnsubscribedToast: string;
 }
 
 const TH: Strings = {
@@ -1173,6 +1177,10 @@ const TH: Strings = {
   sendInChatBtn: "ส่งในแชท",
   copiedLabel: "คัดลอกแล้ว",
   copyLinkBtn: "คัดลอกลิงก์",
+  bellSubscribeLabel: "เปิดการแจ้งเตือน",
+  bellUnsubscribeLabel: "ปิดการแจ้งเตือน",
+  bellSubscribedToast: "เปิดการแจ้งเตือนแล้ว",
+  bellUnsubscribedToast: "ปิดการแจ้งเตือนแล้ว",
 };
 
 const EN: Strings = {
@@ -1771,6 +1779,10 @@ const EN: Strings = {
   sendInChatBtn: "Send in Chat",
   copiedLabel: "Copied",
   copyLinkBtn: "Copy Link",
+  bellSubscribeLabel: "Turn on notifications",
+  bellUnsubscribeLabel: "Turn off notifications",
+  bellSubscribedToast: "Notifications on",
+  bellUnsubscribedToast: "Notifications off",
 };
 
 interface LangCtx {

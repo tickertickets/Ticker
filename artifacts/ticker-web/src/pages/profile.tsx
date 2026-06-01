@@ -29,6 +29,7 @@ import {
   Loader2, Settings, Link2, Users, X, User as UserIcon,
   Camera, MessageCircle, Lock, Unlock, Flag, MoreHorizontal, ChevronLeft, Bookmark, Share2,
   Heart, Send, Pencil, Trash2, Ticket as TicketIcon, AtSign, Check, Search, EyeOff, Eye, Plus, Globe, GripVertical,
+  Bell, BellOff,
 } from "lucide-react";
 import { cn, fmtCount } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
@@ -1342,6 +1343,27 @@ export default function Profile() {
   const [reportUserOpen, setReportUserOpen] = useState(false);
 
   const isOwn = me?.username === username;
+
+  // ── Bell notification subscription state (hooks must be declared before profile) ──
+  const [bellSubscribed, setBellSubscribed] = useState(false);
+  const [bellLoading, setBellLoading] = useState(false);
+
+  const handleBellToggle = async () => {
+    if (!me || bellLoading) return;
+    setBellLoading(true);
+    const next = !bellSubscribed;
+    try {
+      const method = next ? "POST" : "DELETE";
+      const res = await fetch(`/api/users/${username}/notify-subscription`, { method, credentials: "include" });
+      if (res.ok) {
+        setBellSubscribed(next);
+        toast({ title: next ? t.bellSubscribedToast : t.bellUnsubscribedToast, duration: 1500 });
+      }
+    } catch { /* ignore */ } finally {
+      setBellLoading(false);
+    }
+  };
+
   const [, navigate] = useLocation();
 
   // nav-refresh: tap profile icon when already on this profile → scroll to top + refetch
@@ -1551,34 +1573,47 @@ export default function Profile() {
             )}
           </div>
           <span className="flex-1 text-center font-display font-bold text-white text-xl tracking-tight">Ticker</span>
-          {/* Right — Share, same w-9 h-9 as original gear slot */}
+          {/* Right — Bell (other users) or nothing for own profile; share/settings are stacked below */}
           <div className="w-9 h-9 flex items-center justify-end flex-shrink-0">
-            {me ? (
+            {showBell ? (
               <button
                 className="w-9 h-9 flex items-center justify-center active:opacity-70"
-                onClick={async () => {
-                  const url = `${window.location.origin}/@${profile.username}`;
-                  try { await navigator.clipboard.writeText(url); }
-                  catch {
-                    const el = document.createElement("textarea");
-                    el.value = url; el.style.cssText = "position:fixed;top:-9999px;left:-9999px;";
-                    document.body.appendChild(el); el.select(); document.execCommand("copy"); document.body.removeChild(el);
-                  }
-                  toast({ title: t.copiedLabel, duration: 1500 });
-                }}
+                title={bellSubscribed ? t.bellUnsubscribeLabel : t.bellSubscribeLabel}
+                onClick={handleBellToggle}
+                disabled={bellLoading}
               >
-                <Share2 className="w-6 h-6 text-white" />
+                {bellSubscribed
+                  ? <Bell className="w-6 h-6 text-white" fill="currentColor" />
+                  : <Bell className="w-6 h-6 text-white/70" />}
               </button>
             ) : null}
           </div>
         </div>
 
-        {/* Gear / Flag — absolute, right-aligned just below Share */}
+        {/* Share — absolute, right-aligned just below Bell/top area */}
+        <button
+          className="absolute w-9 h-9 flex items-center justify-center right-3 active:opacity-70"
+          style={{ top: "calc(env(safe-area-inset-top, 0px) + 16px + 36px + 8px)" }}
+          onClick={async () => {
+            const url = `${window.location.origin}/@${profile.username}`;
+            try { await navigator.clipboard.writeText(url); }
+            catch {
+              const el = document.createElement("textarea");
+              el.value = url; el.style.cssText = "position:fixed;top:-9999px;left:-9999px;";
+              document.body.appendChild(el); el.select(); document.execCommand("copy"); document.body.removeChild(el);
+            }
+            toast({ title: t.copiedLabel, duration: 1500 });
+          }}
+        >
+          <Share2 className="w-6 h-6 text-white/70" />
+        </button>
+
+        {/* Gear / Flag — absolute, right-aligned below Share */}
         {isOwn ? (
           <Link href="/settings">
             <button
               className="absolute w-9 h-9 flex items-center justify-center right-3"
-              style={{ top: "calc(env(safe-area-inset-top, 0px) + 16px + 36px + 8px)" }}
+              style={{ top: "calc(env(safe-area-inset-top, 0px) + 16px + 36px + 8px + 36px + 8px)" }}
             >
               <Settings className="w-6 h-6 text-white" />
             </button>
@@ -1587,7 +1622,7 @@ export default function Profile() {
           <button
             onClick={() => setReportUserOpen(true)}
             className="absolute w-9 h-9 flex items-center justify-center right-3"
-            style={{ top: "calc(env(safe-area-inset-top, 0px) + 16px + 36px + 8px)" }}
+            style={{ top: "calc(env(safe-area-inset-top, 0px) + 16px + 36px + 8px + 36px + 8px)" }}
           >
             <Flag className="w-6 h-6 text-white/70" />
           </button>
