@@ -9,7 +9,7 @@ import { createPortal } from "react-dom";
 import { useKeyboardHeight } from "@/hooks/use-keyboard-height";
 import { useModalBackButton } from "@/hooks/use-modal-back-button";
 import { Link, useLocation } from "wouter";
-import { Bookmark, Heart, Star, MapPin, CalendarDays, ArrowRight, Lock, Unlock, Users, Flag, Send, Search, X, MessageCircle, Trash2, MoreVertical, Loader2, Ticket as TicketIcon, MessagesSquare, Share2, Pencil, Pin, PinOff, Eye, EyeOff, CornerDownRight } from "lucide-react";
+import { Bookmark, Heart, Star, MapPin, CalendarDays, ArrowRight, Lock, Unlock, Users, Flag, Send, Search, X, MessageCircle, Trash2, MoreVertical, Loader2, Ticket as TicketIcon, MessagesSquare, Share2, Pencil, Pin, PinOff, Eye, EyeOff, CornerDownRight, FolderOpen, Check, ChevronLeft } from "lucide-react";
 import { ReactionButton } from "./ReactionButton";
 import { saveAs } from "file-saver";
 import html2canvas from "html2canvas";
@@ -1172,8 +1172,9 @@ function FeedCard({ ticket, onLongPress }: { ticket: Ticket; onLongPress?: (t: T
   const ratingType = (((ticket as unknown) as Record<string, unknown>)["ratingType"] as string | undefined) ?? "star";
   const cardTheme = (((ticket as unknown) as Record<string, unknown>)["cardTheme"] as string | undefined) ?? "classic";
   const isPoster = cardTheme === "poster";
+  const hideRating = !!((ticket as unknown) as Record<string, unknown>)["hideRating"];
   const ratingStyle = getRatingCardStyle(ticket.rating, ratingType);
-  const feedFrontShadow = specialColorCfg ? specialColorCfg.glow : (ratingStyle.glow.boxShadow ?? "0 4px 14px rgba(0,0,0,0.5)");
+  const feedFrontShadow = specialColorCfg ? specialColorCfg.glow : (hideRating ? "0 4px 14px rgba(0,0,0,0.5)" : (ratingStyle.glow.boxShadow ?? "0 4px 14px rgba(0,0,0,0.5)"));
 
   const handleReact = async (reactions: Record<string, number>) => {
     if (!user) {
@@ -1693,6 +1694,9 @@ export function CardContextMenu({ ticket, onClose }: CardMenuProps) {
   // pinnedIds === []    → user has nothing pinned yet
   const [pinnedIds, setPinnedIds] = useState<string[] | null>(null);
   const [pinning, setPinning] = useState(false);
+  const [albums, setAlbums] = useState<Array<{ id: string; title: string; ticketIds: string[] }> | null>(null);
+  const [albumStep, setAlbumStep] = useState(false);
+  const [movingToAlbum, setMovingToAlbum] = useState(false);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isOwner = !!me && me.id === ticket.userId;
 
@@ -1731,6 +1735,24 @@ export function CardContextMenu({ ticket, onClose }: CardMenuProps) {
     })();
     return () => { cancelled = true; };
   }, [isOwner]);
+
+  // Fetch the current user's albums once when the menu opens
+  useEffect(() => {
+    if (!isOwner || !me) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/albums?userId=${me.id}`, { credentials: "include" });
+        if (!res.ok) { if (!cancelled) setAlbums([]); return; }
+        const data = await res.json();
+        if (cancelled) return;
+        setAlbums(Array.isArray(data?.albums) ? data.albums : []);
+      } catch {
+        if (!cancelled) setAlbums([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isOwner, me?.id]);
 
   const handleClose = () => {
     if (closeTimerRef.current !== null) return;

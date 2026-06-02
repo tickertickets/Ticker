@@ -387,11 +387,12 @@ export default function Search() {
   useEffect(() => {
     if (!fabHighlight) return;
     // First visit: scroll down briefly to reveal dice/VS buttons, then scroll back up
-    const scrollEl = document.querySelector('[data-cat-active="true"]') as HTMLElement | null;
     const tid0 = setTimeout(() => {
+      const scrollEl = document.querySelector('[data-cat-active="true"]') as HTMLElement | null;
       scrollEl?.scrollTo({ top: 80, behavior: "smooth" });
     }, 600);
     const tid1 = setTimeout(() => {
+      const scrollEl = document.querySelector('[data-cat-active="true"]') as HTMLElement | null;
       scrollEl?.scrollTo({ top: 0, behavior: "smooth" });
     }, 1400);
     const tid2 = setTimeout(() => {

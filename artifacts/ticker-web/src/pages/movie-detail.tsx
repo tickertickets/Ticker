@@ -1243,9 +1243,9 @@ export default function MovieDetail() {
       {/* ── Backdrops gallery — single auto-slide carousel ── */}
       {(backdropsData?.backdrops ?? []).length > 0 && (
         <div className="pt-4">
-          <div className="flex items-center gap-2 mb-3 px-5">
-            <Images className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-            <p className="text-xs font-semibold text-muted-foreground flex-1">{lang === "th" ? "ภาพฉาก" : "Scenes"}</p>
+          <div className="flex items-center gap-2 mb-2 px-5">
+            <Images className="w-3.5 h-3.5 text-foreground flex-shrink-0" />
+            <p className="text-xs font-semibold text-foreground">{lang === "th" ? "ภาพฉาก" : "Scenes"}</p>
           </div>
           <BackdropCarousel backdrops={backdropsData?.backdrops ?? []} title={movie?.title ?? ""} />
         </div>

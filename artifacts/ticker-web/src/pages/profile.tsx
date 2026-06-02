@@ -562,7 +562,10 @@ function AlbumPillBtn({ label, isActive, onClick, onLongPress }: {
   };
   return (
     <button
-      className={cn("filter-pill flex-shrink-0", isActive && "active")}
+      className={cn(
+        "flex-shrink-0 text-sm font-semibold px-3 py-1.5 rounded-xl transition-colors",
+        isActive ? "bg-foreground text-background" : "bg-secondary text-foreground/60"
+      )}
       onClick={handleClick}
       onPointerDown={start}
       onPointerUp={cancel}
@@ -1944,7 +1947,7 @@ export default function Profile() {
                     {isOwn && albums.length < 3 && (
                       <button
                         onClick={() => { setNewAlbumTitle(""); setShowCreateAlbum(true); }}
-                        className="filter-pill flex-shrink-0 flex items-center gap-1"
+                        className="flex-shrink-0 flex items-center gap-1 text-sm font-semibold px-3 py-1.5 rounded-xl transition-colors bg-secondary text-foreground/60"
                       >
                         <Plus className="w-3 h-3" />
                         <span>{lang === "th" ? "ใหม่" : "New"}</span>

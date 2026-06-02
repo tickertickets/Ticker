@@ -258,7 +258,7 @@ export function MovieVsPicker({ onClose }: { onClose: () => void }) {
 
         {/* ── Pick step ── */}
         {step === "pick" && (
-          <div className="flex flex-col overflow-hidden" style={{ maxHeight: "calc(92vh - 40px)" }}>
+          <div className="flex flex-col overflow-hidden" style={{ maxHeight: `calc(${maxH} - 40px)` }}>
             {/* Header */}
             <div className="px-4 pt-2 pb-3">
               <div className="relative flex items-center justify-center mb-1 pt-1">
