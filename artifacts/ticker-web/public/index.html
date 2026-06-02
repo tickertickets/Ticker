@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" translate="no">
   <head>
     <script>(function () {
   var P = ['__firefox__','ethereum','DarkReader','chrome-extension','moz-extension','safari-extension','playlistLongPressed'];
@@ -23,7 +23,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, viewport-fit=cover" />
     <title>Ticker — Movie Social Platform</title>
-    <meta name="description" content="Drop a Ticket every time you watch. Build Chains, explore what friends are watching, and discover your next obsession — all in one place." />
+    <meta name="description" content="Every film you watch deserves a Ticket. Log movies, build Chains with friends, and discover what's worth watching next. Welcome to Ticker." />
     <meta name="keywords" content="Ticker, Tickets, Chains, movie app, รีวิวหนัง, ดูหนัง, movie review, film diary, movie tracker, watchlist, movie social, ซีรีย์, film community" />
     <link rel="canonical" href="https://ticker-tickets.vercel.app/" />
 
@@ -48,12 +48,26 @@
 
     <!-- Open Graph -->
     <meta property="og:title" content="Ticker — Movie Social Platform" />
-    <meta property="og:description" content="Drop a Ticket every time you watch. Build Chains, explore what friends are watching, and discover your next obsession — all in one place." />
+    <meta property="og:description" content="Every film you love deserves a Ticket. On Ticker, log what you've watched, build Chains of must-sees with your crew, and discover your next obsession together." />
     <meta property="og:url" content="https://ticker-tickets.vercel.app/" />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="Ticker — Movie Social Platform" />
-    <meta name="twitter:description" content="Drop a Ticket every time you watch. Build Chains, explore what friends are watching, and discover your next obsession — all in one place." />
+    <meta name="twitter:description" content="Log the films you love as Tickets, build Chains with your crew, and discover what's worth watching. Join Ticker — your movie community." />
+
+    <!-- Block Google auto-translate for all modes -->
+    <meta name="google" content="notranslate" />
+    <!-- Mark non-PWA browser so React can selectively enable translate="yes"
+         on specific content elements (synopsis, bio, character descriptions). -->
+    <script>
+      (function () {
+        var isPWA = window.matchMedia("(display-mode: standalone)").matches ||
+                   window.navigator.standalone === true;
+        if (!isPWA) {
+          document.documentElement.setAttribute("data-browser", "1");
+        }
+      })();
+    </script>
 
     <!-- Google Search Console verification -->
     <meta name="google-site-verification" content="eRrNlnK3-oXxOmqJFMtLSgmQF0aSD__hFBmlk1XydhA" />
@@ -78,15 +92,15 @@
       })();
     </script>
 
-    <script type="module" crossorigin src="/assets/index-BUHSX51D.js"></script>
+    <script type="module" crossorigin src="/assets/index-D-wNXdfQ.js"></script>
     <link rel="modulepreload" crossorigin href="/assets/vendor-0VU5cs31.js">
     <link rel="modulepreload" crossorigin href="/assets/tanstack-DO-A4nf0.js">
     <link rel="modulepreload" crossorigin href="/assets/router-DNVmQSku.js">
     <link rel="modulepreload" crossorigin href="/assets/radix-BzcoWsuO.js">
-    <link rel="modulepreload" crossorigin href="/assets/lucide-jdWkUii3.js">
+    <link rel="modulepreload" crossorigin href="/assets/lucide-CM7hXG2B.js">
     <link rel="modulepreload" crossorigin href="/assets/framer-motion-LpcbD145.js">
     <link rel="stylesheet" crossorigin href="/assets/vendor-KkClGO-_.css">
-    <link rel="stylesheet" crossorigin href="/assets/index-DYQyvKlG.css">
+    <link rel="stylesheet" crossorigin href="/assets/index-B-5WDDw8.css">
   <link rel="manifest" href="/manifest.webmanifest"><script id="vite-plugin-pwa:inline-sw">if('serviceWorker' in navigator) {window.addEventListener('load', () => {navigator.serviceWorker.register('/sw.js', { scope: '/' })})}</script></head>
   <body>
     <div id="root"></div>

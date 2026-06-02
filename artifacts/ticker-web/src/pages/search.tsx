@@ -386,11 +386,19 @@ export default function Search() {
   const [fabHighlight, setFabHighlight]           = useState(() => !sessionStorage.getItem("ticker_fab_seen"));
   useEffect(() => {
     if (!fabHighlight) return;
-    const tid = setTimeout(() => {
+    // First visit: scroll down briefly to reveal dice/VS buttons, then scroll back up
+    const scrollEl = document.querySelector('[data-cat-active="true"]') as HTMLElement | null;
+    const tid0 = setTimeout(() => {
+      scrollEl?.scrollTo({ top: 80, behavior: "smooth" });
+    }, 600);
+    const tid1 = setTimeout(() => {
+      scrollEl?.scrollTo({ top: 0, behavior: "smooth" });
+    }, 1400);
+    const tid2 = setTimeout(() => {
       sessionStorage.setItem("ticker_fab_seen", "1");
       setFabHighlight(false);
-    }, 2500);
-    return () => clearTimeout(tid);
+    }, 2800);
+    return () => { clearTimeout(tid0); clearTimeout(tid1); clearTimeout(tid2); };
   }, [fabHighlight]);
   const diceTabCollapseRef = useRef(false);
   // Reset collapse flag when category changes so tab is visible on next visit to top

@@ -346,8 +346,11 @@ export function MovieVsPicker({ onClose }: { onClose: () => void }) {
               </div>
             </div>
 
-            {/* Content */}
-            <div className="flex-1 overflow-y-auto px-4 pb-4">
+            {/* Content — scrolling dismisses keyboard */}
+            <div
+              className="flex-1 overflow-y-auto px-4 pb-4"
+              onScroll={() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); }}
+            >
               {/* Searching indicator */}
               {searching && (
                 <div className="flex justify-center py-8">

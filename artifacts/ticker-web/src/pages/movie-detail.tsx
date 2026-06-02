@@ -7,7 +7,7 @@ import { computeCardTier, computeEffectTags, TIER_VISUAL } from "@/lib/ranks";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { ChevronLeft, Film, Star, Users, Bookmark, ChevronDown, ChevronUp, Tv, Flag, Loader2, EyeOff, Lock, User, Link2, Heart, MessageCircle, Send, Search, Bell, BellOff, Info, Layers, GitBranch, Images } from "lucide-react";
 import { ChainCard, PosterCollage, ChainCommentSheet, ChainShareModal, type ChainItem } from "@/components/ChainsSection";
-import { useState, useRef, useEffect, type ReactNode } from "react";
+import { useState, useRef, useEffect, useCallback, type ReactNode } from "react";
 import { cn, fmtCount, IS_PWA } from "@/lib/utils";
 import { scrollStore } from "@/lib/scroll-store";
 import { useLang, displayYear } from "@/lib/i18n";
@@ -227,6 +227,92 @@ function AccordionContent({ open, children }: { open: boolean; children?: ReactN
   return (
     <div style={{ height: open ? height : 0, overflow: "hidden", transition: ready ? "height 0.4s cubic-bezier(0.4,0,0.2,1)" : "none", overflowAnchor: "none" }}>
       <div ref={innerRef}>{children}</div>
+    </div>
+  );
+}
+
+// ── BackdropCarousel — single 16/9 auto-slide block (mirrors UpcomingCard's MovieCarousel) ──
+function BackdropCarousel({ backdrops, title }: { backdrops: string[]; title: string }) {
+  const pool = backdrops.slice(0, 5);
+  const totalPages = pool.length;
+  const [page, setPage] = useState(0);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const txRef = useRef(0);
+
+  const stopAutoSlide = useCallback(() => {
+    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+  }, []);
+
+  const startAutoSlide = useCallback(() => {
+    stopAutoSlide();
+    if (totalPages <= 1) return;
+    intervalRef.current = setInterval(() => setPage(p => (p + 1) % totalPages), 4000);
+  }, [totalPages, stopAutoSlide]);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || pool.length === 0) return;
+    const setup = () => {
+      let root: Element | null = el.parentElement;
+      while (root && root !== document.body) {
+        const s = getComputedStyle(root);
+        if (s.overflowY === "auto" || s.overflowY === "scroll" || s.overflow === "auto" || s.overflow === "scroll") break;
+        root = root.parentElement;
+      }
+      const obs = new IntersectionObserver(([entry]) => {
+        if (entry.isIntersecting) { setPage(0); startAutoSlide(); }
+        else { stopAutoSlide(); setPage(0); }
+      }, { root: root === document.body ? null : root, threshold: 0.4 });
+      obs.observe(el);
+      return obs;
+    };
+    const id = setTimeout(() => { (containerRef as any)._obs = setup(); }, 60);
+    return () => {
+      clearTimeout(id);
+      ((containerRef as any)._obs as IntersectionObserver | undefined)?.disconnect();
+      stopAutoSlide();
+    };
+  }, [pool.length, startAutoSlide, stopAutoSlide]);
+
+  const onTouchStart = (e: React.TouchEvent) => { txRef.current = e.touches[0].clientX; };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    const dx = e.changedTouches[0].clientX - txRef.current;
+    if (Math.abs(dx) < 40) return;
+    stopAutoSlide();
+    setPage(p => dx < 0 ? Math.min(p + 1, totalPages - 1) : Math.max(p - 1, 0));
+  };
+
+  if (pool.length === 0) return null;
+
+  return (
+    <div
+      ref={containerRef}
+      className="relative w-full overflow-hidden bg-black"
+      style={{ aspectRatio: "16/9" }}
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
+    >
+      {pool.map((src, i) => (
+        <div
+          key={i}
+          className="absolute inset-0 transition-transform duration-500 ease-out"
+          style={{ transform: `translateX(${(i - page) * 100}%)` }}
+        >
+          <img src={src} alt={title} className="w-full h-full object-cover" draggable={false} />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-black/10 pointer-events-none" />
+        </div>
+      ))}
+      {totalPages > 1 && (
+        <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 z-10 flex gap-1 pointer-events-none">
+          {Array.from({ length: totalPages }).map((_, i) => (
+            <span key={i} className={cn(
+              "rounded-full transition-all duration-200",
+              i === page ? "w-4 h-1.5 bg-white" : "w-1.5 h-1.5 bg-white/45"
+            )} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1154,30 +1240,14 @@ export default function MovieDetail() {
           </div>
         )}
 
-      {/* ── Backdrops gallery ── */}
+      {/* ── Backdrops gallery — single auto-slide carousel ── */}
       {(backdropsData?.backdrops ?? []).length > 0 && (
         <div className="pt-4">
           <div className="flex items-center gap-2 mb-3 px-5">
             <Images className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
             <p className="text-xs font-semibold text-muted-foreground flex-1">{lang === "th" ? "ภาพฉาก" : "Scenes"}</p>
           </div>
-          <div className="flex gap-3 overflow-x-auto scrollbar-hide px-5 pb-2">
-            {(backdropsData?.backdrops ?? []).map((url, i) => (
-              <div
-                key={i}
-                className="flex-shrink-0 rounded-2xl overflow-hidden border border-border bg-zinc-900 shadow-md"
-                style={{ width: 260, aspectRatio: "16/9", display: "block" }}
-              >
-                <img
-                  src={url}
-                  alt={`backdrop ${i + 1}`}
-                  className="w-full h-full object-cover"
-                  loading="lazy"
-                  onError={(e) => { (e.currentTarget as HTMLImageElement).closest("div")!.style.display = "none"; }}
-                />
-              </div>
-            ))}
-          </div>
+          <BackdropCarousel backdrops={backdropsData?.backdrops ?? []} title={movie?.title ?? ""} />
         </div>
       )}
 

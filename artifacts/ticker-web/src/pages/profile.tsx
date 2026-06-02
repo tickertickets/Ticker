@@ -540,6 +540,40 @@ function SortableTicketItem({ ticket, isReorderMode }: { ticket: Ticket; isReord
   );
 }
 
+// ── AlbumPillBtn — pill with long-press support ────────────────────────────
+function AlbumPillBtn({ label, isActive, onClick, onLongPress }: {
+  label: string; isActive: boolean; onClick: () => void; onLongPress?: () => void;
+}) {
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const didLongPress = useRef(false);
+  const start = (e: React.TouchEvent | React.PointerEvent) => {
+    e.stopPropagation();
+    didLongPress.current = false;
+    timerRef.current = setTimeout(() => {
+      didLongPress.current = true;
+      onLongPress?.();
+    }, 500);
+  };
+  const cancel = () => { if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; } };
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!didLongPress.current) onClick();
+    didLongPress.current = false;
+  };
+  return (
+    <button
+      className={cn("filter-pill flex-shrink-0", isActive && "active")}
+      onClick={handleClick}
+      onPointerDown={start}
+      onPointerUp={cancel}
+      onPointerCancel={cancel}
+      onTouchEnd={cancel}
+    >
+      {label}
+    </button>
+  );
+}
+
 // ── FilmsGrid ──────────────────────────────────────────────────────────────
 
 function FilmsGrid({ tickets, isOwn, username }: { tickets: Ticket[]; isOwn: boolean; username: string }) {
@@ -1314,7 +1348,7 @@ function ChainTabContent({
 // ── Profile page ───────────────────────────────────────────────────────────
 
 export default function Profile() {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const [, params] = useRoute("/profile/:username");
   const username = params?.username ?? "";
   const { user: me } = useAuth();
@@ -1352,6 +1386,57 @@ export default function Profile() {
     url.searchParams.set("subtab", sub);
     window.history.replaceState({}, "", url.pathname + url.search);
   };
+
+  const [activeAlbumId, setActiveAlbumId] = useState<string | null>(null);
+  const [showCreateAlbum, setShowCreateAlbum] = useState(false);
+  const [newAlbumTitle, setNewAlbumTitle] = useState("");
+  const [albumMenu, setAlbumMenu] = useState<{ id: string; title: string } | null>(null);
+  const [albumRenaming, setAlbumRenaming] = useState(false);
+  const [albumRenameTitle, setAlbumRenameTitle] = useState("");
+  const [albumActionLoading, setAlbumActionLoading] = useState(false);
+
+  const handleCreateAlbum = async () => {
+    if (!newAlbumTitle.trim() || albumActionLoading) return;
+    setAlbumActionLoading(true);
+    try {
+      const res = await fetch("/api/albums", {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: newAlbumTitle.trim() }),
+      });
+      if (res.ok) {
+        queryClient.invalidateQueries({ queryKey: ["profile-albums", profileUserId] });
+        setNewAlbumTitle(""); setShowCreateAlbum(false);
+      }
+    } catch { /* ignore */ } finally { setAlbumActionLoading(false); }
+  };
+
+  const handleDeleteAlbum = async (albumId: string) => {
+    setAlbumActionLoading(true);
+    try {
+      await fetch(`/api/albums/${albumId}`, { method: "DELETE", credentials: "include" });
+      if (activeAlbumId === albumId) setActiveAlbumId(null);
+      queryClient.invalidateQueries({ queryKey: ["profile-albums", profileUserId] });
+      setAlbumMenu(null);
+    } catch { /* ignore */ } finally { setAlbumActionLoading(false); }
+  };
+
+  const handleRenameAlbum = async () => {
+    if (!albumMenu || !albumRenameTitle.trim() || albumActionLoading) return;
+    setAlbumActionLoading(true);
+    try {
+      const res = await fetch(`/api/albums/${albumMenu.id}`, {
+        method: "PATCH", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: albumRenameTitle.trim() }),
+      });
+      if (res.ok) {
+        queryClient.invalidateQueries({ queryKey: ["profile-albums", profileUserId] });
+        setAlbumMenu(null); setAlbumRenaming(false); setAlbumRenameTitle("");
+      }
+    } catch { /* ignore */ } finally { setAlbumActionLoading(false); }
+  };
+
   const [followModal, setFollowModal] = useState<null | "followers" | "following">(null);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [messagingError, setMessagingError] = useState("");
@@ -1441,7 +1526,7 @@ export default function Profile() {
       if (!res.ok) return { albums: [] };
       return res.json();
     },
-    enabled: !!profileUserId && activeTab === "albums",
+    enabled: !!profileUserId,
     staleTime: 30 * 1000,
   });
 
@@ -1825,35 +1910,55 @@ export default function Profile() {
 
           {/* Tab content — CSS toggle, ไม่ unmount */}
           <div style={{ display: activeTab === "films" ? "block" : "none" }}>
-            {/* Albums horizontal strip (inside Tickets tab) */}
-            {(albumsData?.albums ?? []).length > 0 && (
-              <div className="px-4 pt-2 pb-1">
-                <div className="flex items-center gap-1.5 mb-2">
-                  <FolderOpen className="w-3.5 h-3.5 text-muted-foreground" />
-                  <p className="text-xs font-semibold text-muted-foreground">{t.albumsTab}</p>
-                </div>
-                <div className="flex gap-2.5 overflow-x-auto scrollbar-hide pb-1">
-                  {(albumsData?.albums ?? []).map((album: any) => (
-                    <div key={album.id} className="flex-shrink-0 w-[88px]">
-                      <div className="w-full aspect-square rounded-xl overflow-hidden border border-border bg-secondary">
-                        <div className="grid grid-cols-2 gap-0.5 w-full h-full">
-                          {[0,1,2,3].map(i => (
-                            <div key={i} className="overflow-hidden bg-muted">
-                              {album.posters?.[i]
-                                ? <img src={album.posters[i]} alt="" className="w-full h-full object-cover" />
-                                : <div className="w-full h-full bg-secondary" />
-                              }
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                      <p className="text-[10px] font-semibold text-foreground truncate mt-1 text-center px-0.5">{album.title}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
+            {/* Album sub-pills — shown when user has albums or is owner */}
+            {(() => {
+              const albums: any[] = albumsData?.albums ?? [];
+              const showAlbumPills = isOwn || albums.length > 0;
+              if (!showAlbumPills) return null;
+              const allAlbumTicketIds = new Set(albums.flatMap((a: any) => a.ticketIds ?? []));
+              const filteredTickets = activeAlbumId
+                ? tickets.filter((t: Ticket) => (albums.find((a: any) => a.id === activeAlbumId)?.ticketIds ?? []).includes(t.id))
+                : allAlbumTicketIds.size > 0
+                  ? tickets.filter((t: Ticket) => !allAlbumTicketIds.has(t.id))
+                  : tickets;
+              return (
+                <>
+                  <div className="px-3 pt-1 pb-2 flex items-center gap-2 overflow-x-auto scrollbar-hide">
+                    {/* Main/หลัก pill */}
+                    <AlbumPillBtn
+                      label={lang === "th" ? "หลัก" : "Main"}
+                      isActive={!activeAlbumId}
+                      onClick={() => setActiveAlbumId(null)}
+                    />
+                    {/* Custom album pills */}
+                    {albums.map((album: any) => (
+                      <AlbumPillBtn
+                        key={album.id}
+                        label={album.title}
+                        isActive={activeAlbumId === album.id}
+                        onClick={() => setActiveAlbumId(album.id)}
+                        onLongPress={isOwn ? () => { setAlbumMenu({ id: album.id, title: album.title }); setAlbumRenaming(false); setAlbumRenameTitle(album.title); } : undefined}
+                      />
+                    ))}
+                    {/* + New album (owner only, max 3 custom) */}
+                    {isOwn && albums.length < 3 && (
+                      <button
+                        onClick={() => { setNewAlbumTitle(""); setShowCreateAlbum(true); }}
+                        className="filter-pill flex-shrink-0 flex items-center gap-1"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>{lang === "th" ? "ใหม่" : "New"}</span>
+                      </button>
+                    )}
+                  </div>
+                  <FilmsGrid tickets={filteredTickets} isOwn={isOwn} username={username} />
+                </>
+              );
+            })()}
+            {/* Fallback when no albums and not owner */}
+            {!isOwn && (albumsData?.albums ?? []).length === 0 && (
+              <FilmsGrid tickets={tickets} isOwn={isOwn} username={username} />
             )}
-            <FilmsGrid tickets={tickets} isOwn={isOwn} username={username} />
           </div>
 
           <div style={{ display: activeTab === "chain" ? "block" : "none" }}>
@@ -1895,6 +2000,95 @@ export default function Profile() {
           targetId={username}
           onClose={() => setReportUserOpen(false)}
         />
+      )}
+
+      {/* Create album modal */}
+      {showCreateAlbum && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/50" onClick={() => setShowCreateAlbum(false)}>
+          <div className="w-full max-w-lg bg-background rounded-t-3xl p-6 pb-safe" onClick={e => e.stopPropagation()}>
+            <h3 className="font-display font-bold text-base mb-4">{lang === "th" ? "สร้างอัลบั้มใหม่" : "New Album"}</h3>
+            <input
+              autoFocus
+              value={newAlbumTitle}
+              onChange={e => setNewAlbumTitle(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleCreateAlbum()}
+              placeholder={lang === "th" ? "ชื่ออัลบั้ม" : "Album name"}
+              maxLength={40}
+              className="w-full px-4 py-3 rounded-2xl border border-border bg-secondary text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-foreground/20 mb-4"
+            />
+            <div className="flex gap-2">
+              <button onClick={() => setShowCreateAlbum(false)} className="flex-1 h-11 rounded-2xl border border-border text-sm font-bold text-foreground">
+                {lang === "th" ? "ยกเลิก" : "Cancel"}
+              </button>
+              <button
+                onClick={handleCreateAlbum}
+                disabled={!newAlbumTitle.trim() || albumActionLoading}
+                className="flex-1 h-11 rounded-2xl bg-foreground text-background text-sm font-bold disabled:opacity-50"
+              >
+                {albumActionLoading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : (lang === "th" ? "สร้าง" : "Create")}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Album context menu */}
+      {albumMenu && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/50" onClick={() => { setAlbumMenu(null); setAlbumRenaming(false); }}>
+          <div className="w-full max-w-lg bg-background rounded-t-3xl p-6 pb-safe" onClick={e => e.stopPropagation()}>
+            <h3 className="font-display font-bold text-sm text-muted-foreground mb-4 truncate">{albumMenu.title}</h3>
+            {albumRenaming ? (
+              <>
+                <input
+                  autoFocus
+                  value={albumRenameTitle}
+                  onChange={e => setAlbumRenameTitle(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && handleRenameAlbum()}
+                  maxLength={40}
+                  className="w-full px-4 py-3 rounded-2xl border border-border bg-secondary text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-foreground/20 mb-4"
+                />
+                <div className="flex gap-2">
+                  <button onClick={() => setAlbumRenaming(false)} className="flex-1 h-11 rounded-2xl border border-border text-sm font-bold text-foreground">
+                    {lang === "th" ? "ยกเลิก" : "Cancel"}
+                  </button>
+                  <button
+                    onClick={handleRenameAlbum}
+                    disabled={!albumRenameTitle.trim() || albumActionLoading}
+                    className="flex-1 h-11 rounded-2xl bg-foreground text-background text-sm font-bold disabled:opacity-50"
+                  >
+                    {albumActionLoading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : (lang === "th" ? "บันทึก" : "Save")}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="space-y-2">
+                <button
+                  onClick={() => setAlbumRenaming(true)}
+                  className="w-full h-12 rounded-2xl bg-secondary text-foreground text-sm font-semibold flex items-center gap-3 px-4"
+                >
+                  <Pencil className="w-4 h-4" />
+                  {lang === "th" ? "เปลี่ยนชื่อ" : "Rename"}
+                </button>
+                <button
+                  onClick={() => handleDeleteAlbum(albumMenu.id)}
+                  disabled={albumActionLoading}
+                  className="w-full h-12 rounded-2xl bg-red-500/10 text-red-500 text-sm font-semibold flex items-center gap-3 px-4 disabled:opacity-50"
+                >
+                  {albumActionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                  {lang === "th" ? "ลบอัลบั้ม" : "Delete album"}
+                </button>
+                <button
+                  onClick={() => setAlbumMenu(null)}
+                  className="w-full h-11 rounded-2xl border border-border text-sm font-bold text-muted-foreground mt-1"
+                >
+                  {lang === "th" ? "ยกเลิก" : "Cancel"}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

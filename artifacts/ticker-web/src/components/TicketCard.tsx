@@ -637,8 +637,8 @@ function CompactCard({ ticket, onLongPress, viewHref, onDoubleTap }: { ticket: T
       onPointerCancel={() => setPressing(false)}
       {...longPressHandlers}
     >
-      {/* Private lock badge — top-right corner, always visible */}
-      {ticket.isPrivate && (
+      {/* Private lock badge — top-right corner, front only */}
+      {ticket.isPrivate && !flipped && (
         <div className="absolute top-1.5 right-1.5 z-20 w-4 h-4 bg-black/55 rounded-full flex items-center justify-center pointer-events-none">
           <Lock className="w-2.5 h-2.5 text-white/75" />
         </div>
