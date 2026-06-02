@@ -29,7 +29,7 @@ import {
   Loader2, Settings, Link2, Users, X, User as UserIcon,
   Camera, MessageCircle, Lock, Unlock, Flag, MoreHorizontal, ChevronLeft, Bookmark, Share2,
   Heart, Send, Pencil, Trash2, Ticket as TicketIcon, AtSign, Check, Search, EyeOff, Eye, Plus, Globe, GripVertical,
-  Bell, BellOff,
+  Bell, BellOff, FolderOpen,
 } from "lucide-react";
 import { cn, fmtCount } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
@@ -1309,10 +1309,10 @@ export default function Profile() {
   const scrollRef = usePageScroll(`profile_${username}`);
 
   const urlTab = new URLSearchParams(window.location.search).get("tab");
-  const [activeTab, setActiveTab] = useState<"films" | "chain">(() => {
-    if (urlTab === "films" || urlTab === "chain") return urlTab;
+  const [activeTab, setActiveTab] = useState<"films" | "chain" | "albums">(() => {
+    if (urlTab === "films" || urlTab === "chain" || urlTab === "albums") return urlTab;
     const saved = sessionStorage.getItem(`profile_tab_${username}`);
-    if (saved === "films" || saved === "chain") return saved;
+    if (saved === "films" || saved === "chain" || saved === "albums") return saved as any;
     return "films";
   });
   const urlSubTab = new URLSearchParams(window.location.search).get("subtab");
@@ -1322,7 +1322,7 @@ export default function Profile() {
     return saved === "played" ? "played" : "created";
   });
 
-  const handleTabChange = (tab: "films" | "chain") => {
+  const handleTabChange = (tab: "films" | "chain" | "albums") => {
     setActiveTab(tab);
     sessionStorage.setItem(`profile_tab_${username}`, tab);
     const url = new URL(window.location.href);
@@ -1347,6 +1347,18 @@ export default function Profile() {
   // ── Bell notification subscription state (hooks must be declared before profile) ──
   const [bellSubscribed, setBellSubscribed] = useState(false);
   const [bellLoading, setBellLoading] = useState(false);
+
+  // showBell: only show for other users (not own profile, not guests)
+  const showBell = !!me && !isOwn;
+
+  // Load initial bell subscription state from API
+  useEffect(() => {
+    if (!showBell || !username) return;
+    fetch(`/api/users/${username}/notify-subscription`, { credentials: "include" })
+      .then(r => r.ok ? r.json() : { subscribed: false })
+      .then(data => { setBellSubscribed(!!data.subscribed); })
+      .catch(() => {});
+  }, [showBell, username]);
 
   const handleBellToggle = async () => {
     if (!me || bellLoading) return;
@@ -1406,6 +1418,17 @@ export default function Profile() {
   const profile  = profileData;
   const tickets  = ticketsData?.tickets ?? [];
   const profileUserId = ((profile as unknown) as Record<string, unknown>)?.["id"] as string | undefined;
+
+  const { data: albumsData, isLoading: albumsLoading } = useQuery({
+    queryKey: ["profile-albums", profileUserId],
+    queryFn: async () => {
+      const res = await fetch(`/api/albums?userId=${profileUserId}`, { credentials: "include" });
+      if (!res.ok) return { albums: [] };
+      return res.json();
+    },
+    enabled: !!profileUserId && activeTab === "albums",
+    staleTime: 30 * 1000,
+  });
 
   // Cover mosaic shows ONLY the user's pinned tickets (set via long-press →
   // "ปักหมุดบนโปรไฟล์" on their own cards). One image per pin, max 3,
@@ -1744,10 +1767,13 @@ export default function Profile() {
       ) : (
         <>
           {/* Tabs selector + sub-tabs in same CSS grid for center alignment */}
-          <div className="px-4 pb-3" style={{ display: "grid", gridTemplateColumns: "auto auto", justifyContent: "start", justifyItems: "center", gap: "6px 8px" }}>
+          <div className="px-4 pb-3" style={{ display: "grid", gridTemplateColumns: "auto auto auto", justifyContent: "start", justifyItems: "center", gap: "6px 8px" }}>
             <button onClick={() => handleTabChange("films")} className={`filter-pill ${activeTab === "films" ? "active" : ""}`}>Tickets</button>
             <button onClick={() => handleTabChange("chain")} className={`filter-pill ${activeTab === "chain" ? "active" : ""} flex items-center gap-1`}>
               <Link2 className="w-3 h-3" /> Chains
+            </button>
+            <button onClick={() => handleTabChange("albums")} className={`filter-pill ${activeTab === "albums" ? "active" : ""} flex items-center gap-1`}>
+              <FolderOpen className="w-3 h-3" /> {t.albumsTab}
             </button>
             {activeTab === "chain" && (
               <>
@@ -1777,6 +1803,44 @@ export default function Profile() {
               avatarUrl={profile.avatarUrl}
             />
           </div>
+
+          {activeTab === "albums" && (
+            <div className="px-4 pb-6">
+              {albumsLoading ? (
+                <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+              ) : (albumsData?.albums ?? []).length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
+                  <div className="w-16 h-16 rounded-3xl bg-secondary flex items-center justify-center">
+                    <FolderOpen className="w-8 h-8 text-muted-foreground" />
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {isOwn ? t.noAlbumsOwn : t.noAlbumsOther(profile.displayName || username)}
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3 mt-3">
+                  {(albumsData?.albums ?? []).map((album: any) => (
+                    <div key={album.id} className="rounded-2xl border border-border bg-secondary overflow-hidden">
+                      <div className="grid grid-cols-2 gap-0.5 aspect-square bg-muted">
+                        {[0,1,2,3].map(i => (
+                          <div key={i} className="overflow-hidden bg-muted">
+                            {album.posters?.[i]
+                              ? <img src={album.posters[i]} alt="" className="w-full h-full object-cover" />
+                              : <div className="w-full h-full bg-secondary" />
+                            }
+                          </div>
+                        ))}
+                      </div>
+                      <div className="p-2.5">
+                        <p className="text-sm font-bold text-foreground truncate">{album.title}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{album.ticketCount} tickets</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
 

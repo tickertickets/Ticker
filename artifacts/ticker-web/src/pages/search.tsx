@@ -182,8 +182,8 @@ function buildFetchFn(categoryId: string, lang: string) {
   if (categoryId === "legendary")     return (p: number) => fetch(`/api/movies/top-rated?page=${p}${langQs}`).then(r => r.json());
   if (categoryId === "cult_classic")  return (p: number) => fetch(`/api/movies/rare-finds?page=${p}${langQs}`).then(r => r.json());
   if (categoryId === "now_playing")   return (p: number) => fetch(`/api/movies/mood/now_playing?page=${p}${langQs}`).then(r => r.json());
-  if (categoryId === "ticker_top")    return (p: number) => fetch(`/api/movies/ticker-community?sort=top&page=${p}`).then(r => r.json());
-  if (categoryId === "ticker_bottom") return (p: number) => fetch(`/api/movies/ticker-community?sort=bottom&page=${p}`).then(r => r.json());
+  if (categoryId === "ticker_top")    return (p: number) => fetch(`/api/movies/ticker-community?sort=top&page=${p}${langQs}`).then(r => r.json());
+  if (categoryId === "ticker_bottom") return (p: number) => fetch(`/api/movies/ticker-community?sort=bottom&page=${p}${langQs}`).then(r => r.json());
   return (p: number) => fetch(`/api/movies/mood/${categoryId}?page=${p}${langQs}`).then(r => r.json());
 }
 
@@ -234,6 +234,7 @@ function CategoryScrollDiv({
   return (
     <div
       ref={ref}
+      data-cat-active={active ? "true" : undefined}
       className="absolute inset-0 overflow-y-auto overscroll-y-none"
       style={{ paddingTop, display: active ? "block" : "none" }}
     >
@@ -381,6 +382,9 @@ export default function Search() {
   const [showRandomPicker, setShowRandomPicker]   = useState(false);
   const [showVsPicker, setShowVsPicker]           = useState(false);
   const [showDiceTab, setShowDiceTab]             = useState(true);
+  const diceTabCollapseRef = useRef(false);
+  // Reset collapse flag when category changes so tab is visible on next visit to top
+  useEffect(() => { diceTabCollapseRef.current = false; setShowDiceTab(true); }, [activeCategory]);
   const headerRef        = useRef<HTMLDivElement>(null);
   const pillContainerRef = useRef<HTMLDivElement>(null);
   const pillRefs         = useRef<Map<string, HTMLButtonElement>>(new Map());
@@ -424,8 +428,12 @@ export default function Search() {
       setHeaderHidden(false);
       scrollUpDeltaRef.current = 0;
     } else if (delta > 0) {
-      // Scrolling down — hide header and reset upward accumulator
+      // Scrolling down — hide header, collapse dice tab on first scroll past 60px
       if (y > headerH) setHeaderHidden(true);
+      if (y > 60 && !diceTabCollapseRef.current) {
+        diceTabCollapseRef.current = true;
+        setShowDiceTab(false);
+      }
       scrollUpDeltaRef.current = 0;
     } else if (delta < 0) {
       // Scrolling up — accumulate; only show bar once threshold is reached
@@ -563,7 +571,7 @@ export default function Search() {
         style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
       >
         {/* Title */}
-        <div className="flex items-center px-4 pt-4 pb-0">
+        <div className="flex items-center px-4 pt-4 pb-3">
           <div className="w-9 h-9" />
           <button
             onClick={() => setShowDiceTab(prev => !prev)}
@@ -592,14 +600,22 @@ export default function Search() {
             >
               <div className="flex items-center gap-3">
                 <button
-                  onClick={() => setShowRandomPicker(true)}
+                  onClick={() => {
+                    setShowRandomPicker(true);
+                    const activeDiv = document.querySelector('[data-cat-active="true"]') as HTMLElement | null;
+                    if (activeDiv) activeDiv.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
                   className="w-10 h-10 rounded-2xl bg-secondary border border-border flex items-center justify-center active:opacity-60 transition-opacity shadow-sm"
                   title="สุ่มหนัง"
                 >
                   <Dice5 className="w-5 h-5 text-foreground" />
                 </button>
                 <button
-                  onClick={() => setShowVsPicker(true)}
+                  onClick={() => {
+                    setShowVsPicker(true);
+                    const activeDiv = document.querySelector('[data-cat-active="true"]') as HTMLElement | null;
+                    if (activeDiv) activeDiv.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
                   className="w-10 h-10 rounded-2xl bg-secondary border border-border flex items-center justify-center active:opacity-60 transition-opacity shadow-sm"
                   title="VS"
                 >
@@ -610,11 +626,8 @@ export default function Search() {
           </div>
         </div>
 
-        {/* Spacer below title (replaces pb-3 removed above) */}
-        <div className="h-3" />
-
         {/* Search bar */}
-        <div className="px-4 pb-2">
+        <div className="px-4 pb-3">
           <div className="relative flex items-center">
             <SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none z-10" />
             <input

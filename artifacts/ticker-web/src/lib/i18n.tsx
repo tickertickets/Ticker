@@ -518,6 +518,9 @@ export interface Strings {
   // ── Profile — chain subtabs ──────────────────────────────────────
   chainSubTabPlayed: string;
   chainSubTabCreated: string;
+  albumsTab: string;
+  noAlbumsOwn: string;
+  noAlbumsOther: (name: string) => string;
   noChainPlayedOwn: string;
   noChainPlayedOther: (name: string) => string;
   exploreChainsBtn: string;
@@ -1121,6 +1124,9 @@ const TH: Strings = {
   // Profile — chain subtabs
   chainSubTabPlayed: "เล่นแล้ว",
   chainSubTabCreated: "สร้างไว้",
+  albumsTab: "Albums",
+  noAlbumsOwn: "ยังไม่มี Album",
+  noAlbumsOther: (name) => `${name} ยังไม่มี Album`,
   noChainPlayedOwn: "ยังไม่ได้เล่น Chain ไหนเลย",
   noChainPlayedOther: (name) => `${name} ยังไม่ได้เล่น Chain`,
   exploreChainsBtn: "ไปดู Chain",
@@ -1723,6 +1729,9 @@ const EN: Strings = {
   // Profile — chain subtabs
   chainSubTabPlayed: "Played",
   chainSubTabCreated: "Created",
+  albumsTab: "Albums",
+  noAlbumsOwn: "No albums yet",
+  noAlbumsOther: (name) => `${name} has no albums`,
   noChainPlayedOwn: "You haven't played any Chain yet",
   noChainPlayedOther: (name) => `${name} hasn't played any Chain`,
   exploreChainsBtn: "Explore Chains",
