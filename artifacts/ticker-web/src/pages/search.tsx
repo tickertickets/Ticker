@@ -306,7 +306,8 @@ function MovieSectionVertical({ categoryId }: { categoryId: string }) {
       ) : (
         <>
           <div className="grid grid-cols-3 gap-2.5 px-4 pt-3 pb-2.5">
-            {movies.map(movie => <MovieCard key={movie.imdbId} movie={movie} grid srclang={lang} />)}
+            {(isFetchingNextPage ? movies.slice(0, Math.floor(movies.length / 3) * 3) : movies)
+              .map(movie => <MovieCard key={movie.imdbId} movie={movie} grid srclang={lang} />)}
             {!isFetchingNextPage && !hasNextPage && movies.length % 3 !== 0 && Array.from({ length: 3 - (movies.length % 3) }).map((_, i) => (
               <div key={`placeholder-${i}`} aria-hidden="true" />
             ))}
@@ -382,6 +383,15 @@ export default function Search() {
   const [showRandomPicker, setShowRandomPicker]   = useState(false);
   const [showVsPicker, setShowVsPicker]           = useState(false);
   const [showDiceTab, setShowDiceTab]             = useState(true);
+  const [fabHighlight, setFabHighlight]           = useState(() => !sessionStorage.getItem("ticker_fab_seen"));
+  useEffect(() => {
+    if (!fabHighlight) return;
+    const tid = setTimeout(() => {
+      sessionStorage.setItem("ticker_fab_seen", "1");
+      setFabHighlight(false);
+    }, 2500);
+    return () => clearTimeout(tid);
+  }, [fabHighlight]);
   const diceTabCollapseRef = useRef(false);
   // Reset collapse flag when category changes so tab is visible on next visit to top
   useEffect(() => { diceTabCollapseRef.current = false; setShowDiceTab(true); }, [activeCategory]);
@@ -602,10 +612,15 @@ export default function Search() {
                 <button
                   onClick={() => {
                     setShowRandomPicker(true);
+                    sessionStorage.setItem("ticker_fab_seen", "1");
+                    setFabHighlight(false);
                     const activeDiv = document.querySelector('[data-cat-active="true"]') as HTMLElement | null;
                     if (activeDiv) activeDiv.scrollTo({ top: 0, behavior: "smooth" });
                   }}
-                  className="w-10 h-10 rounded-2xl bg-secondary border border-border flex items-center justify-center active:opacity-60 transition-opacity shadow-sm"
+                  className={cn(
+                    "w-10 h-10 rounded-2xl bg-secondary border border-border flex items-center justify-center active:opacity-60 transition-opacity shadow-sm",
+                    fabHighlight && "animate-bounce"
+                  )}
                   title="สุ่มหนัง"
                 >
                   <Dice5 className="w-5 h-5 text-foreground" />
@@ -613,10 +628,15 @@ export default function Search() {
                 <button
                   onClick={() => {
                     setShowVsPicker(true);
+                    sessionStorage.setItem("ticker_fab_seen", "1");
+                    setFabHighlight(false);
                     const activeDiv = document.querySelector('[data-cat-active="true"]') as HTMLElement | null;
                     if (activeDiv) activeDiv.scrollTo({ top: 0, behavior: "smooth" });
                   }}
-                  className="w-10 h-10 rounded-2xl bg-secondary border border-border flex items-center justify-center active:opacity-60 transition-opacity shadow-sm"
+                  className={cn(
+                    "w-10 h-10 rounded-2xl bg-secondary border border-border flex items-center justify-center active:opacity-60 transition-opacity shadow-sm",
+                    fabHighlight && "animate-bounce"
+                  )}
                   title="VS"
                 >
                   <Swords className="w-5 h-5 text-foreground" />

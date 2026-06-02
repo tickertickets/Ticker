@@ -1157,21 +1157,25 @@ export default function MovieDetail() {
       {/* ── Backdrops gallery ── */}
       {(backdropsData?.backdrops ?? []).length > 0 && (
         <div className="pt-4">
-          <div className="flex items-center gap-2 mb-2 px-5">
+          <div className="flex items-center gap-2 mb-3 px-5">
             <Images className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
             <p className="text-xs font-semibold text-muted-foreground flex-1">{lang === "th" ? "ภาพฉาก" : "Scenes"}</p>
           </div>
-          <div className="flex gap-2 overflow-x-auto scrollbar-hide px-5 pb-1">
+          <div className="flex gap-3 overflow-x-auto scrollbar-hide px-5 pb-2">
             {(backdropsData?.backdrops ?? []).map((url, i) => (
-              <img
+              <div
                 key={i}
-                src={url}
-                alt={`backdrop ${i + 1}`}
-                className="flex-shrink-0 rounded-xl object-cover border border-border"
-                style={{ width: 220, height: 124, display: "block" }}
-                loading="lazy"
-                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-              />
+                className="flex-shrink-0 rounded-2xl overflow-hidden border border-border bg-zinc-900 shadow-md"
+                style={{ width: 260, aspectRatio: "16/9", display: "block" }}
+              >
+                <img
+                  src={url}
+                  alt={`backdrop ${i + 1}`}
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).closest("div")!.style.display = "none"; }}
+                />
+              </div>
             ))}
           </div>
         </div>

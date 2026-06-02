@@ -88,6 +88,8 @@ function MovieRow({
 export function MovieVsPicker({ onClose }: { onClose: () => void }) {
   const { lang } = useLang();
   const [, navigate] = useLocation();
+  const [maxH, setMaxH] = useState("92vh");
+  useEffect(() => { setMaxH(`${Math.floor(window.innerHeight * 0.92)}px`); }, []);
 
   const [step, setStep] = useState<"pick" | "loading" | "result">("pick");
   const [query, setQuery] = useState("");
@@ -177,7 +179,7 @@ export function MovieVsPicker({ onClose }: { onClose: () => void }) {
 
       <div
         className="fixed inset-x-0 bottom-0 z-50 rounded-t-3xl bg-background border-t border-border overflow-hidden"
-        style={{ maxHeight: "92vh", paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+        style={{ maxHeight: maxH, paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
       >
         <div className="flex justify-center pt-3 pb-1">
           <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />

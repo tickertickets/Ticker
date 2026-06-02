@@ -500,7 +500,7 @@ function EditProfileSheet({
 
 // ── Sortable ticket item for drag-to-reorder ───────────────────────────────
 
-function SortableTicketItem({ ticket }: { ticket: Ticket }) {
+function SortableTicketItem({ ticket, isReorderMode }: { ticket: Ticket; isReorderMode: boolean }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: String(ticket.id) });
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -508,33 +508,34 @@ function SortableTicketItem({ ticket }: { ticket: Ticket }) {
     opacity: isDragging ? 0.5 : 1,
     zIndex: isDragging ? 10 : undefined,
     width: "calc(33.333% - 7px)",
-    touchAction: "pan-y",
+    touchAction: isReorderMode ? "none" : "pan-y",
     position: "relative",
   };
   return (
     <div ref={setNodeRef} style={style} {...attributes}>
       <TicketCard ticket={ticket} compact />
-      {/* Dedicated drag handle — small grip in top-right corner */}
-      <div
-        {...listeners}
-        style={{
-          position: "absolute",
-          top: 4,
-          right: 4,
-          width: 24,
-          height: 24,
-          borderRadius: 6,
-          background: "rgba(0,0,0,0.45)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          touchAction: "none",
-          cursor: isDragging ? "grabbing" : "grab",
-          zIndex: 20,
-        }}
-      >
-        <GripVertical style={{ width: 13, height: 13, color: "#fff", opacity: 0.85 }} />
-      </div>
+      {isReorderMode && (
+        <div
+          {...listeners}
+          style={{
+            position: "absolute",
+            top: 4,
+            right: 4,
+            width: 26,
+            height: 26,
+            borderRadius: 6,
+            background: "rgba(0,0,0,0.55)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            touchAction: "none",
+            cursor: isDragging ? "grabbing" : "grab",
+            zIndex: 20,
+          }}
+        >
+          <GripVertical style={{ width: 14, height: 14, color: "#fff", opacity: 0.9 }} />
+        </div>
+      )}
     </div>
   );
 }
@@ -545,6 +546,7 @@ function FilmsGrid({ tickets, isOwn, username }: { tickets: Ticket[]; isOwn: boo
   const { t } = useLang();
   const { toast } = useToast();
   const qcFilms = useQueryClient();
+  const [isReorderMode, setIsReorderMode] = useState(false);
   const [orderedTickets, setOrderedTickets] = useState<Ticket[]>(tickets);
   const hasManuallyReordered = useRef(false);
   const prevTicketIdsRef = useRef<Set<string>>(new Set(tickets.map(t => String(t.id))));
@@ -560,8 +562,8 @@ function FilmsGrid({ tickets, isOwn, username }: { tickets: Ticket[]; isOwn: boo
   }, [tickets]);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { delay: 600, tolerance: 5 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 600, tolerance: 5 } }),
+    useSensor(PointerSensor, { activationConstraint: { delay: isReorderMode ? 200 : 99999, tolerance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: isReorderMode ? 200 : 99999, tolerance: 5 } }),
   );
 
   const handleTicketDragEnd = async (event: DragEndEvent) => {
@@ -622,15 +624,28 @@ function FilmsGrid({ tickets, isOwn, username }: { tickets: Ticket[]; isOwn: boo
   }
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTicketDragEnd} modifiers={[restrictToParentElement]}>
-      <SortableContext items={orderedTickets.map(t => String(t.id))} strategy={rectSortingStrategy}>
-        <div className="flex flex-wrap justify-center gap-2.5 px-3 pt-2 pb-2.5">
-          {orderedTickets.map(ticket => (
-            <SortableTicketItem key={String(ticket.id)} ticket={ticket} />
-          ))}
-        </div>
-      </SortableContext>
-    </DndContext>
+    <>
+      <div className="flex justify-end px-3 pt-2 pb-0.5">
+        <button
+          onClick={() => setIsReorderMode(prev => !prev)}
+          className={cn(
+            "text-[11px] font-semibold px-3 py-1 rounded-xl transition-colors",
+            isReorderMode ? "bg-foreground text-background" : "bg-secondary text-muted-foreground"
+          )}
+        >
+          {isReorderMode ? "Done" : "Reorder"}
+        </button>
+      </div>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTicketDragEnd} modifiers={[restrictToParentElement]}>
+        <SortableContext items={orderedTickets.map(t => String(t.id))} strategy={rectSortingStrategy}>
+          <div className="flex flex-wrap justify-center gap-2.5 px-3 pt-2 pb-2.5">
+            {orderedTickets.map(ticket => (
+              <SortableTicketItem key={String(ticket.id)} ticket={ticket} isReorderMode={isReorderMode} />
+            ))}
+          </div>
+        </SortableContext>
+      </DndContext>
+    </>
   );
 }
 
@@ -1609,47 +1624,67 @@ export default function Profile() {
                   ? <Bell className="w-6 h-6 text-white" fill="currentColor" />
                   : <Bell className="w-6 h-6 text-white/70" />}
               </button>
+            ) : isOwn ? (
+              <button
+                className="w-9 h-9 flex items-center justify-center active:opacity-70"
+                onClick={async () => {
+                  const url = `${window.location.origin}/@${profile.username}`;
+                  try { await navigator.clipboard.writeText(url); }
+                  catch {
+                    const el = document.createElement("textarea");
+                    el.value = url; el.style.cssText = "position:fixed;top:-9999px;left:-9999px;";
+                    document.body.appendChild(el); el.select(); document.execCommand("copy"); document.body.removeChild(el);
+                  }
+                  toast({ title: t.copiedLabel, duration: 1500 });
+                }}
+              >
+                <Share2 className="w-6 h-6 text-white/70" />
+              </button>
             ) : null}
           </div>
         </div>
 
-        {/* Share — absolute, right-aligned just below Bell/top area */}
-        <button
-          className="absolute w-9 h-9 flex items-center justify-center right-3 active:opacity-70"
-          style={{ top: "calc(env(safe-area-inset-top, 0px) + 16px + 36px + 8px)" }}
-          onClick={async () => {
-            const url = `${window.location.origin}/@${profile.username}`;
-            try { await navigator.clipboard.writeText(url); }
-            catch {
-              const el = document.createElement("textarea");
-              el.value = url; el.style.cssText = "position:fixed;top:-9999px;left:-9999px;";
-              document.body.appendChild(el); el.select(); document.execCommand("copy"); document.body.removeChild(el);
-            }
-            toast({ title: t.copiedLabel, duration: 1500 });
-          }}
-        >
-          <Share2 className="w-6 h-6 text-white/70" />
-        </button>
+        {/* Share — absolute, right-aligned just below Bell/top area — only on other users' profiles */}
+        {!isOwn && (
+          <button
+            className="absolute w-9 h-9 flex items-center justify-center right-4 active:opacity-70"
+            style={{ top: "calc(env(safe-area-inset-top, 0px) + 16px + 36px + 8px)" }}
+            onClick={async () => {
+              const url = `${window.location.origin}/@${profile.username}`;
+              try { await navigator.clipboard.writeText(url); }
+              catch {
+                const el = document.createElement("textarea");
+                el.value = url; el.style.cssText = "position:fixed;top:-9999px;left:-9999px;";
+                document.body.appendChild(el); el.select(); document.execCommand("copy"); document.body.removeChild(el);
+              }
+              toast({ title: t.copiedLabel, duration: 1500 });
+            }}
+          >
+            <Share2 className="w-6 h-6 text-white/70" />
+          </button>
+        )}
 
-        {/* Gear / Flag — absolute, right-aligned below Share */}
-        {isOwn ? (
+        {/* Gear (own profile) — absolute right, below Share-in-slot */}
+        {isOwn && (
           <Link href="/settings">
             <button
-              className="absolute w-9 h-9 flex items-center justify-center right-3"
-              style={{ top: "calc(env(safe-area-inset-top, 0px) + 16px + 36px + 8px + 36px + 8px)" }}
+              className="absolute w-9 h-9 flex items-center justify-center right-4"
+              style={{ top: "calc(env(safe-area-inset-top, 0px) + 16px + 36px + 8px)" }}
             >
               <Settings className="w-6 h-6 text-white" />
             </button>
           </Link>
-        ) : me && !isVerified(profile.username) ? (
+        )}
+        {/* Flag (other user profiles) — absolute right, below Share */}
+        {!isOwn && me && !isVerified(profile.username) && (
           <button
             onClick={() => setReportUserOpen(true)}
-            className="absolute w-9 h-9 flex items-center justify-center right-3"
+            className="absolute w-9 h-9 flex items-center justify-center right-4"
             style={{ top: "calc(env(safe-area-inset-top, 0px) + 16px + 36px + 8px + 36px + 8px)" }}
           >
             <Flag className="w-6 h-6 text-white/70" />
           </button>
-        ) : null}
+        )}
       </div>
 
       {/* Profile info */}
@@ -1766,29 +1801,58 @@ export default function Profile() {
         </div>
       ) : (
         <>
-          {/* Tabs selector + sub-tabs in same CSS grid for center alignment */}
-          <div className="px-4 pb-3" style={{ display: "grid", gridTemplateColumns: "auto auto auto", justifyContent: "start", justifyItems: "center", gap: "6px 8px" }}>
-            <button onClick={() => handleTabChange("films")} className={`filter-pill ${activeTab === "films" ? "active" : ""}`}>Tickets</button>
-            <button onClick={() => handleTabChange("chain")} className={`filter-pill ${activeTab === "chain" ? "active" : ""} flex items-center gap-1`}>
-              <Link2 className="w-3 h-3" /> Chains
-            </button>
-            <button onClick={() => handleTabChange("albums")} className={`filter-pill ${activeTab === "albums" ? "active" : ""} flex items-center gap-1`}>
-              <FolderOpen className="w-3 h-3" /> {t.albumsTab}
-            </button>
+          {/* Tabs — 2 centered tabs with icons */}
+          <div className="px-4 pb-3">
+            <div className="flex justify-center gap-3">
+              <button onClick={() => handleTabChange("films")} className={`filter-pill flex items-center gap-1.5 ${activeTab === "films" ? "active" : ""}`}>
+                <TicketIcon className="w-3 h-3" /> Tickets
+              </button>
+              <button onClick={() => handleTabChange("chain")} className={`filter-pill flex items-center gap-1.5 ${activeTab === "chain" ? "active" : ""}`}>
+                <Link2 className="w-3 h-3" /> Chains
+              </button>
+            </div>
             {activeTab === "chain" && (
-              <>
+              <div className="flex justify-center gap-2 mt-2">
                 <button onClick={() => handleSubTabChange("created")} className={cn("text-sm font-semibold px-3 py-1.5 rounded-xl transition-colors", chainSubTab === "created" ? "bg-foreground text-background" : "bg-secondary text-foreground/60")}>
                   {t.chainSubTabCreated}
                 </button>
                 <button onClick={() => handleSubTabChange("played")} className={cn("text-sm font-semibold px-3 py-1.5 rounded-xl transition-colors", chainSubTab === "played" ? "bg-foreground text-background" : "bg-secondary text-foreground/60")}>
                   {t.chainSubTabPlayed}
                 </button>
-              </>
+              </div>
             )}
           </div>
 
           {/* Tab content — CSS toggle, ไม่ unmount */}
           <div style={{ display: activeTab === "films" ? "block" : "none" }}>
+            {/* Albums horizontal strip (inside Tickets tab) */}
+            {(albumsData?.albums ?? []).length > 0 && (
+              <div className="px-4 pt-2 pb-1">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <FolderOpen className="w-3.5 h-3.5 text-muted-foreground" />
+                  <p className="text-xs font-semibold text-muted-foreground">{t.albumsTab}</p>
+                </div>
+                <div className="flex gap-2.5 overflow-x-auto scrollbar-hide pb-1">
+                  {(albumsData?.albums ?? []).map((album: any) => (
+                    <div key={album.id} className="flex-shrink-0 w-[88px]">
+                      <div className="w-full aspect-square rounded-xl overflow-hidden border border-border bg-secondary">
+                        <div className="grid grid-cols-2 gap-0.5 w-full h-full">
+                          {[0,1,2,3].map(i => (
+                            <div key={i} className="overflow-hidden bg-muted">
+                              {album.posters?.[i]
+                                ? <img src={album.posters[i]} alt="" className="w-full h-full object-cover" />
+                                : <div className="w-full h-full bg-secondary" />
+                              }
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <p className="text-[10px] font-semibold text-foreground truncate mt-1 text-center px-0.5">{album.title}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <FilmsGrid tickets={tickets} isOwn={isOwn} username={username} />
           </div>
 
@@ -1803,44 +1867,6 @@ export default function Profile() {
               avatarUrl={profile.avatarUrl}
             />
           </div>
-
-          {activeTab === "albums" && (
-            <div className="px-4 pb-6">
-              {albumsLoading ? (
-                <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
-              ) : (albumsData?.albums ?? []).length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
-                  <div className="w-16 h-16 rounded-3xl bg-secondary flex items-center justify-center">
-                    <FolderOpen className="w-8 h-8 text-muted-foreground" />
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    {isOwn ? t.noAlbumsOwn : t.noAlbumsOther(profile.displayName || username)}
-                  </p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-3 mt-3">
-                  {(albumsData?.albums ?? []).map((album: any) => (
-                    <div key={album.id} className="rounded-2xl border border-border bg-secondary overflow-hidden">
-                      <div className="grid grid-cols-2 gap-0.5 aspect-square bg-muted">
-                        {[0,1,2,3].map(i => (
-                          <div key={i} className="overflow-hidden bg-muted">
-                            {album.posters?.[i]
-                              ? <img src={album.posters[i]} alt="" className="w-full h-full object-cover" />
-                              : <div className="w-full h-full bg-secondary" />
-                            }
-                          </div>
-                        ))}
-                      </div>
-                      <div className="p-2.5">
-                        <p className="text-sm font-bold text-foreground truncate">{album.title}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{album.ticketCount} tickets</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
         </>
       )}
 

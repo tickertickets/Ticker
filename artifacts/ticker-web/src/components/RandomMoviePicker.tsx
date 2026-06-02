@@ -132,6 +132,8 @@ function useCountdownToMidnight() {
 }
 
 export function RandomMoviePicker({ onClose, isGuest = false }: { onClose: () => void; isGuest?: boolean }) {
+  const [maxH, setMaxH] = useState("85vh");
+  useEffect(() => { setMaxH(`${Math.floor(window.innerHeight * 0.85)}px`); }, []);
   const { t, lang } = useLang();
   const { toast } = useToast();
   const [, navigate] = useLocation();
@@ -183,7 +185,7 @@ export function RandomMoviePicker({ onClose, isGuest = false }: { onClose: () =>
       <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
 
-      <div className="fixed inset-x-0 bottom-0 z-50 rounded-t-3xl bg-background border-t border-border overflow-hidden" style={{ maxHeight: "85vh" }}>
+      <div className="fixed inset-x-0 bottom-0 z-50 rounded-t-3xl bg-background border-t border-border overflow-hidden" style={{ maxHeight: maxH }}>
         <div className="flex justify-center pt-3 pb-1">
           <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
         </div>

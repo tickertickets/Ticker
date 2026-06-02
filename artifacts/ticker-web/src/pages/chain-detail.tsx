@@ -522,24 +522,31 @@ export default function ChainDetail() {
           {chain.movies.map((movie, idx) => {
             const runItem = displayRun?.items.find(i => i.position === movie.position);
             const isDone = runItem?.status === "done";
+            const inner = (
+              <div className={cn(
+                "w-full aspect-[2/3] rounded-xl overflow-hidden border-2",
+                isDone ? "border-foreground/40" : "border-transparent"
+              )}>
+                {movie.posterUrl
+                  ? <img src={movie.posterUrl} alt={movie.movieTitle} className="w-full h-full object-cover" />
+                  : <div className="w-full h-full bg-secondary flex items-center justify-center"><Film className="w-4 h-4 text-muted-foreground" /></div>}
+                <div className="absolute inset-0 rounded-xl bg-gradient-to-b from-transparent via-transparent to-black/60 pointer-events-none" />
+                {isDone ? (
+                  <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2">
+                    <Check className="w-3 h-3 text-white" />
+                  </div>
+                ) : (
+                  <span className="absolute top-1.5 left-2 text-white/70 text-[9px] font-black">{idx + 1}</span>
+                )}
+              </div>
+            );
             return (
               <div key={movie.id} className="relative flex-shrink-0 w-[72px]">
-                <div className={cn(
-                  "w-full aspect-[2/3] rounded-xl overflow-hidden border-2",
-                  isDone ? "border-foreground/40" : "border-transparent"
-                )}>
-                  {movie.posterUrl
-                    ? <img src={movie.posterUrl} alt={movie.movieTitle} className="w-full h-full object-cover" />
-                    : <div className="w-full h-full bg-secondary flex items-center justify-center"><Film className="w-4 h-4 text-muted-foreground" /></div>}
-                  <div className="absolute inset-0 rounded-xl bg-gradient-to-b from-transparent via-transparent to-black/60 pointer-events-none" />
-                  {isDone ? (
-                    <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2">
-                      <Check className="w-3 h-3 text-white" />
-                    </div>
-                  ) : (
-                    <span className="absolute top-1.5 left-2 text-white/70 text-[9px] font-black">{idx + 1}</span>
-                  )}
-                </div>
+                {movie.imdbId ? (
+                  <Link href={`/movie/${encodeURIComponent(movie.imdbId)}`} onClick={e => e.stopPropagation()} className="block active:opacity-70">
+                    {inner}
+                  </Link>
+                ) : inner}
               </div>
             );
           })}

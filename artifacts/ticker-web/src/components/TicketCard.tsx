@@ -712,7 +712,7 @@ function CompactCard({ ticket, onLongPress, viewHref, onDoubleTap }: { ticket: T
                   <Eye className="w-5 h-5" style={{ color: isCompactPoster ? "rgba(28,28,28,0.4)" : "var(--card-back-text-muted)" }} />
                   <p className="text-[10px] italic text-center" style={{ color: isCompactPoster ? "rgba(28,28,28,0.45)" : "var(--card-back-text-muted)" }}>{t.revealMemoryBtn}</p>
                 </div>
-              ) : ((ticket as unknown) as Record<string, unknown>)["isPrivateMemory"] && !ticket.memoryNote ? (
+              ) : isOwner && ((ticket as unknown) as Record<string, unknown>)["isPrivateMemory"] && !ticket.memoryNote ? (
                 <div className="flex-1 flex flex-col items-center justify-center gap-1">
                   <Lock className="w-5 h-5" style={{ color: isCompactPoster ? "rgba(28,28,28,0.4)" : "var(--card-back-text-muted)" }} />
                   <p className="text-[10px] italic text-center" style={{ color: isCompactPoster ? "rgba(28,28,28,0.45)" : "var(--card-back-text-muted)" }}>{t.privateMemory}</p>
@@ -1447,7 +1447,7 @@ function FeedCard({ ticket, onLongPress }: { ticket: Ticket; onLongPress?: (t: T
                         <Eye className="w-5 h-5" style={{ color: isPoster ? "rgba(28,28,28,0.4)" : "var(--card-back-text-muted)" }} />
                         <p className="text-[10px] italic text-center" style={{ color: isPoster ? "rgba(28,28,28,0.45)" : "var(--card-back-text-muted)" }}>{t.revealMemoryBtn}</p>
                       </div>
-                    ) : ((ticket as unknown) as Record<string, unknown>)["isPrivateMemory"] && !ticket.memoryNote ? (
+                    ) : isOwner && ((ticket as unknown) as Record<string, unknown>)["isPrivateMemory"] && !ticket.memoryNote ? (
                       <div className="flex-1 flex flex-col items-center justify-center gap-1">
                         <Lock className="w-5 h-5" style={{ color: isPoster ? "rgba(28,28,28,0.4)" : "var(--card-back-text-muted)" }} />
                         <p className="text-[10px] italic text-center" style={{ color: isPoster ? "rgba(28,28,28,0.45)" : "var(--card-back-text-muted)" }}>{t.privateMemory}</p>
