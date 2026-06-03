@@ -70,6 +70,7 @@ export const ticketsTable = pgTable("tickets", {
   displayOrder: integer("display_order"),
   cardData: jsonb("card_data").$type<Record<string, unknown>>(),
   captionLinks: jsonb("caption_links").$type<Array<{ id: string; url: string; platform: string; label?: string }>>().default([]),
+  archivedAt: timestamp("archived_at", { withTimezone: true }),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

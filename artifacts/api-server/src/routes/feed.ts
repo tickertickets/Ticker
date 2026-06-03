@@ -14,7 +14,7 @@ import {
   bookmarksTable,
 } from "@workspace/db/schema";
 import { eq, and, desc, isNull, count, countDistinct, max, inArray, ne, or, sql, lt } from "drizzle-orm";
-import { hotScore, makeFreshBoost, applyDiversityCap, DIVERSITY_CAP, AFFINITY_FOLLOWED } from "../lib/hot-score";
+import { hotScore, makeFreshBoost, applyDiversityCap, applyInterleaving, DIVERSITY_CAP, AFFINITY_FOLLOWED } from "../lib/hot-score";
 import { buildChain } from "./chains";
 import { buildTicketBatch } from "../services/tickets.service";
 
@@ -95,6 +95,7 @@ router.get("/", async (req, res) => {
         .where(
           and(
             isNull(ticketsTable.deletedAt),
+            isNull(ticketsTable.archivedAt),
             or(isNull(ticketsTable.cardTheme), ne(ticketsTable.cardTheme, "reel")),
             inArray(ticketsTable.userId, feedUserIds),
             beforeDate ? lt(ticketsTable.createdAt, beforeDate) : undefined,
@@ -131,6 +132,7 @@ router.get("/", async (req, res) => {
         .where(
           and(
             isNull(ticketsTable.deletedAt),
+            isNull(ticketsTable.archivedAt),
             or(isNull(ticketsTable.cardTheme), ne(ticketsTable.cardTheme, "reel")),
             // Own posts always included (even if ticket.isPrivate=true); others: public posts only
             or(
@@ -390,9 +392,11 @@ router.get("/", async (req, res) => {
   const cappedTickets = applyDiversityCap(ticketItems, (i) => i.data.userId, effectiveTicketCap, ticketItems.length);
   const cappedChains  = applyDiversityCap(chainItems,  (i) => i.data.userId, effectiveChainCap,  chainItems.length);
 
-  // Re-merge and sort by hotScore descending; request limit+1 to detect hasMore
+  // Re-merge and sort by hotScore descending, then interleave to prevent
+  // consecutive posts from the same user; request limit+1 to detect hasMore
   const merged = [...cappedTickets, ...cappedChains].sort((a, b) => b.score - a.score);
-  const diversified = merged.slice(0, limit + 1);
+  const interleaved = applyInterleaving(merged, (i) => i.data.userId);
+  const diversified = interleaved.slice(0, limit + 1);
 
   const hasMore = diversified.length > limit;
   const page = diversified.slice(0, limit);

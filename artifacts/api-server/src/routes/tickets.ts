@@ -923,6 +923,7 @@ router.get(
     const baseConditions = [
       eq(ticketsTable.userId, user.id),
       isNull(ticketsTable.deletedAt),
+      isNull(ticketsTable.archivedAt),
       ...(isOwn ? [] : [eq(ticketsTable.isPrivate, false)]),
     ];
 
@@ -941,6 +942,57 @@ router.get(
       hasMore,
       nextCursor: hasMore ? items[items.length - 1]?.id : null,
     });
+  }),
+);
+
+// ── GET /tickets/archived — list current user's archived tickets ──────────────
+router.get(
+  "/archived",
+  asyncHandler(async (req, res) => {
+    const currentUserId = req.session?.userId;
+    if (!currentUserId) throw new UnauthorizedError();
+
+    const tickets = await db
+      .select()
+      .from(ticketsTable)
+      .where(
+        and(
+          eq(ticketsTable.userId, currentUserId),
+          isNull(ticketsTable.deletedAt),
+          isNotNull(ticketsTable.archivedAt),
+        ),
+      )
+      .orderBy(desc(ticketsTable.archivedAt));
+
+    const result = await buildTicketBatch(tickets, currentUserId);
+    res.json({ tickets: result });
+  }),
+);
+
+// ── PATCH /tickets/:ticketId/archive — toggle archive state ───────────────────
+router.patch(
+  "/:ticketId/archive",
+  asyncHandler(async (req, res) => {
+    const currentUserId = req.session?.userId;
+    if (!currentUserId) throw new UnauthorizedError();
+
+    const ticketId = String(req.params["ticketId"]);
+    const [ticket] = await db
+      .select()
+      .from(ticketsTable)
+      .where(and(eq(ticketsTable.id, ticketId), isNull(ticketsTable.deletedAt)))
+      .limit(1);
+
+    if (!ticket) throw new NotFoundError("Ticket");
+    if (ticket.userId !== currentUserId) throw new ForbiddenError();
+
+    const nowArchived = !ticket.archivedAt;
+    await db
+      .update(ticketsTable)
+      .set({ archivedAt: nowArchived ? new Date() : null, updatedAt: new Date() })
+      .where(eq(ticketsTable.id, ticketId));
+
+    res.json({ success: true, archived: nowArchived });
   }),
 );
 

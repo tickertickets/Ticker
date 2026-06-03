@@ -260,6 +260,7 @@ function AppRoutes() {
       location === "/login" ||
       /^\/ticket\/(?!new$)[^/]+$/.test(location) ||
       /^\/profile\/[^/]+$/.test(location) ||
+      /^\/@[^/]+$/.test(location) ||
       /^\/movie\/.+$/.test(location) ||
       /^\/chain\/(?!new$)[^/]+$/.test(location) ||
       /^\/person\/[^/]+$/.test(location) ||

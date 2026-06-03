@@ -9,7 +9,7 @@ import { createPortal } from "react-dom";
 import { useKeyboardHeight } from "@/hooks/use-keyboard-height";
 import { useModalBackButton } from "@/hooks/use-modal-back-button";
 import { Link, useLocation } from "wouter";
-import { Bookmark, Heart, Star, MapPin, CalendarDays, ArrowRight, Lock, Unlock, Users, Flag, Send, Search, X, MessageCircle, Trash2, MoreVertical, Loader2, Ticket as TicketIcon, MessagesSquare, Share2, Pencil, Pin, PinOff, Eye, EyeOff, CornerDownRight, FolderOpen, Check, ChevronLeft } from "lucide-react";
+import { Bookmark, Heart, Star, MapPin, CalendarDays, ArrowRight, Lock, Unlock, Users, Flag, Send, Search, X, MessageCircle, Trash2, MoreVertical, Loader2, Ticket as TicketIcon, MessagesSquare, Share2, Pencil, Pin, PinOff, Eye, EyeOff, CornerDownRight, FolderOpen, Check, ChevronLeft, Archive, ArchiveRestore } from "lucide-react";
 import { ReactionButton } from "./ReactionButton";
 import { saveAs } from "file-saver";
 import html2canvas from "html2canvas";
@@ -1795,6 +1795,15 @@ export function CardContextMenu({ ticket, onClose }: CardMenuProps) {
     handleClose();
   };
 
+  const isArchived = !!(ticket as any).archivedAt;
+  const handleArchive = async () => {
+    try {
+      const res = await fetch(`/api/tickets/${ticket.id}/archive`, { method: "PATCH", credentials: "include" });
+      if (res.ok) queryClient.invalidateQueries();
+    } catch {}
+    handleClose();
+  };
+
   const handleMoveToAlbum = async (albumId: string | null) => {
     if (movingToAlbum) return;
     setMovingToAlbum(true);
@@ -2032,6 +2041,18 @@ export function CardContextMenu({ ticket, onClose }: CardMenuProps) {
                 <MessageCircle className="w-4 h-4 text-muted-foreground" />
               </div>
               <span>{((ticket as any)?.hideComments) ? t.enableComments : t.disableComments}</span>
+            </button>
+            <button
+              className="w-full flex items-center gap-3 px-5 py-3.5 text-sm font-medium text-foreground active:bg-secondary transition-colors"
+              onClick={handleArchive}
+            >
+              <div className="w-8 h-8 rounded-xl bg-secondary flex items-center justify-center">
+                {isArchived
+                  ? <ArchiveRestore className="w-4 h-4 text-muted-foreground" />
+                  : <Archive className="w-4 h-4 text-muted-foreground" />
+                }
+              </div>
+              <span>{isArchived ? t.unarchiveTicket : t.archiveTicket}</span>
             </button>
             <button
               className="w-full flex items-center gap-3 px-5 py-3.5 text-sm font-medium text-foreground active:bg-secondary transition-colors"

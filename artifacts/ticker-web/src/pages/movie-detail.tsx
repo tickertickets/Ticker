@@ -1142,21 +1142,18 @@ export default function MovieDetail() {
               {user && (
                 <button
                   type="button"
-                  onClick={() => followMutation.mutate(!isFollowingMovie)}
-                  disabled={followMutation.isPending}
+                  onClick={() => { if (!followMutation.isPending) followMutation.mutate(!isFollowingMovie); }}
                   aria-label={isFollowingMovie ? "Unfollow movie" : "Follow movie"}
-                  className="flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-all active:scale-95"
-                  style={{
-                    background: isFollowingMovie ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.08)",
-                    border: "1px solid",
-                    borderColor: isFollowingMovie ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.25)",
-                    color: isFollowingMovie ? "#fff" : "rgba(255,255,255,0.7)",
-                    width: 64,
-                    justifyContent: "center",
-                  }}
+                  className={cn(
+                    "flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-all active:scale-95",
+                    isFollowingMovie
+                      ? "bg-foreground text-background border border-foreground/20"
+                      : "bg-secondary text-foreground border border-border",
+                  )}
+                  style={{ width: 64, justifyContent: "center" }}
                 >
                   {isFollowingMovie
-                    ? <><BellOff className="w-3 h-3 shrink-0" /><span>{lang === "th" ? "แจ้งเตือน" : "Notif"}</span></>
+                    ? <><BellOff className="w-3 h-3 shrink-0" /><span>{lang === "th" ? "แจ้งเตือน" : "Not"}</span></>
                     : <><Bell className="w-3 h-3 shrink-0" /><span>{lang === "th" ? "ติดตาม" : "Follow"}</span></>
                   }
                 </button>
@@ -1242,14 +1239,18 @@ export default function MovieDetail() {
 
       </div>
 
-      {/* ── Backdrops gallery — full-width, outside the px-5 container ── */}
+      {/* ── Backdrops gallery ── */}
       {(backdropsData?.backdrops ?? []).length > 0 && (
         <div className="pt-4">
           <div className="flex items-center gap-2 mb-2 px-5">
             <Images className="w-3.5 h-3.5 text-foreground flex-shrink-0" />
             <p className="text-xs font-bold text-foreground">{lang === "th" ? "ภาพฉาก" : "Scenes"}</p>
           </div>
-          <BackdropCarousel backdrops={backdropsData?.backdrops ?? []} title={movie?.title ?? ""} />
+          <div className="px-5">
+            <div className="rounded-2xl overflow-hidden">
+              <BackdropCarousel backdrops={backdropsData?.backdrops ?? []} title={movie?.title ?? ""} />
+            </div>
+          </div>
         </div>
       )}
 
@@ -1452,7 +1453,7 @@ export default function MovieDetail() {
                         >
                           <div className="flex-shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border transition-opacity active:opacity-70">
                             <div className="relative" style={{ aspectRatio: "2/3" }}>
-                              {char.imageUrl ? (
+                              {char.imageUrl && char.source !== "cast" ? (
                                 <img src={char.imageUrl} alt={char.name} className="w-full h-full object-cover object-top" loading="eager" />
                               ) : (
                                 <div className="w-full h-full flex items-center justify-center bg-zinc-900">

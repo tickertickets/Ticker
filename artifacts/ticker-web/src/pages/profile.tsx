@@ -620,9 +620,12 @@ function FilmsGrid({ tickets, isOwn, username }: { tickets: Ticket[]; isOwn: boo
         body: JSON.stringify({ ticketIds: newOrder.map(t => String(t.id)) }),
       });
       if (res.ok) {
-        qcFilms.setQueryData(["profile-tickets", username], (old: any) =>
-          old ? { ...old, tickets: newOrder } : old
-        );
+        qcFilms.setQueryData(["profile-tickets", username], (old: any) => {
+          if (!old) return old;
+          const newOrderIds = new Set(newOrder.map((t: any) => String(t.id)));
+          const untouched = (old.tickets ?? []).filter((t: any) => !newOrderIds.has(String(t.id)));
+          return { ...old, tickets: [...untouched, ...newOrder] };
+        });
       } else {
         hasManuallyReordered.current = false;
         toast({ title: "บันทึกลำดับไม่สำเร็จ", variant: "destructive" });
@@ -1890,7 +1893,7 @@ export default function Profile() {
       ) : (
         <>
           {/* Tabs — 2 centered tabs with icons */}
-          <div className="px-4 pb-3">
+          <div className="px-4 pb-2">
             <div className="flex justify-center gap-3">
               <button onClick={() => handleTabChange("films")} className={`filter-pill flex items-center gap-1.5 ${activeTab === "films" ? "active" : ""}`}>
                 <TicketIcon className="w-3 h-3" /> Tickets
@@ -1899,8 +1902,12 @@ export default function Profile() {
                 <Link2 className="w-3 h-3" /> Chains
               </button>
             </div>
-            {activeTab === "chain" && (
-              <div className="flex justify-center gap-2 mt-2">
+          </div>
+
+          {/* Chain sub-tabs — same visual level as album pills */}
+          {activeTab === "chain" && (
+            <div className="overflow-x-auto scrollbar-hide px-3 pt-1 pb-2">
+              <div className="flex items-center justify-center gap-2 min-w-max mx-auto">
                 <button onClick={() => handleSubTabChange("created")} className={cn("text-sm font-semibold px-3 py-1.5 rounded-xl transition-colors", chainSubTab === "created" ? "bg-foreground text-background" : "bg-secondary text-foreground/60")}>
                   {t.chainSubTabCreated}
                 </button>
@@ -1908,8 +1915,8 @@ export default function Profile() {
                   {t.chainSubTabPlayed}
                 </button>
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* Tab content — CSS toggle, ไม่ unmount */}
           <div style={{ display: activeTab === "films" ? "block" : "none" }}>
@@ -1926,33 +1933,35 @@ export default function Profile() {
                   : tickets;
               return (
                 <>
-                  <div className="px-3 pt-1 pb-2 flex items-center gap-2 overflow-x-auto scrollbar-hide">
-                    {/* Main/หลัก pill */}
-                    <AlbumPillBtn
-                      label={lang === "th" ? "หลัก" : "Main"}
-                      isActive={!activeAlbumId}
-                      onClick={() => setActiveAlbumId(null)}
-                    />
-                    {/* Custom album pills */}
-                    {albums.map((album: any) => (
+                  <div className="overflow-x-auto scrollbar-hide px-3 pt-1 pb-2">
+                    <div className="flex items-center justify-center gap-2 min-w-max mx-auto">
+                      {/* Main/หลัก pill */}
                       <AlbumPillBtn
-                        key={album.id}
-                        label={album.title}
-                        isActive={activeAlbumId === album.id}
-                        onClick={() => setActiveAlbumId(album.id)}
-                        onLongPress={isOwn ? () => { setAlbumMenu({ id: album.id, title: album.title }); setAlbumRenaming(false); setAlbumRenameTitle(album.title); } : undefined}
+                        label={lang === "th" ? "หลัก" : "Main"}
+                        isActive={!activeAlbumId}
+                        onClick={() => setActiveAlbumId(null)}
                       />
-                    ))}
-                    {/* + New album (owner only, max 3 custom) */}
-                    {isOwn && albums.length < 3 && (
-                      <button
-                        onClick={() => { setNewAlbumTitle(""); setShowCreateAlbum(true); }}
-                        className="flex-shrink-0 flex items-center gap-1 text-sm font-semibold px-3 py-1.5 rounded-xl transition-colors bg-secondary text-foreground/60"
-                      >
-                        <Plus className="w-3 h-3" />
-                        <span>{lang === "th" ? "ใหม่" : "New"}</span>
-                      </button>
-                    )}
+                      {/* Custom album pills */}
+                      {albums.map((album: any) => (
+                        <AlbumPillBtn
+                          key={album.id}
+                          label={album.title}
+                          isActive={activeAlbumId === album.id}
+                          onClick={() => setActiveAlbumId(album.id)}
+                          onLongPress={isOwn ? () => { setAlbumMenu({ id: album.id, title: album.title }); setAlbumRenaming(false); setAlbumRenameTitle(album.title); } : undefined}
+                        />
+                      ))}
+                      {/* + New album (owner only, max 3 custom) */}
+                      {isOwn && albums.length < 3 && (
+                        <button
+                          onClick={() => { setNewAlbumTitle(""); setShowCreateAlbum(true); }}
+                          className="flex-shrink-0 flex items-center gap-1 text-sm font-semibold px-3 py-1.5 rounded-xl transition-colors bg-secondary text-foreground/60"
+                        >
+                          <Plus className="w-3 h-3" />
+                          <span>{lang === "th" ? "ใหม่" : "New"}</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <FilmsGrid tickets={filteredTickets} isOwn={isOwn} username={username} />
                 </>

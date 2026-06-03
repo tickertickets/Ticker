@@ -4,7 +4,7 @@ import { usePageScroll } from "@/hooks/use-page-scroll";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { navBack } from "@/lib/nav-back";
-import { ChevronLeft, Trash2, RotateCcw, X, Loader2, LogOut, Film, Lock, MessageSquare, Heart, Link2, Moon, Ticket, ChevronRight, Star, Eye, EyeOff, Sparkles, TrendingUp, Users, Bell, Shield, Clock, Info } from "lucide-react";
+import { ChevronLeft, Trash2, RotateCcw, X, Loader2, LogOut, Film, Lock, MessageSquare, Heart, Link2, Moon, Ticket, ChevronRight, Star, Eye, EyeOff, Sparkles, TrendingUp, Users, Bell, Shield, Clock, Info, Archive, ArchiveRestore } from "lucide-react";
 import { isPushSupported, getPushStatus, enablePushNotifications, disablePushNotifications, hasLocalSubscription, describePushError } from "@/lib/push";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
@@ -112,6 +112,28 @@ async function purgeTicket(ticketId: number) {
     method: "DELETE", credentials: "include",
   });
   if (!res.ok) throw new Error("Failed to purge");
+  return res.json();
+}
+
+type ArchivedTicket = {
+  id: string;
+  movieTitle: string;
+  posterUrl?: string | null;
+  rankTier?: string | null;
+  archivedAt: string;
+};
+
+async function fetchArchived(): Promise<{ tickets: ArchivedTicket[] }> {
+  const res = await fetch("/api/tickets/archived", { credentials: "include" });
+  if (!res.ok) throw new Error("Failed to fetch archive");
+  return res.json();
+}
+
+async function unarchiveTicketApi(ticketId: string) {
+  const res = await fetch(`/api/tickets/${ticketId}/archive`, {
+    method: "PATCH", credentials: "include",
+  });
+  if (!res.ok) throw new Error("Failed to unarchive");
   return res.json();
 }
 
@@ -927,7 +949,7 @@ export default function Settings() {
     }
     return "main";
   })();
-  const [activeSection, setActiveSection] = useState<"main" | "trash" | "activities">(initialSection as "main" | "trash" | "activities");
+  const [activeSection, setActiveSection] = useState<"main" | "trash" | "archive" | "activities">(initialSection as "main" | "trash" | "archive" | "activities");
   const [restoreError, setRestoreError] = useState<string | null>(null);
   const [isPrivate, setIsPrivate] = useState<boolean>(() => !!(user as unknown as Record<string,unknown>)?.["isPrivate"]);
   const [savingPrivate, setSavingPrivate] = useState(false);
@@ -1061,6 +1083,17 @@ export default function Settings() {
     queryKey: ["trash"],
     queryFn: fetchTrash,
     enabled: activeSection === "trash",
+  });
+
+  const { data: archiveData, isLoading: archiveLoading } = useQuery({
+    queryKey: ["archived-tickets"],
+    queryFn: fetchArchived,
+    enabled: activeSection === "archive",
+  });
+
+  const unarchiveMutation = useMutation({
+    mutationFn: unarchiveTicketApi,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["archived-tickets"] }),
   });
 
   const { data: activitiesData, isLoading: activitiesLoading } = useQuery({
@@ -1264,6 +1297,7 @@ export default function Settings() {
           </button>
           <h1 className="font-display font-bold text-lg text-foreground">
             {activeSection === "trash" ? t.trashPageTitle
+              : activeSection === "archive" ? t.archivePageTitle
               : activeSection === "activities" ? t.activitiesPageTitle
               : t.settingsPageTitle}
           </h1>
@@ -1498,6 +1532,19 @@ export default function Settings() {
               <div className="flex-1">
                 <p className="font-semibold text-sm text-foreground">{t.activities}</p>
                 <p className="text-xs text-muted-foreground">{t.activitiesDesc}</p>
+              </div>
+              <ChevronLeft className="w-4 h-4 text-muted-foreground rotate-180" />
+            </button>
+            <button
+              onClick={() => setActiveSection("archive")}
+              className="w-full flex items-center gap-3 px-4 py-4 hover:bg-accent transition-colors text-left"
+            >
+              <div className="w-8 h-8 rounded-xl bg-secondary flex items-center justify-center">
+                <Archive className="w-4 h-4 text-muted-foreground" />
+              </div>
+              <div className="flex-1">
+                <p className="font-semibold text-sm text-foreground">{t.archive}</p>
+                <p className="text-xs text-muted-foreground">{t.archiveDesc}</p>
               </div>
               <ChevronLeft className="w-4 h-4 text-muted-foreground rotate-180" />
             </button>
@@ -1770,6 +1817,62 @@ export default function Settings() {
           </div>
         </>,
         document.body
+      )}
+
+      {/* Archive Section */}
+      {activeSection === "archive" && (
+        <div className="px-4 pt-4 pb-3">
+          <p className="text-xs text-muted-foreground mb-4 truncate">
+            {t.archiveSectionNote}
+          </p>
+          {archiveLoading && (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            </div>
+          )}
+          {!archiveLoading && (archiveData?.tickets ?? []).length === 0 && (
+            <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
+              <div className="w-16 h-16 rounded-3xl bg-secondary flex items-center justify-center">
+                <Archive className="w-8 h-8 text-muted-foreground" />
+              </div>
+              <p className="font-bold text-base text-foreground">{t.archiveEmpty}</p>
+              <p className="text-sm text-muted-foreground">{t.archiveEmptyDesc}</p>
+            </div>
+          )}
+          {!archiveLoading && (archiveData?.tickets ?? []).length > 0 && (
+            <div className="space-y-3">
+              {(archiveData?.tickets ?? []).map(ticket => (
+                <div key={ticket.id} className="flex items-center gap-3 bg-secondary rounded-2xl p-3 border border-border">
+                  <div className="relative w-10 h-14 rounded-xl overflow-hidden bg-zinc-900 flex-shrink-0 border border-border">
+                    {ticket.posterUrl ? (
+                      <img src={ticket.posterUrl} alt={ticket.movieTitle} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Film className="w-4 h-4 text-muted-foreground" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-sm text-foreground leading-tight line-clamp-1">
+                      {ticket.movieTitle}
+                    </p>
+                    {ticket.rankTier && (
+                      <p className="text-xs text-muted-foreground mt-0.5 capitalize">{ticket.rankTier}</p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => unarchiveMutation.mutate(ticket.id)}
+                    disabled={unarchiveMutation.isPending}
+                    className="flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-xl bg-secondary border border-border text-foreground text-xs font-semibold hover:bg-secondary/80 transition-colors flex-shrink-0"
+                  >
+                    <ArchiveRestore className="w-3 h-3" />
+                    {t.unarchive}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Trash Section */}

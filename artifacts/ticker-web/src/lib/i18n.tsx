@@ -54,6 +54,8 @@ export interface Strings {
   privateProfileDesc: string;
   trash: string;
   trashDesc: string;
+  archive: string;
+  archiveDesc: string;
   pushNotifications: string;
   pushNotificationsDesc: string;
   pushBlockedTitle: string;
@@ -401,6 +403,11 @@ export interface Strings {
   trashSectionNote: string;
   settingsPageTitle: string;
   trashPageTitle: string;
+  archivePageTitle: string;
+  archiveSectionNote: string;
+  archiveEmpty: string;
+  archiveEmptyDesc: string;
+  unarchive: string;
   // ── Settings — activities section ─────────────────────────────────
   activities: string;
   activitiesDesc: string;
@@ -456,6 +463,8 @@ export interface Strings {
   enableComments: string;
   disableComments: string;
   moveToTrash: string;
+  archiveTicket: string;
+  unarchiveTicket: string;
   reasonPlaceholder: string;
   reviewPlaceholder: string;
   watchLocationPlaceholder: string;
@@ -623,6 +632,8 @@ const TH: Strings = {
   privateProfileDesc: "เปิดแล้วผู้อื่นต้องส่งคำขอติดตามก่อน",
   trash: "ถังขยะ",
   trashDesc: "ตั๋วที่ถูกลบ — กู้คืนได้ภายใน 30 วัน",
+  archive: "คลังเก็บ",
+  archiveDesc: "ตั๋วที่ซ่อนออกจากโปรไฟล์และ Feed",
   pushNotifications: "การแจ้งเตือน",
   pushNotificationsDesc: "รับแจ้งเตือนเข้าเครื่องเมื่อมีกิจกรรมใหม่",
   pushBlockedTitle: "การแจ้งเตือนถูกบล็อก",
@@ -1008,6 +1019,11 @@ const TH: Strings = {
   trashSectionNote: "รายการที่ลบจะถูกเก็บไว้ 30 วัน แล้วลบถาวร",
   settingsPageTitle: "ตั้งค่า",
   trashPageTitle: "ถังขยะ",
+  archivePageTitle: "คลังเก็บ",
+  archiveSectionNote: "Tickets ที่ซ่อนออกจากโปรไฟล์และ Feed",
+  archiveEmpty: "ยังไม่มี Ticket ในคลัง",
+  archiveEmptyDesc: "กด ... บน Ticket แล้วเลือก 'เก็บเข้าคลัง' เพื่อซ่อน",
+  unarchive: "นำออก",
   // Activities
   activities: "กิจกรรม",
   activitiesDesc: "ประวัติไลค์และคอมเมนต์ 30 วันย้อนหลัง",
@@ -1063,6 +1079,8 @@ const TH: Strings = {
   enableComments: "เปิดคอมเมนต์",
   disableComments: "ปิดคอมเมนต์",
   moveToTrash: "ย้ายไปถังขยะ",
+  archiveTicket: "เก็บเข้าคลัง",
+  unarchiveTicket: "นำออกจากคลัง",
   reasonPlaceholder: "บอกเหตุผลที่ชอบหนังนี้... (ไม่บังคับ)",
   reviewPlaceholder: "บอกเพื่อนว่าหนังเรื่องนี้ยังไง...",
   watchLocationPlaceholder: "สถานที่...",
@@ -1228,6 +1246,8 @@ const EN: Strings = {
   privateProfileDesc: "Others must request to follow you",
   trash: "Trash",
   trashDesc: "Deleted tickets — recoverable within 30 days",
+  archive: "Archive",
+  archiveDesc: "Tickets hidden from profile and feed",
   pushNotifications: "Push Notifications",
   pushNotificationsDesc: "Get device alerts for new activity",
   pushBlockedTitle: "Notifications are blocked",
@@ -1613,6 +1633,11 @@ const EN: Strings = {
   trashSectionNote: "Deleted items are kept for 30 days, then removed forever",
   settingsPageTitle: "Settings",
   trashPageTitle: "Trash",
+  archivePageTitle: "Archive",
+  archiveSectionNote: "Tickets hidden from your profile and feed",
+  archiveEmpty: "No Archived Tickets",
+  archiveEmptyDesc: "Tap ... on a Ticket and choose 'Archive' to hide it",
+  unarchive: "Unarchive",
   // Activities
   activities: "Activities",
   activitiesDesc: "30-day likes & comments history",
@@ -1668,6 +1693,8 @@ const EN: Strings = {
   enableComments: "Enable comments",
   disableComments: "Disable comments",
   moveToTrash: "Move to Trash",
+  archiveTicket: "Archive",
+  unarchiveTicket: "Unarchive",
   reasonPlaceholder: "Tell us why you like this movie... (optional)",
   reviewPlaceholder: "Tell your friends about this movie...",
   watchLocationPlaceholder: "Location...",

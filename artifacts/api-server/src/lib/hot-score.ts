@@ -104,6 +104,45 @@ export function applyDiversityCap<T>(
   return result;
 }
 
+// ── Interleaving — prevent consecutive posts from the same user ───────────────
+//
+// After diversity-cap and score-sort, walk the list and ensure no two adjacent
+// items share the same userId.  When a conflict is detected, the algorithm
+// scans ahead to the next item from a different user, swaps it into position,
+// then continues from where it left off.  This is O(n²) in the worst case but
+// feed pages are small (≤50 items) so it's effectively O(n).
+//
+// Score order is preserved as closely as possible: we only skip forward when
+// needed (never backward), so the highest-scoring post still leads the feed.
+
+export function applyInterleaving<T>(
+  items: T[],
+  getUserId: (item: T) => string,
+): T[] {
+  if (items.length <= 1) return items;
+  const arr = [...items];
+  for (let i = 1; i < arr.length; i++) {
+    if (getUserId(arr[i]!) === getUserId(arr[i - 1]!)) {
+      // Find the next item from a different user
+      let swapIdx = -1;
+      for (let j = i + 1; j < arr.length; j++) {
+        if (getUserId(arr[j]!) !== getUserId(arr[i - 1]!)) {
+          swapIdx = j;
+          break;
+        }
+      }
+      if (swapIdx !== -1) {
+        // Rotate arr[i..swapIdx] left by one to bring swapIdx to position i
+        const tmp = arr[swapIdx]!;
+        arr.splice(swapIdx, 1);
+        arr.splice(i, 0, tmp);
+      }
+      // If no swap candidate found, leave as-is (all remaining are same user)
+    }
+  }
+  return arr;
+}
+
 // ── Fresh-post boost ──────────────────────────────────────────────────────────
 //
 // Posts < 60 min old by a user you follow (or your own posts) get a temporary
