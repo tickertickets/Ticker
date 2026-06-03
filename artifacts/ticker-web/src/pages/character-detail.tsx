@@ -197,6 +197,9 @@ export default function CharacterDetail() {
   const sourceHref  = data?.sourceUrl
     ?? (sourceIsAniList    ? "https://anilist.co"             : null)
     ?? (sourceIsComicVine  ? "https://comicvine.gamespot.com" : null);
+  const fandomSearchUrl = data?.name
+    ? `https://www.fandom.com/search/results?query=${encodeURIComponent(data.name)}`
+    : null;
 
   // ── Report modal ─────────────────────────────────────────────────────────────
 
@@ -370,21 +373,34 @@ export default function CharacterDetail() {
               </div>
             )}
 
-            {/* Source credit — shown whenever we have a source, regardless of bio */}
-            {sourceLabel && sourceHref && (
-              <div className={`px-5 ${hasBioContent ? "pb-2" : "pt-4 pb-2"}`}>
-                <p className="text-[10px] text-muted-foreground/50">
-                  {lang === "th" ? "ที่มา: " : "Source: "}
+            {/* Source credit + Fandom wiki link */}
+            {(sourceLabel || fandomSearchUrl) && (
+              <div className={`px-5 ${hasBioContent ? "pb-2" : "pt-4 pb-2"} flex items-center gap-3 flex-wrap`}>
+                {sourceLabel && sourceHref && (
+                  <p className="text-[10px] text-muted-foreground/50">
+                    {lang === "th" ? "ที่มา: " : "Source: "}
+                    <a
+                      href={sourceHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {sourceLabel}
+                    </a>
+                  </p>
+                )}
+                {fandomSearchUrl && (
                   <a
-                    href={sourceHref}
+                    href={fandomSearchUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="underline"
+                    className="text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors underline"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    {sourceLabel}
+                    {lang === "th" ? "ค้นหาบน Fandom" : "Search on Fandom"}
                   </a>
-                </p>
+                )}
               </div>
             )}
 

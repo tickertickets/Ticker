@@ -1795,6 +1795,29 @@ export function CardContextMenu({ ticket, onClose }: CardMenuProps) {
     handleClose();
   };
 
+  const handleMoveToAlbum = async (albumId: string | null) => {
+    if (movingToAlbum) return;
+    setMovingToAlbum(true);
+    try {
+      const currentAlbumId = albums?.find(a => (a.ticketIds ?? []).includes(ticket.id))?.id ?? null;
+      if (albumId === null) {
+        if (currentAlbumId) {
+          await fetch(`/api/albums/${currentAlbumId}/tickets/${ticket.id}`, { method: "DELETE", credentials: "include" });
+        }
+      } else {
+        await fetch(`/api/albums/${albumId}/tickets`, {
+          method: "POST", credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ticketId: ticket.id }),
+        });
+      }
+      queryClient.invalidateQueries({ queryKey: ["profile-albums"] });
+      if (me?.username) queryClient.invalidateQueries({ queryKey: [`/api/users/${me.username}`] });
+    } catch { /* silent */ }
+    setMovingToAlbum(false);
+    handleClose();
+  };
+
   // Toggle this ticket in the user's pinned-cover list. Limit is enforced by
   // the API (drops anything past 6) so we mirror the cap in the UI to avoid
   // sending extra IDs that would silently get dropped.
@@ -1877,6 +1900,55 @@ export function CardContextMenu({ ticket, onClose }: CardMenuProps) {
               </button>
             </div>
           </div>
+        ) : albumStep ? (
+          /* ── Album picker step ── */
+          <div className="py-2">
+            <button
+              className="w-full flex items-center gap-3 px-5 py-3 text-sm font-semibold text-foreground active:bg-secondary transition-colors border-b border-border/40"
+              onClick={() => setAlbumStep(false)}
+            >
+              <ChevronLeft className="w-4 h-4 text-muted-foreground" />
+              <span>{lang === "th" ? "ย้ายไปอัลบั้ม" : "Move to Album"}</span>
+            </button>
+            {(() => {
+              const currentAlbumId = albums?.find(a => (a.ticketIds ?? []).includes(ticket.id))?.id ?? null;
+              return (
+                <>
+                  {currentAlbumId && (
+                    <button
+                      className="w-full flex items-center gap-3 px-5 py-3.5 text-sm font-medium text-foreground active:bg-secondary transition-colors disabled:opacity-50"
+                      disabled={movingToAlbum}
+                      onClick={() => handleMoveToAlbum(null)}
+                    >
+                      <div className="w-8 h-8 rounded-xl bg-secondary flex items-center justify-center">
+                        <X className="w-4 h-4 text-muted-foreground" />
+                      </div>
+                      <span>{lang === "th" ? "ถอดออกจากอัลบั้ม" : "Remove from album"}</span>
+                    </button>
+                  )}
+                  {(albums ?? []).map(album => (
+                    <button
+                      key={album.id}
+                      className="w-full flex items-center gap-3 px-5 py-3.5 text-sm font-medium text-foreground active:bg-secondary transition-colors disabled:opacity-50"
+                      disabled={movingToAlbum || album.id === currentAlbumId}
+                      onClick={() => handleMoveToAlbum(album.id)}
+                    >
+                      <div className="w-8 h-8 rounded-xl bg-secondary flex items-center justify-center">
+                        <FolderOpen className="w-4 h-4 text-muted-foreground" />
+                      </div>
+                      <span className="flex-1 text-left truncate">{album.title}</span>
+                      {album.id === currentAlbumId && <Check className="w-4 h-4 text-foreground" />}
+                    </button>
+                  ))}
+                  {movingToAlbum && (
+                    <div className="flex justify-center py-2">
+                      <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+          </div>
         ) : (
           /* ── Normal menu ── */
           <div className="py-2">
@@ -1901,9 +1973,7 @@ export function CardContextMenu({ ticket, onClose }: CardMenuProps) {
             <button
               className="w-full flex items-center gap-3 px-5 py-3.5 text-sm font-medium text-foreground active:bg-secondary transition-colors"
               onClick={() => {
-                // Pre-seed ticket cache → edit-ticket shows instantly with no spinner
                 queryClient.setQueryData([`/api/tickets/${ticket.id}`], (old: any) => old ?? ticket);
-                // Store back path so edit-ticket can navigate() back (no reload indicator)
                 sessionStorage.setItem("ticker:edit-ticket-back", window.location.pathname + window.location.search);
                 handleClose();
                 setTimeout(() => navigate(`/ticket/${ticket.id}/edit`), 200);
@@ -1914,6 +1984,17 @@ export function CardContextMenu({ ticket, onClose }: CardMenuProps) {
               </div>
               <span>{t.editPost}</span>
             </button>
+            {isOwner && albums != null && albums.length > 0 && (
+              <button
+                className="w-full flex items-center gap-3 px-5 py-3.5 text-sm font-medium text-foreground active:bg-secondary transition-colors"
+                onClick={() => setAlbumStep(true)}
+              >
+                <div className="w-8 h-8 rounded-xl bg-secondary flex items-center justify-center">
+                  <FolderOpen className="w-4 h-4 text-muted-foreground" />
+                </div>
+                <span>{lang === "th" ? "ย้ายไปอัลบั้ม" : "Move to Album"}</span>
+              </button>
+            )}
             <button
               className="w-full flex items-center gap-3 px-5 py-3.5 text-sm font-medium text-foreground active:bg-secondary transition-colors"
               onClick={handleTogglePrivate}

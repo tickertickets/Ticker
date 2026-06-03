@@ -20,6 +20,11 @@ type CommunityMovie = { imdbId: string; title: string; posterUrl: string | null;
 
 function TickerExtremes() {
   const { lang } = useLang();
+  const [revealed, setRevealed] = useState(false);
+  useEffect(() => {
+    const tid = setTimeout(() => setRevealed(true), 120);
+    return () => clearTimeout(tid);
+  }, []);
   const { data, isLoading } = useQuery<{ top: CommunityMovie[]; bottom: CommunityMovie[] }>({
     queryKey: ["ticker-community-ratings"],
     queryFn: async () => {
@@ -54,19 +59,27 @@ function TickerExtremes() {
     </Link>
   );
   return (
-    <div className="mx-4 mt-2 mb-3 rounded-2xl border border-border bg-secondary/40 px-3 py-2.5 flex items-center gap-3">
-      <div className="flex-1 min-w-0">
-        <p className="text-[9px] font-bold text-muted-foreground mb-1.5 uppercase tracking-wider">
-          {lang === "th" ? "คะแนนสูงสุด" : "Highest"}
-        </p>
-        {highest && <MovieMini movie={highest} trend="up" />}
-      </div>
-      <div className="w-px h-10 bg-border flex-shrink-0" />
-      <div className="flex-1 min-w-0">
-        <p className="text-[9px] font-bold text-muted-foreground mb-1.5 uppercase tracking-wider">
-          {lang === "th" ? "คะแนนต่ำสุด" : "Lowest"}
-        </p>
-        {lowest && <MovieMini movie={lowest} trend="down" />}
+    <div
+      style={{
+        opacity: revealed ? 1 : 0,
+        transform: revealed ? "translateY(0)" : "translateY(-8px)",
+        transition: "opacity 0.35s ease, transform 0.35s ease",
+      }}
+    >
+      <div className="mx-4 mt-2 mb-3 rounded-2xl border border-border bg-secondary/40 px-3 py-2.5 flex items-center gap-3">
+        <div className="flex-1 min-w-0">
+          <p className="text-[9px] font-bold text-muted-foreground mb-1.5 uppercase tracking-wider">
+            {lang === "th" ? "คะแนนสูงสุด" : "Highest"}
+          </p>
+          {highest && <MovieMini movie={highest} trend="up" />}
+        </div>
+        <div className="w-px h-10 bg-border flex-shrink-0" />
+        <div className="flex-1 min-w-0">
+          <p className="text-[9px] font-bold text-muted-foreground mb-1.5 uppercase tracking-wider">
+            {lang === "th" ? "คะแนนต่ำสุด" : "Lowest"}
+          </p>
+          {lowest && <MovieMini movie={lowest} trend="down" />}
+        </div>
       </div>
     </div>
   );
