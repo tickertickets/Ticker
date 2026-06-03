@@ -88,8 +88,7 @@ function MovieRow({
 export function MovieVsPicker({ onClose }: { onClose: () => void }) {
   const { lang } = useLang();
   const [, navigate] = useLocation();
-  const [maxH, setMaxH] = useState("92vh");
-  useEffect(() => { setMaxH(`${Math.floor(window.innerHeight * 0.92)}px`); }, []);
+  const [maxH] = useState(() => `${Math.floor(window.innerHeight * 0.92)}px`);
 
   const [step, setStep] = useState<"pick" | "loading" | "result">("pick");
   const [query, setQuery] = useState("");

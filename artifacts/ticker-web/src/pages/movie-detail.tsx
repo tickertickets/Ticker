@@ -1224,7 +1224,7 @@ export default function MovieDetail() {
         {/* ── Trailer embed ── */}
         {videosData?.trailerKey && (
           <div>
-            <p className="text-xs font-semibold text-foreground mb-2">{t.trailerLabel}</p>
+            <p className="text-xs font-bold text-foreground mb-2">{t.trailerLabel}</p>
             <div
               className="w-full rounded-2xl overflow-hidden bg-zinc-900"
               style={{ aspectRatio: "16/9" }}
@@ -1240,25 +1240,25 @@ export default function MovieDetail() {
           </div>
         )}
 
-      {/* ── Backdrops gallery — single auto-slide carousel ── */}
+      </div>
+
+      {/* ── Backdrops gallery — full-width, outside the px-5 container ── */}
       {(backdropsData?.backdrops ?? []).length > 0 && (
         <div className="pt-4">
           <div className="flex items-center gap-2 mb-2 px-5">
             <Images className="w-3.5 h-3.5 text-foreground flex-shrink-0" />
-            <p className="text-xs font-semibold text-foreground">{lang === "th" ? "ภาพฉาก" : "Scenes"}</p>
+            <p className="text-xs font-bold text-foreground">{lang === "th" ? "ภาพฉาก" : "Scenes"}</p>
           </div>
           <BackdropCarousel backdrops={backdropsData?.backdrops ?? []} title={movie?.title ?? ""} />
         </div>
       )}
-
-      </div>
 
       {/* ── Available on — standalone ── */}
       {allProviders.length > 0 && (
         <div className="px-5 pt-4">
           <div className="flex items-center gap-2 mb-2">
             <Tv className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-            <p className="text-xs font-semibold text-muted-foreground flex-1">{t.watchOnLabel}</p>
+            <p className="text-xs font-bold text-foreground flex-1">{t.watchOnLabel}</p>
           </div>
           <div className="flex flex-wrap gap-2">
             {allProviders.map(p => (
@@ -1294,7 +1294,7 @@ export default function MovieDetail() {
           <div className="px-5 pt-4">
             <div className="flex items-center gap-2 mb-2">
               <Link2 className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-              <p className="text-xs font-semibold text-muted-foreground flex-1">{"Chains"}</p>
+              <p className="text-xs font-bold text-foreground flex-1">{"Chains"}</p>
             </div>
             <div className="grid grid-cols-3 gap-2">
               {visibleChains.map(chain => (
@@ -1395,7 +1395,7 @@ export default function MovieDetail() {
             onClick={(e) => { const b = e.currentTarget; setShowDetails(v => { const next = !v; if (next) { setShowCollection(true); setShowSpinoffs(true); } setTimeout(() => { const c = scrollRef.current; if (c) { const r = b.getBoundingClientRect(), cr = c.getBoundingClientRect(); c.scrollTo({ top: Math.max(0, c.scrollTop + r.top - cr.top - 8), behavior: "smooth" }); } }, 360); return next; }); }}
           >
             <Info className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-            <h3 className="text-xs font-semibold text-muted-foreground tracking-wide flex-1">{lang === "th" ? "รายละเอียด" : "Details"}</h3>
+            <h3 className="text-xs font-bold text-foreground flex-1">{lang === "th" ? "รายละเอียด" : "Details"}</h3>
             {showDetails
               ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
               : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />}
@@ -1408,7 +1408,7 @@ export default function MovieDetail() {
                   <div className="border-t border-border mt-3 mb-2" />
                   <div className="flex items-center gap-2 mb-1.5">
                     <User className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                    <p className="text-xs font-semibold text-muted-foreground flex-1">
+                    <p className="text-xs font-bold text-foreground flex-1">
                       {lang === "th" ? "ตัวละคร" : "Characters"}
                     </p>
                   </div>
@@ -1502,7 +1502,7 @@ export default function MovieDetail() {
                       <div className="mt-3">
                         <div className="w-full flex items-center gap-2 py-1">
                           <Layers className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                          <p className="text-xs font-semibold text-muted-foreground flex-1">
+                          <p className="text-xs font-bold text-foreground flex-1">
                             {collectionData.collectionName ?? (lang === "th" ? "ภาคทั้งหมด" : "All Parts")}
                           </p>
                         </div>
@@ -1539,7 +1539,7 @@ export default function MovieDetail() {
                       <div className="mt-3">
                         <div className="w-full flex items-center gap-2 py-1">
                           <GitBranch className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                          <p className="text-xs font-semibold text-muted-foreground flex-1">
+                          <p className="text-xs font-bold text-foreground flex-1">
                             {mainMovies.length > 0
                               ? (lang === "th" ? "ภาคเสริม" : "Spinoffs")
                               : (lang === "th" ? "ภาคเสริม / ที่เกี่ยวข้อง" : "Spinoffs/Related")}
@@ -1578,7 +1578,7 @@ export default function MovieDetail() {
                 <div className="mt-3">
                   <div className="flex items-center gap-2 mb-2">
                     <User className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                    <p className="text-xs font-semibold text-muted-foreground flex-1">{t.directorLabel}</p>
+                    <p className="text-xs font-bold text-foreground flex-1">{t.directorLabel}</p>
                   </div>
                   <div ref={directorScrollRef} className="flex overflow-x-auto gap-2.5 pb-1 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
                     {(creditsData?.directors ?? []).map(p => (
@@ -1605,7 +1605,7 @@ export default function MovieDetail() {
                 <div className="mt-3">
                   <div className="flex items-center gap-2 mb-2">
                     <Users className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                    <p className="text-xs font-semibold text-muted-foreground flex-1">{creditsData?.isVoiceCast ? t.voiceActorLabel : t.castLabel}</p>
+                    <p className="text-xs font-bold text-foreground flex-1">{creditsData?.isVoiceCast ? t.voiceActorLabel : t.castLabel}</p>
                   </div>
                   <div ref={castScrollRef} className="flex overflow-x-auto gap-2.5 pb-1 scrollbar-hide -mx-5 px-5" style={{ WebkitOverflowScrolling: "touch" }}>
                     {(creditsData?.cast ?? []).map(p => (

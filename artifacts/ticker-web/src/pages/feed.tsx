@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { TicketCard } from "@/components/TicketCard";
-import { Loader2, MessageCircle, Bell, TrendingUp, TrendingDown } from "lucide-react";
+import { Loader2, MessageCircle, Bell } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Link } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -14,76 +14,6 @@ import { UpcomingCard, type UpcomingMovie } from "@/components/UpcomingCard";
 import { useLang } from "@/lib/i18n";
 import { LangToggle } from "@/components/LangToggle";
 
-// ── TickerExtremes — highest and lowest Ticker-rated movies ──────────────────
-
-type CommunityMovie = { imdbId: string; title: string; posterUrl: string | null; avgRating: number; ticketCount: number };
-
-function TickerExtremes() {
-  const { lang } = useLang();
-  const [revealed, setRevealed] = useState(false);
-  useEffect(() => {
-    const tid = setTimeout(() => setRevealed(true), 120);
-    return () => clearTimeout(tid);
-  }, []);
-  const { data, isLoading } = useQuery<{ top: CommunityMovie[]; bottom: CommunityMovie[] }>({
-    queryKey: ["ticker-community-ratings"],
-    queryFn: async () => {
-      const r = await fetch("/api/movies/ticker-community", { credentials: "include" });
-      if (!r.ok) return { top: [], bottom: [] };
-      return r.json();
-    },
-    staleTime: 5 * 60 * 1000,
-    refetchInterval: 5 * 60 * 1000,
-  });
-  const highest = data?.top?.[0] ?? null;
-  const lowest = data?.bottom?.[0] ?? null;
-  if (isLoading || (!highest && !lowest)) return null;
-  const MovieMini = ({ movie, trend }: { movie: CommunityMovie; trend: "up" | "down" }) => (
-    <Link href={`/movie/${encodeURIComponent(movie.imdbId)}`}>
-      <div className="flex items-center gap-2 flex-1 min-w-0 active:opacity-70">
-        <div className="w-9 h-[50px] rounded-xl overflow-hidden bg-secondary flex-shrink-0 border border-border">
-          {movie.posterUrl
-            ? <img src={movie.posterUrl} alt={movie.title} className="w-full h-full object-cover" loading="lazy" />
-            : <div className="w-full h-full bg-secondary" />}
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-bold text-foreground truncate leading-tight">{movie.title}</p>
-          <div className={cn("flex items-center gap-0.5 mt-0.5", trend === "up" ? "text-emerald-500" : "text-red-400")}>
-            {trend === "up"
-              ? <TrendingUp className="w-3 h-3 flex-shrink-0" />
-              : <TrendingDown className="w-3 h-3 flex-shrink-0" />}
-            <span className="text-[11px] font-black">{movie.avgRating.toFixed(1)}</span>
-          </div>
-        </div>
-      </div>
-    </Link>
-  );
-  return (
-    <div
-      style={{
-        opacity: revealed ? 1 : 0,
-        transform: revealed ? "translateY(0)" : "translateY(-8px)",
-        transition: "opacity 0.35s ease, transform 0.35s ease",
-      }}
-    >
-      <div className="mx-4 mt-2 mb-3 rounded-2xl border border-border bg-secondary/40 px-3 py-2.5 flex items-center gap-3">
-        <div className="flex-1 min-w-0">
-          <p className="text-[9px] font-bold text-muted-foreground mb-1.5 uppercase tracking-wider">
-            {lang === "th" ? "คะแนนสูงสุด" : "Highest"}
-          </p>
-          {highest && <MovieMini movie={highest} trend="up" />}
-        </div>
-        <div className="w-px h-10 bg-border flex-shrink-0" />
-        <div className="flex-1 min-w-0">
-          <p className="text-[9px] font-bold text-muted-foreground mb-1.5 uppercase tracking-wider">
-            {lang === "th" ? "คะแนนต่ำสุด" : "Lowest"}
-          </p>
-          {lowest && <MovieMini movie={lowest} trend="down" />}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 type FeedItem =
   | { type: "ticket"; ticket: any }
@@ -390,8 +320,6 @@ export default function Feed() {
         className="absolute inset-0 overflow-y-auto overscroll-y-none"
         style={{ paddingTop: headerH + (isRefreshing ? 44 : 0) }}
       >
-        {/* Ticker extremes — highest & lowest community-rated movies */}
-        <TickerExtremes />
 
         {isEmpty && (
           <div className="px-4 py-16 text-center">

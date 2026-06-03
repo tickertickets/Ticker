@@ -21,6 +21,7 @@ import {
   cvNameMatches,
   type VolumeCredit,
 } from "../lib/comicvine";
+import { searchFandom } from "../lib/fandom.js";
 
 const router = Router();
 
@@ -32,7 +33,7 @@ type CharResult = {
   description: string;
   imageUrl: string | null;
   alias: string | null;
-  source: "anilist" | "comicvine" | "tmdb" | "cast";
+  source: "anilist" | "comicvine" | "tmdb" | "cast" | "fandom";
   sourceUrl?: string;
 };
 
@@ -685,7 +686,11 @@ router.get(
         const rawResults = row.results as CharResult[];
         // Detect entries where a previous agent stored TMDB actor profile URLs
         // as imageUrl for anilist-sourced characters (those should use s4.anilist.co).
-        const hadBadImages = rawResults.some(
+        // Invalidate any cache entry that still uses old al:/cv:/alm: format
+        const hasOldFormat = rawResults.length > 0 && rawResults.some(
+          r => !r.wikidataId?.startsWith("fm:"),
+        );
+        const hadBadImages = !hasOldFormat && rawResults.some(
           r => r.source === "anilist" && r.imageUrl?.includes("image.tmdb.org/t/p/"),
         );
         const results = rawResults.map(r =>
@@ -694,13 +699,12 @@ router.get(
             : r,
         );
         const effectiveTtl = results.length === 0 ? EMPTY_CACHE_TTL : CACHE_TTL;
-        if (!hadBadImages && ageMs < effectiveTtl) {
+        if (!hasOldFormat && !hadBadImages && ageMs < effectiveTtl) {
           BY_MOVIE_CACHE.set(tmdbId, { results, ts: Date.now() - ageMs });
           return res.json({ results });
         }
-        // Bad images detected — delete this DB row so a fresh fetch re-caches
-        // with correct AniList images, then fall through to the live fetch below.
-        if (hadBadImages) {
+        // Old format or bad images — delete and re-fetch fresh Fandom stubs
+        if (hasOldFormat || hadBadImages) {
           db.delete(characterCacheTable).where(eq(characterCacheTable.tmdbId, tmdbId)).catch(() => {});
         }
       }
@@ -832,87 +836,17 @@ router.get(
       return res.json({ results: [] });
     }
 
-    const anime = isAnime(originalLanguage, genreIds);
-
-    // ── Anime: match via AniList ──────────────────────────────────────────────
-    // Use getAniListMediaWithChars so we capture the media ID.
-    // Matched chars get `al:ID`; unmatched chars get `alm:mediaId:charName`
-    // so the detail handler can validate them against the exact media.
-    let anilistMediaId: number | null = null;
-    let anilistChars: AniListChar[] = [];
-
-    if (anime && movieTitle) {
-      const mediaInfo = await getAniListMediaWithChars(movieTitle).catch(() => null);
-      if (mediaInfo) {
-        anilistMediaId = mediaInfo.mediaId;
-        anilistChars = mediaInfo.chars;
-      }
-    }
-
-    // ── Non-anime: match via CV two-pass lookup ───────────────────────────────
-    let cvLookup = new Map<string, { id: number; name: string; imageUrl: string | null; sourceUrl: string }>();
-    if (!anime) {
-      cvLookup = await lookupComicVineForMovie(
-        characterEntries,
-        movieTitle,
-        franchiseName,
-      );
-    }
-
-    // Build results
-    const results: CharResult[] = [];
-
-    for (const entry of characterEntries) {
-      if (anime) {
-        const alMatch = matchAniListChar(entry.name, anilistChars)
-          ?? (entry.altName ? matchAniListChar(entry.altName, anilistChars) : null);
-        if (alMatch) {
-          // Confirmed match within the specific anime
-          results.push({
-            name: alMatch.name,
-            wikidataId: `al:${alMatch.id}`,
-            description: alMatch.description ?? "",
-            imageUrl: alMatch.imageUrl ?? null,
-            alias: null,
-            source: "anilist",
-            sourceUrl: `https://anilist.co/character/${alMatch.id}`,
-          });
-        } else if (anilistMediaId) {
-          // Unmatched in pre-fetched list — encode media ID for validated lazy fetch
-          // `alm:mediaId:charName` tells the detail handler to search within that specific media
-          // No placeholder image — character image loads when the detail page is opened
-          results.push({
-            name: entry.name,
-            wikidataId: `alm:${anilistMediaId}:${encodeURIComponent(entry.name)}`,
-            description: "",
-            imageUrl: null,
-            alias: null,
-            source: "anilist",
-          });
-        }
-        // If anilistMediaId is null (AniList doesn't know this anime), skip entirely
-      } else {
-        const cvMatch    = cvLookup.get(entry.name) ?? null;
-        const cvAltMatch = entry.altName ? (cvLookup.get(entry.altName) ?? null) : null;
-        // When altName resolves to a DIFFERENT CV character, prefer it — it is
-        // usually more specific (e.g. "Ben Reilly" over generic "Spider-Man").
-        const useChar = (cvAltMatch && (!cvMatch || cvAltMatch.id !== cvMatch.id))
-          ? cvAltMatch
-          : cvMatch;
-        if (useChar) {
-          results.push({
-            name: useChar.name,
-            wikidataId: `cv:${useChar.id}`,
-            description: "",
-            imageUrl: useChar.imageUrl ?? null,
-            alias: null,
-            source: "comicvine",
-            sourceUrl: useChar.sourceUrl,
-          });
-        }
-        // No CV match → character excluded entirely (no stub/placeholder)
-      }
-    }
+    // Build Fandom stubs — character images and descriptions are fetched
+    // lazily from Fandom wiki when the user opens the character detail page.
+    // Actor profile photos are deliberately NOT used as character images.
+    const results: CharResult[] = characterEntries.map(entry => ({
+      name:        entry.name,
+      wikidataId:  `fm:${encodeURIComponent(entry.name)}:${encodeURIComponent(movieTitle)}`,
+      description: "",
+      imageUrl:    null,
+      alias:       null,
+      source:      "fandom" as const,
+    }));
 
     BY_MOVIE_CACHE.set(tmdbId, { results, ts: Date.now() });
     // Persist to DB cache (fire-and-forget — don't block the response)
@@ -957,6 +891,7 @@ router.get(
     else if (lower.startsWith("als%3a")) rawCharId = "als:" + rawCharId.slice(6);
     else if (lower.startsWith("cvs%3a")) rawCharId = "cvs:" + rawCharId.slice(6);
     else if (lower.startsWith("alm%3a")) rawCharId = "alm:" + rawCharId.slice(6);
+    else if (lower.startsWith("fm%3a"))  rawCharId = "fm:"  + rawCharId.slice(5);
     // Always decode remaining percent-encoding (e.g. alm:204066%3ASuguru%20Geto has a second %3A)
     if (rawCharId.includes("%")) {
       try { rawCharId = decodeURIComponent(rawCharId); } catch { /* keep */ }
@@ -967,6 +902,33 @@ router.get(
     }
 
     const now = Date.now();
+
+    // ── fm:<charName>:<movieTitle>  — Fandom wiki lookup ─────────────────────
+    if (rawCharId.startsWith("fm:")) {
+      const rest      = rawCharId.slice(3);
+      const colonIdx  = rest.indexOf(":");
+      if (colonIdx < 0) {
+        return res.json({ wikidataId: rawCharId, charId: rawCharId, name: decodeURIComponent(rest),
+          description: "", structuredInfo: [], imageUrl: null, filmography: [], source: "fandom" });
+      }
+      const charName   = decodeURIComponent(rest.slice(0, colonIdx));
+      const movieTitle = decodeURIComponent(rest.slice(colonIdx + 1));
+      const [fandomResult, filmography] = await Promise.all([
+        searchFandom(charName, movieTitle),
+        getFilmographyByKeyword(charName).catch(() => [] as FilmographyEntry[]),
+      ]);
+      return res.json({
+        wikidataId:     rawCharId,
+        charId:         rawCharId,
+        name:           charName,
+        description:    fandomResult?.description ?? "",
+        structuredInfo: [],
+        imageUrl:       fandomResult?.imageUrl ?? null,
+        filmography,
+        source:         "fandom",
+        sourceUrl:      fandomResult?.sourceUrl ?? null,
+      });
+    }
 
     // ── al:<id>  — AniList character by ID ───────────────────────────────────
     if (rawCharId.startsWith("al:")) {

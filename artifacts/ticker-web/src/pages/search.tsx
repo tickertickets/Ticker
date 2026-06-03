@@ -17,7 +17,7 @@ import {
   Film, Loader2, Search as SearchIcon, TrendingUp, Crown, Skull,
   Moon, Smile, Zap, AlertCircle, Clapperboard, X as XIcon,
   Sparkles, Globe, Wand2, Ghost, Sword, HeartCrack, Shield,
-  Dice5, Swords,
+  Dice5, Swords, TrendingDown,
   type LucideIcon,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
@@ -144,6 +144,55 @@ const MIDDLE_CAT_MAP: Record<string, { id: string; label: string; icon: LucideIc
   midnight_horror:   { id: "midnight_horror",   label: "Midnight Horror",    icon: Ghost       },
   marvel_dc:         { id: "marvel_dc",         label: "Marvel & DC",        icon: Shield      },
 };
+
+type CommunityMovie = { imdbId: string; title: string; posterUrl: string | null; avgRating: number; ticketCount: number };
+
+function SearchTickerExtremes() {
+  const { lang } = useLang();
+  const { data } = useQuery<{ top: CommunityMovie[]; bottom: CommunityMovie[] }>({
+    queryKey: ["ticker-community-ratings"],
+    queryFn: async () => {
+      const r = await fetch("/api/movies/ticker-community", { credentials: "include" });
+      if (!r.ok) return { top: [], bottom: [] };
+      return r.json();
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+  const highest = data?.top?.[0] ?? null;
+  const lowest  = data?.bottom?.[0] ?? null;
+  if (!highest && !lowest) return null;
+  return (
+    <div className="flex items-center justify-center gap-4 px-4 pb-2">
+      {lowest && (
+        <Link href={`/movie/${encodeURIComponent(lowest.imdbId)}`}>
+          <div className="flex items-center gap-1.5 active:opacity-60">
+            <div className="w-6 h-9 rounded-lg overflow-hidden bg-secondary border border-border flex-shrink-0">
+              {lowest.posterUrl && <img src={lowest.posterUrl} alt={lowest.title} className="w-full h-full object-cover" loading="lazy" />}
+            </div>
+            <div>
+              <p className="text-[12px] font-black text-red-400 leading-none">{lowest.avgRating.toFixed(1)}</p>
+              <p className="text-[9px] text-muted-foreground leading-tight">{lang === "th" ? "ต่ำสุด" : "Lowest"}</p>
+            </div>
+          </div>
+        </Link>
+      )}
+      <div className="h-6 w-px bg-border" />
+      {highest && (
+        <Link href={`/movie/${encodeURIComponent(highest.imdbId)}`}>
+          <div className="flex items-center gap-1.5 active:opacity-60">
+            <div>
+              <p className="text-[12px] font-black text-emerald-500 leading-none text-right">{highest.avgRating.toFixed(1)}</p>
+              <p className="text-[9px] text-muted-foreground leading-tight text-right">{lang === "th" ? "สูงสุด" : "Highest"}</p>
+            </div>
+            <div className="w-6 h-9 rounded-lg overflow-hidden bg-secondary border border-border flex-shrink-0">
+              {highest.posterUrl && <img src={highest.posterUrl} alt={highest.title} className="w-full h-full object-cover" loading="lazy" />}
+            </div>
+          </div>
+        </Link>
+      )}
+    </div>
+  );
+}
 
 function getTimedMiddleOrder(): string[] {
   const h = new Date().getHours();
@@ -382,19 +431,13 @@ export default function Search() {
   const [visitedCategories, setVisitedCategories] = useState<Set<string>>(() => new Set([activeCategory]));
   const [showRandomPicker, setShowRandomPicker]   = useState(false);
   const [showVsPicker, setShowVsPicker]           = useState(false);
-  const [showDiceTab, setShowDiceTab]             = useState(true);
+  const [showDiceTab, setShowDiceTab]             = useState(false);
   const [fabHighlight, setFabHighlight]           = useState(() => !sessionStorage.getItem("ticker_fab_seen"));
   useEffect(() => {
     if (!fabHighlight) return;
-    // First visit: scroll down briefly to reveal dice/VS buttons, then scroll back up
-    const tid0 = setTimeout(() => {
-      const scrollEl = document.querySelector('[data-cat-active="true"]') as HTMLElement | null;
-      scrollEl?.scrollTo({ top: 80, behavior: "smooth" });
-    }, 600);
-    const tid1 = setTimeout(() => {
-      const scrollEl = document.querySelector('[data-cat-active="true"]') as HTMLElement | null;
-      scrollEl?.scrollTo({ top: 0, behavior: "smooth" });
-    }, 1400);
+    // First visit: slide the Roll/VS bar in then back out — no page scroll
+    const tid0 = setTimeout(() => setShowDiceTab(true), 600);
+    const tid1 = setTimeout(() => setShowDiceTab(false), 2200);
     const tid2 = setTimeout(() => {
       sessionStorage.setItem("ticker_fab_seen", "1");
       setFabHighlight(false);
@@ -402,8 +445,8 @@ export default function Search() {
     return () => { clearTimeout(tid0); clearTimeout(tid1); clearTimeout(tid2); };
   }, [fabHighlight]);
   const diceTabCollapseRef = useRef(false);
-  // Reset collapse flag when category changes so tab is visible on next visit to top
-  useEffect(() => { diceTabCollapseRef.current = false; setShowDiceTab(true); }, [activeCategory]);
+  // Reset collapse flag on category change (do not auto-open)
+  useEffect(() => { diceTabCollapseRef.current = false; }, [activeCategory]);
   const headerRef        = useRef<HTMLDivElement>(null);
   const pillContainerRef = useRef<HTMLDivElement>(null);
   const pillRefs         = useRef<Map<string, HTMLButtonElement>>(new Map());
@@ -600,6 +643,9 @@ export default function Search() {
           </button>
           <div className="w-9 h-9" />
         </div>
+
+        {/* Compact community extremes — highest / lowest Ticker-rated movies */}
+        <SearchTickerExtremes />
 
         {/* Dice slide-out tab — smooth banner reveal using grid-template-rows */}
         <div
