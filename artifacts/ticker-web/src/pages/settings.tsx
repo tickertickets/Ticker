@@ -1140,6 +1140,17 @@ export default function Settings() {
     refetchOnWindowFocus: true,
   });
 
+  const { data: hiddenItemsData, refetch: refetchHidden } = useQuery({
+    queryKey: ["my-hidden-items"],
+    queryFn: async () => {
+      const res = await fetch("/api/feed/hidden-items", { credentials: "include" });
+      if (!res.ok) return { items: [] };
+      return res.json();
+    },
+    enabled: activeSection === "activities" && !!user,
+    staleTime: 0,
+  });
+
   const restoreMutation = useMutation({
     mutationFn: restoreTicket,
     onSuccess: () => {
@@ -2043,7 +2054,8 @@ export default function Settings() {
             const ot = activitiesData?.ownTickets ?? [];
             const hasTickets = tl.length > 0 || tc.length > 0 || ot.length > 0;
             const hasChains = cl.length > 0 || cc.length > 0;
-            const isEmpty = !hasTickets && !hasChains;
+            const hiddenItems = hiddenItemsData?.items ?? [];
+            const isEmpty = !hasTickets && !hasChains && hiddenItems.length === 0;
 
             if (isEmpty) {
               return (
@@ -2177,6 +2189,38 @@ export default function Settings() {
                     </div>
                   </div>
                 )}
+
+                {hiddenItems.length > 0 && (
+                  <div className={hasTickets || hasChains ? "mt-4" : ""}>
+                    <p className="text-xs font-semibold text-muted-foreground tracking-wide mb-2 px-1">{t.hiddenPosts}</p>
+                    <div className="space-y-2">
+                      {hiddenItems.map((item: any) => (
+                        <div key={item.itemId} className="flex items-center gap-3 px-3 py-2.5 rounded-2xl bg-secondary">
+                          {item.posterUrl && (
+                            <div className="w-8 h-10 rounded-lg overflow-hidden flex-shrink-0">
+                              <img src={item.posterUrl} className="w-full h-full object-cover" alt="" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold truncate">{item.movieTitle ?? item.title}</p>
+                            <p className="text-xs text-muted-foreground capitalize">{item.itemType}</p>
+                          </div>
+                          <button
+                            onClick={async () => {
+                              await fetch(`/api/feed/signal/${item.itemId}`, { method: "DELETE", credentials: "include" });
+                              refetchHidden();
+                            }}
+                            className="flex-shrink-0 flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-xl bg-foreground text-background"
+                          >
+                            <Eye className="w-3 h-3" />
+                            <span>{t.notInterestedRestore}</span>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
               </>
             );
           })()}

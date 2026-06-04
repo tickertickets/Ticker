@@ -634,11 +634,10 @@ function SortableAlbumPill({ album, isActive, isReorderMode, onClick, onLongPres
 
 // ── FilmsGrid ──────────────────────────────────────────────────────────────
 
-function FilmsGrid({ tickets, isOwn, username }: { tickets: Ticket[]; isOwn: boolean; username: string }) {
-  const { t } = useLang();
+function FilmsGrid({ tickets, isOwn, username, isReorderMode = false, onToggleReorderMode }: { tickets: Ticket[]; isOwn: boolean; username: string; isReorderMode?: boolean; onToggleReorderMode?: () => void }) {
+  const { t, lang } = useLang();
   const { toast } = useToast();
   const qcFilms = useQueryClient();
-  const [isReorderMode, setIsReorderMode] = useState(false);
   const [orderedTickets, setOrderedTickets] = useState<Ticket[]>(tickets);
   const hasManuallyReordered = useRef(false);
   const prevTicketIdsRef = useRef<Set<string>>(new Set(tickets.map(t => String(t.id))));
@@ -722,13 +721,13 @@ function FilmsGrid({ tickets, isOwn, username }: { tickets: Ticket[]; isOwn: boo
     <>
       <div className="flex justify-end px-3 pt-2 pb-0.5">
         <button
-          onClick={() => setIsReorderMode(prev => !prev)}
+          onClick={() => onToggleReorderMode?.()}
           className={cn(
             "text-[11px] font-semibold px-3 py-1 rounded-xl transition-colors",
             isReorderMode ? "bg-foreground text-background" : "bg-secondary text-muted-foreground"
           )}
         >
-          {isReorderMode ? "Done" : "Reorder"}
+          {isReorderMode ? (lang === "th" ? "เสร็จ" : "Done") : (lang === "th" ? "เรียง" : "Reorder")}
         </button>
       </div>
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTicketDragEnd} modifiers={[restrictToParentElement]}>
@@ -1621,7 +1620,7 @@ export default function Profile() {
   });
 
   const [albumPillOrder, setAlbumPillOrder] = useState<string[]>([]);
-  const [albumIsReorderMode, setAlbumIsReorderMode] = useState(false);
+  const [isReorderMode, setIsReorderMode] = useState(false);
   useEffect(() => {
     const ids = (albumsData?.albums ?? []).map((a: any) => a.id as string);
     setAlbumPillOrder(prev => {
@@ -1633,8 +1632,8 @@ export default function Profile() {
   }, [albumsData]);
 
   const albumSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { delay: albumIsReorderMode ? 150 : 99999, tolerance: 5 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: albumIsReorderMode ? 150 : 99999, tolerance: 5 } }),
+    useSensor(PointerSensor, { activationConstraint: { delay: isReorderMode ? 150 : 99999, tolerance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: isReorderMode ? 150 : 99999, tolerance: 5 } }),
   );
 
   const handleAlbumPillDragEnd = async (event: DragEndEvent) => {
@@ -2051,7 +2050,7 @@ export default function Profile() {
                   <div className="overflow-x-auto scrollbar-hide px-3 pt-1 pb-2">
                     <div className="flex items-center gap-2 min-w-max mx-auto">
                       {/* Main/หลัก pill — never reorderable */}
-                      {!albumIsReorderMode && (
+                      {!isReorderMode && (
                         <AlbumPillBtn
                           label={lang === "th" ? "หลัก" : "Main"}
                           isActive={!activeAlbumId}
@@ -2067,7 +2066,7 @@ export default function Profile() {
                                 key={album.id}
                                 album={album}
                                 isActive={activeAlbumId === album.id}
-                                isReorderMode={albumIsReorderMode}
+                                isReorderMode={isReorderMode}
                                 onClick={() => setActiveAlbumId(album.id)}
                                 onLongPress={isOwn ? () => { setAlbumMenu({ id: album.id, title: album.title }); setAlbumRenaming(false); setAlbumRenameTitle(album.title); } : undefined}
                               />
@@ -2075,20 +2074,8 @@ export default function Profile() {
                           </div>
                         </SortableContext>
                       </DndContext>
-                      {/* Reorder toggle (owner only, when >1 album) */}
-                      {isOwn && orderedAlbums.length > 1 && (
-                        <button
-                          onClick={() => setAlbumIsReorderMode(prev => !prev)}
-                          className={cn(
-                            "flex-shrink-0 text-[11px] font-semibold px-2.5 py-1.5 rounded-xl transition-colors",
-                            albumIsReorderMode ? "bg-foreground text-background" : "bg-secondary text-muted-foreground"
-                          )}
-                        >
-                          {albumIsReorderMode ? (lang === "th" ? "เสร็จ" : "Done") : (lang === "th" ? "เรียง" : "Reorder")}
-                        </button>
-                      )}
                       {/* + New album (owner only, max 3 custom) */}
-                      {isOwn && albums.length < 3 && !albumIsReorderMode && (
+                      {isOwn && albums.length < 3 && !isReorderMode && (
                         <button
                           onClick={() => { setNewAlbumTitle(""); setShowCreateAlbum(true); }}
                           className="flex-shrink-0 flex items-center gap-1 text-sm font-semibold px-3 py-1.5 rounded-xl transition-colors bg-secondary text-foreground/60"
@@ -2099,13 +2086,13 @@ export default function Profile() {
                       )}
                     </div>
                   </div>
-                  <FilmsGrid tickets={filteredTickets} isOwn={isOwn} username={username} />
+                  <FilmsGrid tickets={filteredTickets} isOwn={isOwn} username={username} isReorderMode={isReorderMode} onToggleReorderMode={() => setIsReorderMode(p => !p)} />
                 </>
               );
             })()}
             {/* Fallback when no albums and not owner */}
             {!isOwn && (albumsData?.albums ?? []).length === 0 && (
-              <FilmsGrid tickets={tickets} isOwn={isOwn} username={username} />
+              <FilmsGrid tickets={tickets} isOwn={isOwn} username={username} isReorderMode={isReorderMode} onToggleReorderMode={() => setIsReorderMode(p => !p)} />
             )}
           </div>
 

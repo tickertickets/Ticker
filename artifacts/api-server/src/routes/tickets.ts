@@ -28,6 +28,7 @@ import {
   likesTable,
   commentsTable,
   bookmarksTable,
+  feedSignalsTable,
 } from "@workspace/db/schema";
 import {
   eq,
@@ -47,7 +48,7 @@ import {
 } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { sanitize } from "../lib/sanitize";
-import { hotScore, makeFreshBoost, applyDiversitySpread, DIVERSITY_CAP, AFFINITY_FOLLOWED } from "../lib/hot-score";
+import { hotScore, makeFreshBoost, applyDiversitySpread, DIVERSITY_CAP, AFFINITY_FOLLOWED, computeGenreAffinity, makeGenreBoost } from "../lib/hot-score";
 import { asyncHandler } from "../middlewares/error-handler";
 import {
   UnauthorizedError,
@@ -290,6 +291,36 @@ router.get(
       const followedIds = followRows.map((f) => f.followingId);
       const followedSet = new Set([...followedIds, currentUserId]);
 
+      // Load hidden ticket IDs so they're excluded from both tiers
+      const hiddenSignalRows = await db
+        .select({ itemId: feedSignalsTable.itemId })
+        .from(feedSignalsTable)
+        .where(and(
+          eq(feedSignalsTable.userId, currentUserId),
+          eq(feedSignalsTable.itemType, "ticket"),
+          eq(feedSignalsTable.signalType, "hide"),
+        ));
+      const hiddenTicketIds = new Set(hiddenSignalRows.map(s => s.itemId));
+
+      // Load genre affinity for the current user (own + liked + bookmarked tickets)
+      const [ownGenreRows, likedGenreRows, savedGenreRows] = await Promise.all([
+        db.select({ genre: ticketsTable.genre }).from(ticketsTable)
+          .where(and(eq(ticketsTable.userId, currentUserId), isNull(ticketsTable.deletedAt))),
+        db.select({ genre: ticketsTable.genre }).from(ticketsTable)
+          .innerJoin(likesTable, eq(likesTable.ticketId, ticketsTable.id))
+          .where(and(eq(likesTable.userId, currentUserId), isNull(ticketsTable.deletedAt))),
+        db.select({ genre: ticketsTable.genre }).from(ticketsTable)
+          .innerJoin(bookmarksTable, eq(bookmarksTable.ticketId, ticketsTable.id))
+          .where(and(eq(bookmarksTable.userId, currentUserId), isNull(ticketsTable.deletedAt))),
+      ]);
+      const allGenres = [
+        ...ownGenreRows.map(r => r.genre ?? ""),
+        ...likedGenreRows.map(r => r.genre ?? ""),
+        ...savedGenreRows.map(r => r.genre ?? ""),
+        ...savedGenreRows.map(r => r.genre ?? ""), // double-weight bookmarks as intent signal
+      ].filter(Boolean);
+      const genreBoostFn = makeGenreBoost(computeGenreAffinity(allGenres));
+
       // 2a. Tier A: own posts (any privacy) + followed users' non-private posts
       const tierAWhere = and(
         notDeleted,
@@ -310,8 +341,10 @@ router.get(
         )`))
         .limit(POOL);
 
-      // exclude other users' private tickets (keep own private tickets)
-      const tierA = tierARaw.filter((t) => t.userId === currentUserId || !t.isPrivate);
+      // exclude other users' private tickets (keep own private tickets) + hidden items
+      const tierA = tierARaw
+        .filter((t) => t.userId === currentUserId || !t.isPrivate)
+        .filter((t) => !hiddenTicketIds.has(String(t.id)));
 
       // 2b. Tier B: public discovery pool (public accounts, non-private tickets)
       const publicUserRows = await db
@@ -340,15 +373,22 @@ router.get(
             .limit(POOL)
         : [];
 
-      // 3. Score both tiers and merge
+      // Filter hidden items from tier B as well
+      const tierB = tierBRaw.filter((t) => !hiddenTicketIds.has(String(t.id)));
+
+      // 3. Score both tiers and merge with genre affinity
       const affinityFn = (uid: string) => (followedSet.has(uid) && uid !== currentUserId) ? AFFINITY_FOLLOWED : AFFINITY_DISCOVERY;
       const freshBoostFn = makeFreshBoost(followedSet, currentUserId);
       const [scoredA, scoredB] = await Promise.all([
         bulkScore(tierA, affinityFn, freshBoostFn),
-        bulkScore(tierBRaw, affinityFn, freshBoostFn),
+        bulkScore(tierB, affinityFn, freshBoostFn),
       ]);
 
-      const merged = [...scoredA, ...scoredB];
+      // Apply genre affinity boost on top of hotScore × affinity × freshBoost
+      const merged = [...scoredA, ...scoredB].map(s => ({
+        ...s,
+        score: s.score * genreBoostFn(s.t.genre ?? ""),
+      }));
       merged.sort((a, b) => b.score - a.score);
       const effectiveCapHome = merged.length <= limit ? merged.length : DIVERSITY_CAP;
       const spread = applyDiversitySpread(merged, (s) => s.t.userId, effectiveCapHome, limit + 1);

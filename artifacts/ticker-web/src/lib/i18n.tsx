@@ -249,6 +249,12 @@ export interface Strings {
   report: string;
   reportReasons: string[];
   notInterested: string;
+  notInterestedModalTitle: string;
+  notInterestedModalDesc: string;
+  notInterestedHide: string;
+  notInterestedRestore: string;
+  hiddenPosts: string;
+  hiddenPostsEmpty: string;
   youPrefix: string;
   episodeLabel: string;
   episodeOptional: string;
@@ -914,6 +920,12 @@ const TH: Strings = {
   report: "รายงาน",
   reportReasons: ["สแปม", "ไม่เหมาะสม", "การคุกคาม", "สปอยล์โดยไม่เตือน", "อื่นๆ"],
   notInterested: "ไม่สนใจ",
+  notInterestedModalTitle: "ไม่สนใจโพสต์นี้?",
+  notInterestedModalDesc: "โพสต์จะยังอยู่ในเซสชั่นนี้ พร้อมปุ่มให้กู้คืน หลังรีเฟรชจะไม่แสดงอีก",
+  notInterestedHide: "ซ่อน",
+  notInterestedRestore: "แสดงโพสต์",
+  hiddenPosts: "โพสต์ที่ซ่อน",
+  hiddenPostsEmpty: "ยังไม่มีโพสต์ที่ซ่อนไว้",
   youPrefix: "คุณ: ",
   episodeLabel: "เลือกตอน",
   episodeOptional: "เลือกตอน (ไม่บังคับ)",
@@ -1528,6 +1540,12 @@ const EN: Strings = {
   hideRatingDesc: "Star rating won't appear on the card",
   report: "Report",
   notInterested: "Not interested",
+  notInterestedModalTitle: "Not interested in this post?",
+  notInterestedModalDesc: "The post stays visible this session with a restore option. After refresh it won't appear in your feed.",
+  notInterestedHide: "Hide",
+  notInterestedRestore: "Show post",
+  hiddenPosts: "Hidden Posts",
+  hiddenPostsEmpty: "No hidden posts yet",
   reportReasons: ["Spam", "Inappropriate", "Harassment", "Spoiler without warning", "Other"],
   youPrefix: "You: ",
   episodeLabel: "Select Episode",

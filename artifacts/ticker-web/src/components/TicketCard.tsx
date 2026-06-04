@@ -4,6 +4,7 @@ import { AddLinkSheet } from "./AddLinkSheet";
 import type { SocialLink } from "@/lib/socialLinks";
 import { useLinkSync } from "@/hooks/use-link-sync";
 import { useLang, displayYear, displayDate } from "@/lib/i18n";
+import { NotInterestedModal } from "./NotInterestedModal";
 import { ExpandableText } from "./ExpandableText";
 import { createPortal } from "react-dom";
 import { useKeyboardHeight } from "@/hooks/use-keyboard-height";
@@ -1106,7 +1107,7 @@ function FeedCard({ ticket, onLongPress, onNotInterested }: { ticket: Ticket; on
   const [storyShareOpen, setStoryShareOpen] = useState(false);
   const [commentOpen,    setCommentOpen]    = useState(false);
   const [confirmDelete,          setConfirmDelete]          = useState(false);
-  const [confirmNotInterested,   setConfirmNotInterested]   = useState(false);
+  const [notInterestedModalOpen, setNotInterestedModalOpen] = useState(false);
   const [flipped,       setFlipped]       = useState(false);
   const [flipSign,      setFlipSign]      = useState<1 | -1>(1);
   const [cardPressing,  setCardPressing]  = useState(false);
@@ -1342,30 +1343,14 @@ function FeedCard({ ticket, onLongPress, onNotInterested }: { ticket: Ticket; on
           </button>
         ) : isVerified(ticket.user?.username) ? null : (
           <div className="flex items-center gap-0 ml-auto">
-            {onNotInterested && !confirmNotInterested && (
+            {onNotInterested && (
               <button
-                onClick={e => { e.stopPropagation(); setConfirmNotInterested(true); }}
+                onClick={e => { e.stopPropagation(); setNotInterestedModalOpen(true); }}
                 className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
                 title={t.notInterested}
               >
                 <EyeOff className="w-3.5 h-3.5" />
               </button>
-            )}
-            {onNotInterested && confirmNotInterested && (
-              <div className="flex items-center gap-1 ml-auto" onClick={e => e.stopPropagation()}>
-                <button
-                  onClick={() => setConfirmNotInterested(false)}
-                  className="px-2 py-1 rounded-lg text-[11px] font-semibold text-muted-foreground bg-secondary transition-colors"
-                >
-                  {t.cancelBtn}
-                </button>
-                <button
-                  onClick={() => { setConfirmNotInterested(false); onNotInterested(); }}
-                  className="px-2 py-1 rounded-lg text-[11px] font-semibold text-background bg-foreground transition-colors"
-                >
-                  {t.notInterested ?? "Hide"}
-                </button>
-              </div>
             )}
             <ReportButton ticketId={ticket.id} />
           </div>
@@ -1700,6 +1685,11 @@ function FeedCard({ ticket, onLongPress, onNotInterested }: { ticket: Ticket; on
       )}
       {shareOpen && <ShareToChatModal ticket={ticket} onClose={() => setShareOpen(false)} />}
       {commentOpen && <CommentModal ticket={ticket} onClose={() => setCommentOpen(false)} />}
+      <NotInterestedModal
+        open={notInterestedModalOpen}
+        onClose={() => setNotInterestedModalOpen(false)}
+        onConfirm={() => onNotInterested?.()}
+      />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { TicketCard } from "@/components/TicketCard";
-import { Loader2, MessageCircle, Bell } from "lucide-react";
+import { Loader2, MessageCircle, Bell, EyeOff, Eye } from "lucide-react";
+import { useHiddenItems } from "@/hooks/use-hidden-items";
 import { useAuth } from "@/hooks/use-auth";
 import { Link } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -100,28 +101,14 @@ export default function Feed() {
     }
   }, [feedData]);
 
-  // "Not interested" — optimistic hide + persist to backend
-  const handleNotInterested = useCallback(async (itemId: string, itemType: "ticket" | "chain") => {
+  const { hiddenIds, hideItem, hideChain, restoreItem } = useHiddenItems();
+
+  // "Not interested" — soft-hide (stays in list) + persist to backend
+  const handleNotInterested = useCallback((itemId: string, itemType: "ticket" | "chain") => {
     seenIdsRef.current.add(itemId);
-    qc.setQueryData<{ items: FeedItem[]; hasMore: boolean; nextCursor: string | null }>(
-      ["mixed-feed", feedMode],
-      (old) => old ? {
-        ...old,
-        items: old.items.filter((item) =>
-          item.type === "ticket" ? item.ticket.id !== itemId : item.chain.id !== itemId
-        ),
-      } : old,
-    );
-    setExtraItems((prev) => prev.filter((item) =>
-      item.type === "ticket" ? item.ticket.id !== itemId : item.chain.id !== itemId
-    ));
-    fetch("/api/feed/signal", {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ itemId, itemType, signalType: "hide" }),
-    }).catch(() => {});
-  }, [qc, feedMode]);
+    if (itemType === "ticket") hideItem(itemId);
+    else hideChain(itemId);
+  }, [hideItem, hideChain]);
 
   // Fetch next page — passes seen IDs as exclude to prevent server-side duplicates
   const fetchMore = useCallback(async () => {
@@ -363,20 +350,56 @@ export default function Feed() {
         {!isEmpty && (
           <div className="flex flex-col">
             {displayItems.map((item) => {
-              if (item.kind === "ticket") return (
-                <TicketCard
-                  key={item.key}
-                  ticket={item.ticket}
-                  onNotInterested={user ? () => handleNotInterested(item.ticket.id, "ticket") : undefined}
-                />
-              );
-              if (item.kind === "chain") return (
-                <ChainCard
-                  key={item.key}
-                  chain={item.chain}
-                  onNotInterested={user ? () => handleNotInterested(item.chain.id, "chain") : undefined}
-                />
-              );
+              if (item.kind === "ticket") {
+                const id = String(item.ticket.id);
+                if (hiddenIds.has(id)) return (
+                  <div key={item.key} className="flex items-center justify-between px-4 py-3 border-b border-border">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <EyeOff className="w-3.5 h-3.5" />
+                      <span className="text-xs font-medium">{t.notInterested}</span>
+                    </div>
+                    <button
+                      onClick={() => restoreItem(id)}
+                      className="flex items-center gap-1.5 text-xs font-semibold text-foreground px-2.5 py-1 rounded-lg bg-secondary"
+                    >
+                      <Eye className="w-3 h-3" />
+                      <span>{t.notInterestedRestore}</span>
+                    </button>
+                  </div>
+                );
+                return (
+                  <TicketCard
+                    key={item.key}
+                    ticket={item.ticket}
+                    onNotInterested={user ? () => handleNotInterested(id, "ticket") : undefined}
+                  />
+                );
+              }
+              if (item.kind === "chain") {
+                const id = item.chain.id;
+                if (hiddenIds.has(id)) return (
+                  <div key={item.key} className="flex items-center justify-between px-4 py-3 border-b border-border">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <EyeOff className="w-3.5 h-3.5" />
+                      <span className="text-xs font-medium">{t.notInterested}</span>
+                    </div>
+                    <button
+                      onClick={() => restoreItem(id)}
+                      className="flex items-center gap-1.5 text-xs font-semibold text-foreground px-2.5 py-1 rounded-lg bg-secondary"
+                    >
+                      <Eye className="w-3 h-3" />
+                      <span>{t.notInterestedRestore}</span>
+                    </button>
+                  </div>
+                );
+                return (
+                  <ChainCard
+                    key={item.key}
+                    chain={item.chain}
+                    onNotInterested={user ? () => handleNotInterested(id, "chain") : undefined}
+                  />
+                );
+              }
               return <UpcomingCard key={item.key} movie={item.movie} />;
             })}
             {/* Infinite scroll sentinel */}

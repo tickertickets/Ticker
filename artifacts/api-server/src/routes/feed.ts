@@ -524,6 +524,58 @@ router.get("/", async (req, res) => {
 // feed requests for that user.  Frontend calls this on every dismissal and
 // also removes the item from the in-memory feed list optimistically.
 
+// ── GET /api/feed/hidden-items — list items hidden by this user (Activity recovery) ──
+router.get("/hidden-items", async (req, res) => {
+  const userId = req.session?.userId;
+  if (!userId) { res.status(401).json({ error: "unauthorized" }); return; }
+
+  const signals = await db
+    .select({ itemId: feedSignalsTable.itemId, itemType: feedSignalsTable.itemType, hiddenAt: feedSignalsTable.createdAt })
+    .from(feedSignalsTable)
+    .where(and(eq(feedSignalsTable.userId, userId), eq(feedSignalsTable.signalType, "hide")))
+    .orderBy(desc(feedSignalsTable.createdAt));
+
+  if (signals.length === 0) { res.json({ items: [] }); return; }
+
+  const ticketSigs = signals.filter(s => s.itemType === "ticket");
+  const chainSigs  = signals.filter(s => s.itemType === "chain");
+
+  const [tickets, chains] = await Promise.all([
+    ticketSigs.length > 0
+      ? db.select({ id: ticketsTable.id, movieTitle: ticketsTable.movieTitle, posterUrl: ticketsTable.posterUrl, rankTier: ticketsTable.rankTier })
+          .from(ticketsTable)
+          .where(and(inArray(ticketsTable.id, ticketSigs.map(s => Number(s.itemId))), isNull(ticketsTable.deletedAt)))
+      : Promise.resolve([]),
+    chainSigs.length > 0
+      ? db.select({ id: chainsTable.id, title: chainsTable.title })
+          .from(chainsTable)
+          .where(and(inArray(chainsTable.id, chainSigs.map(s => s.itemId)), isNull(chainsTable.deletedAt)))
+      : Promise.resolve([]),
+  ]);
+
+  const ticketMap = new Map((tickets as any[]).map(t => [String(t.id), t]));
+  const chainMap  = new Map((chains as any[]).map(c => [c.id, c]));
+
+  const items = signals
+    .map(s => {
+      const meta = s.itemType === "ticket" ? ticketMap.get(s.itemId) : chainMap.get(s.itemId);
+      if (!meta) return null;
+      return { itemId: s.itemId, itemType: s.itemType, hiddenAt: s.hiddenAt, ...meta };
+    })
+    .filter(Boolean);
+
+  res.json({ items });
+});
+
+// ── DELETE /api/feed/signal/:itemId — restore (remove hide signal) ────────────
+router.delete("/signal/:itemId", async (req, res) => {
+  const userId = req.session?.userId;
+  if (!userId) { res.status(401).json({ error: "unauthorized" }); return; }
+  const { itemId } = req.params;
+  await db.delete(feedSignalsTable).where(and(eq(feedSignalsTable.userId, userId), eq(feedSignalsTable.itemId, itemId!)));
+  res.json({ ok: true });
+});
+
 router.post("/signal", async (req, res) => {
   const userId = req.session?.userId;
   if (!userId) { res.status(401).json({ error: "unauthorized" }); return; }

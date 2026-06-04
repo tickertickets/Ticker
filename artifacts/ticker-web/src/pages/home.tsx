@@ -8,8 +8,9 @@ import type { ChainItem } from "@/components/ChainsSection";
 import { UpcomingCard, type UpcomingMovie } from "@/components/UpcomingCard";
 import {
   Loader2, Search as SearchIcon, User, Users, X as XIcon,
-  Ticket, Link2, Newspaper, TrendingUp, TrendingDown,
+  Ticket, Link2, Newspaper, TrendingUp, TrendingDown, EyeOff, Eye,
 } from "lucide-react";
+import { useHiddenItems } from "@/hooks/use-hidden-items";
 import { Link, useSearch } from "wouter";
 import { VerifiedBadge, isVerified } from "@/components/VerifiedBadge";
 import { BadgeIcon } from "@/components/BadgeIcon";
@@ -350,7 +351,7 @@ function markSeen(ids: string[]) {
 function TicketsFeed() {
   const { t } = useLang();
   const { user } = useAuth();
-  // Use home mode for logged-in users so followed private-account users' content appears
+  const { hiddenIds, hideItem, restoreItem } = useHiddenItems();
   const feedMode = user ? ListTicketsFeed.home : ListTicketsFeed.discovery;
   const { data, isLoading } = useListTickets(
     { feed: feedMode, type: ListTicketsType.ticket, limit: 20 },
@@ -369,7 +370,33 @@ function TicketsFeed() {
 
   return (
     <div className="flex flex-col">
-      {allTickets.map((ticket: any) => <TicketCard key={ticket.id} ticket={ticket} />)}
+      {allTickets.map((ticket: any) => {
+        const id = String(ticket.id);
+        if (hiddenIds.has(id)) {
+          return (
+            <div key={id} className="flex items-center justify-between px-4 py-3 border-b border-border">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <EyeOff className="w-3.5 h-3.5" />
+                <span className="text-xs font-medium">{t.notInterested}</span>
+              </div>
+              <button
+                onClick={() => restoreItem(id)}
+                className="flex items-center gap-1.5 text-xs font-semibold text-foreground px-2.5 py-1 rounded-lg bg-secondary"
+              >
+                <Eye className="w-3 h-3" />
+                <span>{t.notInterestedRestore}</span>
+              </button>
+            </div>
+          );
+        }
+        return (
+          <TicketCard
+            key={id}
+            ticket={ticket}
+            onNotInterested={user ? () => hideItem(id) : undefined}
+          />
+        );
+      })}
     </div>
   );
 }

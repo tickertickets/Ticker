@@ -13,11 +13,12 @@ import {
   ticketsTable,
   followsTable,
   reportsTable,
+  feedSignalsTable,
 } from "@workspace/db/schema";
 import { eq, and, desc, isNull, isNotNull, count, max, asc, sql, inArray, or, ilike } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { sanitize } from "../lib/sanitize";
-import { hotScore, makeFreshBoost, applyDiversityCap, applyDiversitySpread, DIVERSITY_CAP } from "../lib/hot-score";
+import { hotScore, makeFreshBoost, applyDiversityCap, applyDiversitySpread, DIVERSITY_CAP, AFFINITY_FOLLOWED } from "../lib/hot-score";
 import { tmdbFetch } from "../lib/tmdb-client";
 import { awardXp } from "../services/badge.service";
 import { notifyFollowersNewPost, createNotification } from "../services/notify.service";
@@ -318,7 +319,21 @@ router.get("/", async (req, res) => {
         COALESCE((SELECT MAX(started_at) FROM chain_runs WHERE chain_id = ${chainsTable.id}), ${chainsTable.createdAt})
       )`))
       .limit(POOL);
-    const poolChains = rawRows.map(r => r.chain);
+
+    // Exclude chains the user has hidden
+    let hiddenChainIds = new Set<string>();
+    if (currentUserId) {
+      const hiddenRows = await db
+        .select({ itemId: feedSignalsTable.itemId })
+        .from(feedSignalsTable)
+        .where(and(
+          eq(feedSignalsTable.userId, currentUserId),
+          eq(feedSignalsTable.itemType, "chain"),
+          eq(feedSignalsTable.signalType, "hide"),
+        ));
+      hiddenChainIds = new Set(hiddenRows.map(r => r.itemId));
+    }
+    const poolChains = rawRows.map(r => r.chain).filter(c => !hiddenChainIds.has(c.id));
 
     if (poolChains.length > 0) {
       const poolIds = poolChains.map(c => c.id);
@@ -355,7 +370,8 @@ router.get("/", async (req, res) => {
           saves:    saveMap.get(c.id) ?? 0,  // bookmarks  — quality/intent signal
           lastActivityAt,
         });
-        return { chain: c, score: base * freshBoostFn(c.userId, c.createdAt) };
+        const affinity = followedSet.has(c.userId) && c.userId !== currentUserId ? AFFINITY_FOLLOWED : 1.0;
+        return { chain: c, score: base * affinity * freshBoostFn(c.userId, c.createdAt) };
       });
       scored.sort((a, b) => {
         const diff = b.score - a.score;

@@ -8,7 +8,9 @@ import { useKeyboardHeight } from "@/hooks/use-keyboard-height";
 import { useQuery } from "@tanstack/react-query";
 import { useLang } from "@/lib/i18n";
 import { Link, useLocation } from "wouter";
-import { Loader2, Link2, Heart, Share2, X, Trash2, Users, Search, Bookmark, Flag, Send, MessageCircle, Check, CornerDownRight, EyeOff } from "lucide-react";
+import { Loader2, Link2, Heart, Share2, X, Trash2, Users, Search, Bookmark, Flag, Send, MessageCircle, Check, CornerDownRight, EyeOff, Eye } from "lucide-react";
+import { NotInterestedModal } from "./NotInterestedModal";
+import { useHiddenItems } from "@/hooks/use-hidden-items";
 import { useModalBackButton } from "@/hooks/use-modal-back-button";
 import { cn, fmtCount } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
@@ -816,6 +818,7 @@ export function ChainCard({ chain, onNotInterested }: { chain: ChainItem; onNotI
   const { toast } = useToast();
   const [liked, setLiked] = useState(chain.isLiked ?? false);
   const [likeCount, setLikeCount] = useState(chain.likeCount ?? 0);
+  const [notInterestedModalOpen, setNotInterestedModalOpen] = useState(false);
   const [bookmarked, setBookmarked] = useState(chain.isBookmarked ?? false);
   const [commentOpen, setCommentOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
@@ -1006,7 +1009,7 @@ export function ChainCard({ chain, onNotInterested }: { chain: ChainItem; onNotI
             <div className="flex items-center gap-0 ml-auto">
               {onNotInterested && (
                 <button
-                  onClick={e => { e.stopPropagation(); onNotInterested(); }}
+                  onClick={e => { e.stopPropagation(); setNotInterestedModalOpen(true); }}
                   className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
                   title={t.notInterested}
                 >
@@ -1187,6 +1190,11 @@ export function ChainCard({ chain, onNotInterested }: { chain: ChainItem; onNotI
       {shareOpen && (
         <ChainShareModal chain={chain} onClose={() => setShareOpen(false)} />
       )}
+      <NotInterestedModal
+        open={notInterestedModalOpen}
+        onClose={() => setNotInterestedModalOpen(false)}
+        onConfirm={() => onNotInterested?.()}
+      />
     </>
   );
 }
@@ -1200,6 +1208,8 @@ export function ChainCard({ chain, onNotInterested }: { chain: ChainItem; onNotI
 
 export function ChainsSection() {
   const { t } = useLang();
+  const { user } = useAuth();
+  const { hiddenIds, hideChain, restoreItem } = useHiddenItems();
   const { data, isLoading } = useQuery<{ chains: ChainItem[] }>({
     queryKey: ["chains-feed"],
     queryFn: async () => {
@@ -1222,9 +1232,32 @@ export function ChainsSection() {
         <div className="px-4 py-12 text-center text-sm text-muted-foreground">{t.noChainsFeed}</div>
       ) : (
         <div className="flex flex-col">
-          {chains.map(c => (
-            <ChainCard key={c.id} chain={c} />
-          ))}
+          {chains.map(c => {
+            if (hiddenIds.has(c.id)) {
+              return (
+                <div key={c.id} className="flex items-center justify-between px-4 py-3 border-b border-border">
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <EyeOff className="w-3.5 h-3.5" />
+                    <span className="text-xs font-medium">{t.notInterested}</span>
+                  </div>
+                  <button
+                    onClick={() => restoreItem(c.id)}
+                    className="flex items-center gap-1.5 text-xs font-semibold text-foreground px-2.5 py-1 rounded-lg bg-secondary"
+                  >
+                    <Eye className="w-3 h-3" />
+                    <span>{t.notInterestedRestore}</span>
+                  </button>
+                </div>
+              );
+            }
+            return (
+              <ChainCard
+                key={c.id}
+                chain={c}
+                onNotInterested={user ? () => hideChain(c.id) : undefined}
+              />
+            );
+          })}
         </div>
       )}
     </div>
