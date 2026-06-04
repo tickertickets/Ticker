@@ -13,8 +13,15 @@ import {
   commentsTable,
   bookmarksTable,
 } from "@workspace/db/schema";
-import { eq, and, desc, isNull, count, countDistinct, max, inArray, ne, or, sql, lt } from "drizzle-orm";
-import { hotScore, makeFreshBoost, applyDiversitySpread, DIVERSITY_CAP, AFFINITY_FOLLOWED } from "../lib/hot-score";
+import { eq, and, desc, isNull, count, countDistinct, max, inArray, ne, or, sql, lt, gte } from "drizzle-orm";
+import {
+  hotScore,
+  makeFreshBoost,
+  applyDiversitySpread,
+  applyContentTypeInterleave,
+  DIVERSITY_CAP,
+  AFFINITY_FOLLOWED,
+} from "../lib/hot-score";
 import { buildChain } from "./chains";
 import { buildTicketBatch } from "../services/tickets.service";
 
@@ -25,31 +32,78 @@ const router: IRouter = Router();
  *
  * Unified ranked feed mixing Tickets and Chains via a shared hotScore.
  *
- * mode=discover  All public content, scored by hotScore (default)
- * mode=home      Followed users get AFFINITY_FOLLOWED (2×) permanent score boost
- *                on top of freshBoost — ensures their content surfaces even after
- *                the 60-min fresh window (Instagram-style persistent affinity)
+ * ── Modes ────────────────────────────────────────────────────────────────────
+ * mode=discover  All public content, pure hotScore ranking (default)
+ * mode=home      Followed users get AFFINITY_FOLLOWED (2×) + freshBoost on top
+ *                of hotScore — ensures their content surfaces even after the
+ *                60-min fresh window (Instagram-style persistent affinity)
  * mode=following Only posts from followed users + own posts, hotScore ranked
  *
- * Ranking formula (industry-standard):
+ * ── Ranking formula (industry-standard) ─────────────────────────────────────
  *   engagement = log(1+likes)×1 + log(1+saves)×1.5 + log(1+comments)×2 + log(1+runs)×3
  *   score      = (engagement + 1) / (hours_since_last_activity + 2) ^ 1.8
  *
- * Diversity cap: max DIVERSITY_CAP posts per user per page — prevents any
- * single viral user from monopolising the feed (Twitter/Instagram standard).
+ * ── Pagination ───────────────────────────────────────────────────────────────
+ * home / discover  → offset-based cursor ("cursor" query param, encoded integer).
+ *   The full pool is scored, diversity-spread, and content-type-interleaved
+ *   ONCE per request; the cursor slices into that stable ordered list.
+ *   Using a timestamp cursor on a score-ranked feed is fundamentally wrong:
+ *   new posts created after the cursor date would be silently skipped on page 2+.
  *
- * Returns: { items: FeedItem[], hasMore: boolean }
+ * following        → timestamp cursor ("cursor" query param, ISO date string).
+ *   Chronological feeds are sorted by time, so a time cursor is correct here.
+ *
+ * ── Diversity controls ───────────────────────────────────────────────────────
+ * Author diversity  — applyDiversitySpread: cooldown-based, prevents the same
+ *   author from occupying consecutive slots. Hard cap = DIVERSITY_CAP per
+ *   page-equivalent window (Twitter/Instagram standard).
+ * Content-type diversity — applyContentTypeInterleave: prevents > 2 consecutive
+ *   items of the same type (Ticket or Chain) when both types exist (Instagram,
+ *   TikTok standard).
+ *
+ * ── Pool time window ─────────────────────────────────────────────────────────
+ * home / discover fetch content from the last POOL_DAYS days only.
+ * This keeps the ranking pool at a manageable size as the platform grows;
+ * content older than this has decayed to near-zero hotScore anyway.
+ * "following" has no time window — users expect to see all recent posts from
+ * people they follow regardless of age.
+ *
+ * Returns: { items: FeedItem[], hasMore: boolean, nextCursor: string | null }
  * FeedItem = { type: "ticket", ticket: ... } | { type: "chain", chain: ... }
  */
+
+const POOL_DAYS = 60; // ranked feeds only consider posts from the last N days
+
 router.get("/", async (req, res) => {
   const currentUserId = req.session?.userId;
   const limit = Math.min(Number(req.query["limit"]) || 20, 50);
   const mode = (req.query["mode"] as string) || "discover";
-  // Larger pool ensures diversity cap has enough candidates to fill the page
+
+  // Raw DB fetch size: large enough that after diversity filtering we still
+  // have at least `limit` items even in a thin-pool scenario.
   const POOL = limit * 6;
-  // Cursor for pagination: ISO timestamp of the oldest createdAt from the previous page
-  const beforeParam = req.query["before"] as string | undefined;
-  const beforeDate = beforeParam ? new Date(beforeParam) : null;
+
+  // ── Cursor parsing ───────────────────────────────────────────────────────────
+  // home / discover: integer offset (position in the ranked list)
+  // following:       ISO timestamp (posts created before this time)
+  const cursorParam = req.query["cursor"] as string | undefined;
+
+  // Legacy "before" param kept for backwards compat (old clients may still send it)
+  const legacyBefore = req.query["before"] as string | undefined;
+  const rawCursor = cursorParam ?? legacyBefore;
+
+  let rankedOffset = 0;        // for home / discover
+  let followingBefore: Date | null = null; // for following
+
+  if (rawCursor) {
+    if (mode === "following") {
+      const d = new Date(rawCursor);
+      if (!isNaN(d.getTime())) followingBefore = d;
+    } else {
+      const n = parseInt(rawCursor, 10);
+      if (!isNaN(n) && n > 0) rankedOffset = n;
+    }
+  }
 
   // ── Get followed user IDs ────────────────────────────────────────────────────
   let followedIds: string[] = [];
@@ -65,7 +119,7 @@ router.get("/", async (req, res) => {
     ...(currentUserId ? [currentUserId] : []),
   ]);
 
-  // ── Identify private users so their content is excluded from ALL feeds ───────
+  // ── Identify private users so their content is excluded from public feeds ────
   let privateUserIds: Set<string> = new Set();
   {
     const privateRows = await db
@@ -73,15 +127,19 @@ router.get("/", async (req, res) => {
       .from(usersTable)
       .where(eq(usersTable.isPrivate, true));
     for (const r of privateRows) privateUserIds.add(r.id);
-    // Current user is never excluded from their own feed regardless of privacy setting
     if (currentUserId) privateUserIds.delete(currentUserId);
   }
 
   // freshBoost:
-  //   • discover mode → only own posts get the fresh window boost (fair ranking)
-  //   • home / following mode → followed users also get a boost (personal feed)
+  //   • discover → only own posts get the fresh window (fair public ranking)
+  //   • home / following → followed users also get the boost
   const freshBoostFollowedSet = (mode === "home" || mode === "following") ? followedSet : null;
   const freshBoost = makeFreshBoost(freshBoostFollowedSet, currentUserId);
+
+  // ── Pool time window (ranked modes only) ─────────────────────────────────────
+  const poolWindowStart = (mode !== "following")
+    ? new Date(Date.now() - POOL_DAYS * 24 * 60 * 60 * 1000)
+    : null;
 
   // ── Fetch ticket pool ────────────────────────────────────────────────────────
   let ticketPool: (typeof ticketsTable.$inferSelect)[] = [];
@@ -98,29 +156,24 @@ router.get("/", async (req, res) => {
             isNull(ticketsTable.archivedAt),
             or(isNull(ticketsTable.cardTheme), ne(ticketsTable.cardTheme, "reel")),
             inArray(ticketsTable.userId, feedUserIds),
-            beforeDate ? lt(ticketsTable.createdAt, beforeDate) : undefined,
+            // Chronological feed: time cursor is correct here
+            followingBefore ? lt(ticketsTable.createdAt, followingBefore) : undefined,
           ),
         )
-        .orderBy(desc(sql`GREATEST(
-          ${ticketsTable.createdAt},
-          COALESCE((SELECT MAX(created_at) FROM likes WHERE ticket_id = ${ticketsTable.id}), ${ticketsTable.createdAt}),
-          COALESCE((SELECT MAX(created_at) FROM comments WHERE ticket_id = ${ticketsTable.id}), ${ticketsTable.createdAt})
-        )`))
+        .orderBy(desc(ticketsTable.createdAt))
         .limit(POOL);
       ticketPool = raw.filter(
         (t) => t.userId === currentUserId || (!t.isPrivate && (!privateUserIds.has(t.userId) || followedSet.has(t.userId))),
       );
     }
   } else {
-    // discover / home: all public users' non-private, non-reel tickets
-    // home mode ALSO includes non-private tickets from followed private users
+    // discover / home: all public non-private non-reel tickets within the time window
     const publicUserRows = await db
       .select({ id: usersTable.id })
       .from(usersTable)
       .where(eq(usersTable.isPrivate, false));
     const publicUserIds = publicUserRows.map((r) => r.id);
 
-    // In home mode, include tickets from private users we follow + own posts regardless of account privacy
     const includedUserIds = (mode === "home" && currentUserId)
       ? [...new Set([...publicUserIds, ...followedIds, currentUserId])]
       : publicUserIds;
@@ -134,13 +187,13 @@ router.get("/", async (req, res) => {
             isNull(ticketsTable.deletedAt),
             isNull(ticketsTable.archivedAt),
             or(isNull(ticketsTable.cardTheme), ne(ticketsTable.cardTheme, "reel")),
-            // Own posts always included (even if ticket.isPrivate=true); others: public posts only
             or(
               eq(ticketsTable.isPrivate, false),
               currentUserId ? eq(ticketsTable.userId, currentUserId) : undefined,
             ),
             inArray(ticketsTable.userId, includedUserIds),
-            beforeDate ? lt(ticketsTable.createdAt, beforeDate) : undefined,
+            // Ranked feed: time window keeps the pool size bounded, NOT a pagination cursor
+            poolWindowStart ? gte(ticketsTable.createdAt, poolWindowStart) : undefined,
           ),
         )
         .orderBy(desc(sql`GREATEST(
@@ -149,7 +202,6 @@ router.get("/", async (req, res) => {
           COALESCE((SELECT MAX(created_at) FROM comments WHERE ticket_id = ${ticketsTable.id}), ${ticketsTable.createdAt})
         )`))
         .limit(POOL);
-      // Private users' tickets only visible to followers; own posts always visible
       ticketPool = (mode === "home" && currentUserId)
         ? raw.filter(t => t.userId === currentUserId || !privateUserIds.has(t.userId) || followedSet.has(t.userId))
         : raw;
@@ -169,30 +221,22 @@ router.get("/", async (req, res) => {
           and(
             isNull(chainsTable.deletedAt),
             inArray(chainsTable.userId, feedUserIds),
-            beforeDate ? lt(chainsTable.createdAt, beforeDate) : undefined,
+            followingBefore ? lt(chainsTable.createdAt, followingBefore) : undefined,
           ),
         )
-        .orderBy(desc(sql`GREATEST(
-          ${chainsTable.createdAt},
-          COALESCE((SELECT MAX(created_at) FROM chain_likes WHERE chain_id = ${chainsTable.id}), ${chainsTable.createdAt}),
-          COALESCE((SELECT MAX(created_at) FROM chain_comments WHERE chain_id = ${chainsTable.id}), ${chainsTable.createdAt}),
-          COALESCE((SELECT MAX(started_at) FROM chain_runs WHERE chain_id = ${chainsTable.id}), ${chainsTable.createdAt})
-        )`))
+        .orderBy(desc(chainsTable.createdAt))
         .limit(POOL);
       chainPool = raw.filter(
         (c) => c.userId === currentUserId || (!c.isPrivate && (!privateUserIds.has(c.userId) || followedSet.has(c.userId))),
       );
     }
   } else {
-    // discover / home: all public chains from public users
-    // home mode ALSO includes non-private chains from followed private users
     const publicUserRows2 = await db
       .select({ id: usersTable.id })
       .from(usersTable)
       .where(eq(usersTable.isPrivate, false));
     const publicUserIds2 = publicUserRows2.map((r) => r.id);
 
-    // In home mode, include chains from private users we follow + own chains regardless of account privacy
     const includedChainUserIds = (mode === "home" && currentUserId)
       ? [...new Set([...publicUserIds2, ...followedIds, currentUserId])]
       : publicUserIds2;
@@ -203,13 +247,12 @@ router.get("/", async (req, res) => {
         .from(chainsTable)
         .where(and(
           isNull(chainsTable.deletedAt),
-          // Own chains always included; others: public chains only
           or(
             eq(chainsTable.isPrivate, false),
             currentUserId ? eq(chainsTable.userId, currentUserId) : undefined,
           ),
           inArray(chainsTable.userId, includedChainUserIds),
-          beforeDate ? lt(chainsTable.createdAt, beforeDate) : undefined,
+          poolWindowStart ? gte(chainsTable.createdAt, poolWindowStart) : undefined,
         ))
         .orderBy(desc(sql`GREATEST(
           ${chainsTable.createdAt},
@@ -218,25 +261,16 @@ router.get("/", async (req, res) => {
           COALESCE((SELECT MAX(started_at) FROM chain_runs WHERE chain_id = ${chainsTable.id}), ${chainsTable.createdAt})
         )`))
         .limit(POOL);
-      // Private users' chains only visible to followers; own chains always visible
       chainPool = (mode === "home" && currentUserId)
         ? raw.filter(c => c.userId === currentUserId || !privateUserIds.has(c.userId) || followedSet.has(c.userId))
         : raw;
     }
   }
 
-  // ── Bulk score tickets ───────────────────────────────────────────────────────
-  type ScoredTicket = {
-    type: "ticket";
-    data: typeof ticketsTable.$inferSelect;
-    score: number;
-  };
-  type ScoredChain = {
-    type: "chain";
-    data: typeof chainsTable.$inferSelect;
-    score: number;
-  };
-  type ScoredItem = ScoredTicket | ScoredChain;
+  // ── Score tickets ────────────────────────────────────────────────────────────
+  type ScoredTicket = { type: "ticket"; data: typeof ticketsTable.$inferSelect; score: number };
+  type ScoredChain  = { type: "chain";  data: typeof chainsTable.$inferSelect;  score: number };
+  type ScoredItem   = ScoredTicket | ScoredChain;
 
   const scoredItems: ScoredItem[] = [];
 
@@ -244,28 +278,17 @@ router.get("/", async (req, res) => {
     const ids = ticketPool.map((t) => t.id);
     const [likeRows, commentRows, saveRows] = await Promise.all([
       db
-        .select({
-          ticketId: likesTable.ticketId,
-          n: count(),
-          lastAt: max(likesTable.createdAt),
-        })
+        .select({ ticketId: likesTable.ticketId, n: count(), lastAt: max(likesTable.createdAt) })
         .from(likesTable)
         .where(inArray(likesTable.ticketId, ids))
         .groupBy(likesTable.ticketId),
       db
-        .select({
-          ticketId: commentsTable.ticketId,
-          n: count(),
-          lastAt: max(commentsTable.createdAt),
-        })
+        .select({ ticketId: commentsTable.ticketId, n: count(), lastAt: max(commentsTable.createdAt) })
         .from(commentsTable)
         .where(inArray(commentsTable.ticketId, ids))
         .groupBy(commentsTable.ticketId),
       db
-        .select({
-          ticketId: bookmarksTable.ticketId,
-          n: count(),
-        })
+        .select({ ticketId: bookmarksTable.ticketId, n: count() })
         .from(bookmarksTable)
         .where(inArray(bookmarksTable.ticketId, ids))
         .groupBy(bookmarksTable.ticketId),
@@ -275,6 +298,7 @@ router.get("/", async (req, res) => {
     const saveMap    = new Map(saveRows.map((r) => [r.ticketId, Number(r.n)]));
     const likeLastAt = new Map(likeRows.map((r) => [r.ticketId, r.lastAt ? new Date(r.lastAt) : null]));
     const cmtLastAt  = new Map(commentRows.map((r) => [r.ticketId, r.lastAt ? new Date(r.lastAt) : null]));
+
     for (const t of ticketPool) {
       const la = likeLastAt.get(t.id);
       const ca = cmtLastAt.get(t.id);
@@ -287,7 +311,6 @@ router.get("/", async (req, res) => {
         saves:    saveMap.get(t.id) ?? 0,
         lastActivityAt,
       });
-      // home mode: permanently boost followed users' content so it surfaces beyond the 60-min fresh window
       const affinity = (mode === "home" && followedIds.length > 0 && followedSet.has(t.userId) && t.userId !== currentUserId)
         ? AFFINITY_FOLLOWED
         : 1.0;
@@ -295,42 +318,27 @@ router.get("/", async (req, res) => {
     }
   }
 
-  // ── Bulk score chains ────────────────────────────────────────────────────────
+  // ── Score chains ─────────────────────────────────────────────────────────────
   if (chainPool.length > 0) {
     const ids = chainPool.map((c) => c.id);
     const [likeRows, commentRows, runRows, saveRows] = await Promise.all([
       db
-        .select({
-          chainId: chainLikesTable.chainId,
-          n: count(),
-          lastAt: max(chainLikesTable.createdAt),
-        })
+        .select({ chainId: chainLikesTable.chainId, n: count(), lastAt: max(chainLikesTable.createdAt) })
         .from(chainLikesTable)
         .where(inArray(chainLikesTable.chainId, ids))
         .groupBy(chainLikesTable.chainId),
       db
-        .select({
-          chainId: chainCommentsTable.chainId,
-          n: count(),
-          lastAt: max(chainCommentsTable.createdAt),
-        })
+        .select({ chainId: chainCommentsTable.chainId, n: count(), lastAt: max(chainCommentsTable.createdAt) })
         .from(chainCommentsTable)
         .where(inArray(chainCommentsTable.chainId, ids))
         .groupBy(chainCommentsTable.chainId),
       db
-        .select({
-          chainId: chainRunsTable.chainId,
-          n: countDistinct(chainRunsTable.userId), // unique participants, not total runs
-          lastAt: max(chainRunsTable.startedAt),
-        })
+        .select({ chainId: chainRunsTable.chainId, n: countDistinct(chainRunsTable.userId), lastAt: max(chainRunsTable.startedAt) })
         .from(chainRunsTable)
         .where(inArray(chainRunsTable.chainId, ids))
         .groupBy(chainRunsTable.chainId),
       db
-        .select({
-          chainId: chainBookmarksTable.chainId,
-          n: count(),
-        })
+        .select({ chainId: chainBookmarksTable.chainId, n: count() })
         .from(chainBookmarksTable)
         .where(inArray(chainBookmarksTable.chainId, ids))
         .groupBy(chainBookmarksTable.chainId),
@@ -342,13 +350,9 @@ router.get("/", async (req, res) => {
     const likeLastAt = new Map(likeRows.map((r) => [r.chainId, r.lastAt ? new Date(r.lastAt) : null]));
     const cmtLastAt  = new Map(commentRows.map((r) => [r.chainId, r.lastAt ? new Date(r.lastAt) : null]));
     const runLastAt  = new Map(runRows.map((r) => [r.chainId, r.lastAt ? new Date(r.lastAt) : null]));
+
     for (const c of chainPool) {
-      const lastActivityAt = [
-        c.createdAt,
-        likeLastAt.get(c.id),
-        cmtLastAt.get(c.id),
-        runLastAt.get(c.id),
-      ]
+      const lastActivityAt = [c.createdAt, likeLastAt.get(c.id), cmtLastAt.get(c.id), runLastAt.get(c.id)]
         .filter((d): d is Date => d instanceof Date)
         .reduce((a, b) => (a > b ? a : b), c.createdAt);
       const base = hotScore({
@@ -365,34 +369,70 @@ router.get("/", async (req, res) => {
     }
   }
 
-  // ── Merge, sort, apply diversity cap ─────────────────────────────────────────
-  // 1. Sort by hotScore descending; tiebreak by newest content first.
+  // ── Sort by score desc; tiebreak by newest content first ─────────────────────
   scoredItems.sort((a, b) => {
     const diff = b.score - a.score;
     if (Math.abs(diff) > 1e-10) return diff;
     return b.data.createdAt.getTime() - a.data.createdAt.getTime();
   });
 
-  // 2. Apply diversity spread to the unified sorted pool.
-  //    applyDiversitySpread enforces both a minimum gap (minGap = pageSize/cap)
-  //    between posts from the same author AND a per-author hard cap.
-  //    This is the standard used by Instagram, Twitter/X, TikTok, LinkedIn.
+  // ── Apply author diversity spread ─────────────────────────────────────────────
+  // For ranked (home/discover): spread across the FULL pool so that pagination
+  // is consistent — the same author distribution holds regardless of which page
+  // the user is on.  We use a proportional per-user cap so that on any 20-item
+  // window the author cap still approximates DIVERSITY_CAP.
   //
-  //    Small-pool relaxation: lift the cap to show everything when the total
-  //    content is smaller than one full page — cap would only hide content.
-  const effectiveCap = scoredItems.length <= limit ? scoredItems.length : DIVERSITY_CAP;
-  const diversified = applyDiversitySpread(scoredItems, (i) => i.data.userId, effectiveCap, limit + 1);
+  // For following (chronological): spread across a single page-worth of items.
 
-  const hasMore = diversified.length > limit;
-  const page = diversified.slice(0, limit);
+  let diversified: ScoredItem[];
 
-  // ── Build full objects ───────────────────────────────────────────────────────
-  const rawTickets = page
-    .filter((i): i is ScoredTicket => i.type === "ticket")
-    .map((i) => i.data);
-  const rawChains = page
-    .filter((i): i is ScoredChain => i.type === "chain")
-    .map((i) => i.data);
+  if (mode === "following") {
+    // Thin pool: lift the per-user cap so we never hide content from someone
+    // the user deliberately chose to follow.
+    const effectiveCap = scoredItems.length <= limit ? scoredItems.length : DIVERSITY_CAP;
+    diversified = applyDiversitySpread(scoredItems, (i) => i.data.userId, effectiveCap, limit + 1);
+  } else {
+    // Ranked modes: spread across the full pool with a proportional cap so that
+    // in any 20-item slice the effective per-author density ≈ DIVERSITY_CAP.
+    const pagesInPool = Math.max(1, Math.ceil(scoredItems.length / limit));
+    const poolCapPerUser = pagesInPool * DIVERSITY_CAP;
+    const effectiveCap = scoredItems.length <= limit ? scoredItems.length : poolCapPerUser;
+    diversified = applyDiversitySpread(scoredItems, (i) => i.data.userId, effectiveCap, POOL);
+  }
+
+  // ── Apply content-type interleaving ──────────────────────────────────────────
+  // Ensures no more than 2 consecutive Tickets or Chains in the final feed.
+  // Applied after author diversity so score ordering is disturbed as little as
+  // possible. Both constraints together mirror Instagram/TikTok's feed behaviour.
+  const interleaved = applyContentTypeInterleave(diversified, (i) => i.type, 2);
+
+  // ── Paginate ──────────────────────────────────────────────────────────────────
+  // Ranked modes: stable offset into the pre-ranked list.
+  // Following mode: the diversity spread already returned a page-sized slice; no offset.
+  let page: ScoredItem[];
+  let hasMore: boolean;
+  let nextCursor: string | null;
+
+  if (mode === "following") {
+    // interleaved is already page-sized (limit+1 requested from spread)
+    hasMore = interleaved.length > limit;
+    page = interleaved.slice(0, limit);
+    // Time cursor: ISO date of the oldest createdAt on this page
+    nextCursor = (hasMore && page.length > 0)
+      ? page.reduce((oldest, item) =>
+          item.data.createdAt < oldest.data.createdAt ? item : oldest
+        ).data.createdAt.toISOString()
+      : null;
+  } else {
+    // Offset-based: slice into the stable ranked list
+    hasMore = rankedOffset + limit < interleaved.length;
+    page = interleaved.slice(rankedOffset, rankedOffset + limit);
+    nextCursor = hasMore ? String(rankedOffset + limit) : null;
+  }
+
+  // ── Build full response objects ───────────────────────────────────────────────
+  const rawTickets = page.filter((i): i is ScoredTicket => i.type === "ticket").map((i) => i.data);
+  const rawChains  = page.filter((i): i is ScoredChain  => i.type === "chain").map((i) => i.data);
 
   const [builtTickets, builtChains] = await Promise.all([
     rawTickets.length > 0 ? buildTicketBatch(rawTickets, currentUserId) : [],
@@ -413,13 +453,6 @@ router.get("/", async (req, res) => {
       }
     })
     .filter(Boolean);
-
-  // nextCursor = ISO timestamp of the oldest createdAt on this page (used as `before` param for next page)
-  const nextCursor = page.length > 0
-    ? page.reduce((oldest, item) =>
-        item.data.createdAt < oldest.data.createdAt ? item : oldest
-      ).data.createdAt.toISOString()
-    : null;
 
   res.json({ items, hasMore, nextCursor });
 });

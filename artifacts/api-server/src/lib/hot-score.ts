@@ -74,15 +74,12 @@ export function hotScore({
   return (engagement + 1) / Math.pow(ageHours + 2, HOT_GRAVITY);
 }
 
-// ── Diversity cap ─────────────────────────────────────────────────────────────
+// ── Diversity cap (legacy — used by chains route) ────────────────────────────
 //
-// Prevents a single viral user from monopolising the feed.
-// Walk the hotScore-sorted list and skip any user who has already
-// contributed `maxPerUser` posts to the result set.
-//
-// Applied AFTER sorting so the best posts from each user always win;
-// we only limit how many slots one user can occupy per page.
-// (Used by Twitter, Instagram, Reddit — typical value: 2-3 per page.)
+// Simple hard cap: walk the sorted list and skip any user who has already
+// contributed `maxPerUser` posts to the result. Used by chains.ts for its
+// own separate chain-feed endpoint. The unified /api/feed route uses the
+// more sophisticated applyDiversitySpread instead.
 
 export function applyDiversityCap<T>(
   sorted: T[],
@@ -104,39 +101,40 @@ export function applyDiversityCap<T>(
   return result;
 }
 
-// ── Diversity spread — cooldown-based interleaving (industry standard) ────────
+// ── Diversity spread — cooldown-based author interleaving (industry standard) ──
 //
 // At each slot, picks the highest-scoring eligible candidate — i.e. a candidate
 // whose author hasn't appeared in the last `minGap` positions AND hasn't yet
 // hit the per-author hard cap.
 //
-//   minGap = floor(pageSize / maxPerUser)
+//   minGap = max(2, floor(targetSize / maxPerUser))
 //
-// For DIVERSITY_CAP=2 on a 20-item page: minGap = 10.
-// This guarantees the same author's two allowed posts sit at least 10 slots
+// This guarantees the same author's allowed posts sit at least minGap slots
 // apart — a natural spread without any forced alternating pattern.
 //
 // This is the approach used by Instagram, Twitter/X, TikTok, and LinkedIn.
-// It replaces the previous `applyDiversityCap` + `applyInterleaving` pair.
 //
 // Graceful degradation: if the pool has too few distinct authors the cooldown
 // is relaxed (Pass 2) while the hard cap is still enforced, so we never return
 // fewer items than the content allows.
+//
+// targetSize controls how many items to produce (used both for slicing and
+// for computing minGap).
 
 export function applyDiversitySpread<T>(
   sorted: T[],                    // pre-sorted by score desc (highest first)
   getUserId: (item: T) => string,
   maxPerUser: number,
-  pageSize: number,
+  targetSize: number,
 ): T[] {
-  const minGap = Math.max(2, Math.floor(pageSize / maxPerUser));
+  const minGap = Math.max(2, Math.floor(targetSize / maxPerUser));
 
   const result: T[]                  = [];
   const pool    = [...sorted];       // working copy — preserves score order
   const lastPos = new Map<string, number>(); // userId → last placed position
   const placed  = new Map<string, number>(); // userId → total placed count
 
-  while (result.length < pageSize && pool.length > 0) {
+  while (result.length < targetSize && pool.length > 0) {
     const pos = result.length;
     let picked = false;
 
@@ -174,6 +172,69 @@ export function applyDiversitySpread<T>(
     }
 
     if (!picked) break; // all remaining items are over the hard cap
+  }
+
+  return result;
+}
+
+// ── Content-type interleaving ──────────────────────────────────────────────────
+//
+// Prevents long runs of the same content type (e.g. 10 Tickets in a row when
+// Chains exist, or vice versa).  Applied AFTER author diversity spread so that
+// score ordering is disturbed as little as possible.
+//
+// Algorithm: greedy slot-fill with a type cooldown.
+//   • Walk through positions in order.
+//   • At each position, if the current run of one type has reached `maxRun`,
+//     pick the highest-scoring item of the OTHER type from the remaining pool.
+//   • If no other type is available (pool is mono-typed), relax and take the
+//     best available item — we never return fewer items than the content allows.
+//
+// maxRun = 2 mirrors the per-author cap: the same principle (no user or content
+// type dominates consecutive slots) used by Instagram, TikTok, and LinkedIn.
+
+export function applyContentTypeInterleave<T>(
+  items: T[],
+  getType: (item: T) => string,
+  maxRun = 2,
+): T[] {
+  if (items.length === 0) return items;
+
+  const result: T[] = [];
+  const pool = [...items]; // pool is already sorted by score best-first
+  let runType: string | null = null;
+  let runLen = 0;
+
+  while (pool.length > 0) {
+    let pickedIdx = -1;
+
+    if (runLen >= maxRun && runType !== null) {
+      // Must pick a different type to break the run
+      for (let i = 0; i < pool.length; i++) {
+        if (getType(pool[i]!) !== runType) {
+          pickedIdx = i;
+          break;
+        }
+      }
+      // Graceful degradation: if only one type remains, fall through to index 0
+    }
+
+    if (pickedIdx === -1) {
+      pickedIdx = 0; // best available (pool is score-ordered)
+    }
+
+    const item = pool[pickedIdx]!;
+    const type = getType(item);
+
+    if (type === runType) {
+      runLen++;
+    } else {
+      runType = type;
+      runLen = 1;
+    }
+
+    result.push(item);
+    pool.splice(pickedIdx, 1);
   }
 
   return result;

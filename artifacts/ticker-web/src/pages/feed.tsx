@@ -100,7 +100,7 @@ export default function Feed() {
     setLoadingMore(true);
     try {
       const res = await fetch(
-        `/api/feed?mode=${feedMode}&limit=20&before=${encodeURIComponent(nextCursor)}`,
+        `/api/feed?mode=${feedMode}&limit=20&cursor=${encodeURIComponent(nextCursor)}`,
         { credentials: "include" },
       );
       if (!res.ok) return;
