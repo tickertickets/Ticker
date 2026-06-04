@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { albumsTable, albumTicketsTable, albumMoviesTable, usersTable, ticketsTable, followsTable } from "@workspace/db/schema";
-import { eq, and, asc, inArray, isNull } from "drizzle-orm";
+import { eq, and, asc, desc, inArray, isNull, isNotNull } from "drizzle-orm";
 import { sanitize } from "../lib/sanitize";
 import { nanoid } from "nanoid";
 
@@ -32,7 +32,7 @@ router.get("/", async (req, res) => {
   const isOwner = currentUserId === userId;
 
   const albums = await db.select().from(albumsTable)
-    .where(eq(albumsTable.userId, userId))
+    .where(and(eq(albumsTable.userId, userId), isNull(albumsTable.archivedAt)))
     .orderBy(asc(albumsTable.displayOrder), asc(albumsTable.createdAt));
 
   const result = await Promise.all(albums.map(async album => {
@@ -323,6 +323,67 @@ router.delete("/:id/movies/:movieId", async (req, res) => {
   await db.delete(albumMoviesTable)
     .where(and(eq(albumMoviesTable.albumId, id), eq(albumMoviesTable.movieId, movieId)));
   res.json({ ok: true });
+});
+
+// ── GET /albums/archived — list current user's archived albums ────────────────
+router.get("/archived", async (req, res) => {
+  const currentUserId = req.session?.userId;
+  if (!currentUserId) {
+    res.status(401).json({ error: "unauthorized" });
+    return;
+  }
+
+  const albums = await db.select().from(albumsTable)
+    .where(and(eq(albumsTable.userId, currentUserId), isNotNull(albumsTable.archivedAt)))
+    .orderBy(desc(albumsTable.archivedAt));
+
+  const result = await Promise.all(albums.map(async album => {
+    const atRows = await db.select({ ticketId: albumTicketsTable.ticketId })
+      .from(albumTicketsTable)
+      .where(eq(albumTicketsTable.albumId, album.id))
+      .orderBy(asc(albumTicketsTable.addedAt));
+
+    const allTicketIds = atRows.map(r => r.ticketId);
+
+    let posters: (string | null)[] = [];
+    if (allTicketIds.length > 0) {
+      const ticketRows = await db.select({ id: ticketsTable.id, posterUrl: ticketsTable.posterUrl })
+        .from(ticketsTable)
+        .where(and(inArray(ticketsTable.id, allTicketIds.slice(0, 4)), isNull(ticketsTable.deletedAt)));
+      posters = ticketRows.map(t => t.posterUrl);
+    }
+
+    return {
+      id: album.id,
+      title: album.title,
+      archivedAt: album.archivedAt,
+      ticketCount: allTicketIds.length,
+      posters,
+    };
+  }));
+
+  res.json({ albums: result });
+});
+
+// ── PATCH /albums/:id/archive — toggle archive state ─────────────────────────
+router.patch("/:id/archive", async (req, res) => {
+  const currentUserId = req.session?.userId;
+  if (!currentUserId) {
+    res.status(401).json({ error: "unauthorized" });
+    return;
+  }
+
+  const { id } = req.params;
+  const [album] = await db.select().from(albumsTable).where(eq(albumsTable.id, id)).limit(1);
+  if (!album) { res.status(404).json({ error: "not_found" }); return; }
+  if (album.userId !== currentUserId) { res.status(403).json({ error: "forbidden" }); return; }
+
+  const nowArchived = !album.archivedAt;
+  await db.update(albumsTable)
+    .set({ archivedAt: nowArchived ? new Date() : null, updatedAt: new Date() })
+    .where(eq(albumsTable.id, id));
+
+  res.json({ success: true, archived: nowArchived });
 });
 
 export default router;

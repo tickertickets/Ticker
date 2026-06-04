@@ -47,7 +47,7 @@ import {
 } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { sanitize } from "../lib/sanitize";
-import { hotScore, makeFreshBoost, applyDiversityCap, DIVERSITY_CAP, AFFINITY_FOLLOWED } from "../lib/hot-score";
+import { hotScore, makeFreshBoost, applyDiversitySpread, DIVERSITY_CAP, AFFINITY_FOLLOWED } from "../lib/hot-score";
 import { asyncHandler } from "../middlewares/error-handler";
 import {
   UnauthorizedError,
@@ -351,8 +351,8 @@ router.get(
       const merged = [...scoredA, ...scoredB];
       merged.sort((a, b) => b.score - a.score);
       const effectiveCapHome = merged.length <= limit ? merged.length : DIVERSITY_CAP;
-      const capped = applyDiversityCap(merged, (s) => s.t.userId, effectiveCapHome, limit + 1);
-      tickets = capped.map((s) => s.t);
+      const spread = applyDiversitySpread(merged, (s) => s.t.userId, effectiveCapHome, limit + 1);
+      tickets = spread.map((s) => s.t);
 
     } else if (feed === "following" && currentUserId) {
       // ── Following Feed — Only posts from followed users + own posts ─────────
@@ -395,8 +395,8 @@ router.get(
         const scored = await bulkScore(filtered, undefined, freshBoostFn);
         scored.sort((a, b) => b.score - a.score);
         const effectiveCapFollowing = scored.length <= limit ? scored.length : DIVERSITY_CAP;
-        const capped = applyDiversityCap(scored, (s) => s.t.userId, effectiveCapFollowing, limit + 1);
-        tickets = capped.map((s) => s.t);
+        const spread = applyDiversitySpread(scored, (s) => s.t.userId, effectiveCapFollowing, limit + 1);
+        tickets = spread.map((s) => s.t);
       }
 
     } else {
@@ -438,8 +438,8 @@ router.get(
       const scored = await bulkScore(discRaw, undefined, freshBoostFn);
       scored.sort((a, b) => b.score - a.score);
       const effectiveCapDisc = scored.length <= limit ? scored.length : DIVERSITY_CAP;
-      const capped = applyDiversityCap(scored, (s) => s.t.userId, effectiveCapDisc, limit + 1);
-      tickets = capped.map((s) => s.t);
+      const spread = applyDiversitySpread(scored, (s) => s.t.userId, effectiveCapDisc, limit + 1);
+      tickets = spread.map((s) => s.t);
     }
 
     const hasMore = tickets.length > limit;

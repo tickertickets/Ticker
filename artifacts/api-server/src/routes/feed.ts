@@ -14,7 +14,7 @@ import {
   bookmarksTable,
 } from "@workspace/db/schema";
 import { eq, and, desc, isNull, count, countDistinct, max, inArray, ne, or, sql, lt } from "drizzle-orm";
-import { hotScore, makeFreshBoost, applyDiversityCap, applyInterleaving, DIVERSITY_CAP, AFFINITY_FOLLOWED } from "../lib/hot-score";
+import { hotScore, makeFreshBoost, applyDiversitySpread, DIVERSITY_CAP, AFFINITY_FOLLOWED } from "../lib/hot-score";
 import { buildChain } from "./chains";
 import { buildTicketBatch } from "../services/tickets.service";
 
@@ -373,30 +373,15 @@ router.get("/", async (req, res) => {
     return b.data.createdAt.getTime() - a.data.createdAt.getTime();
   });
 
-  // 2. Diversity cap applied SEPARATELY per content type so that a user's
-  //    chains cannot crowd out their own tickets (and vice-versa).
-  //    Each type gets up to effectiveCap posts per user, then both lists are
-  //    merged and re-sorted by hotScore before the final page slice.
+  // 2. Apply diversity spread to the unified sorted pool.
+  //    applyDiversitySpread enforces both a minimum gap (minGap = pageSize/cap)
+  //    between posts from the same author AND a per-author hard cap.
+  //    This is the standard used by Instagram, Twitter/X, TikTok, LinkedIn.
   //
-  //    Small-pool relaxation: when the pool is smaller than one full page
-  //    (i.e. total content < limit), all posts fit on a single page anyway,
-  //    so the diversity cap would only hide content — defeat its purpose.
-  //    In that case, lift the cap to show everything. The hard cap only
-  //    kicks in for large feeds where a single viral user could monopolise.
-  const ticketItems = scoredItems.filter((i): i is ScoredTicket => i.type === "ticket");
-  const chainItems  = scoredItems.filter((i): i is ScoredChain  => i.type === "chain");
-
-  const effectiveTicketCap = ticketItems.length <= limit ? ticketItems.length : DIVERSITY_CAP;
-  const effectiveChainCap  = chainItems.length  <= limit ? chainItems.length  : DIVERSITY_CAP;
-
-  const cappedTickets = applyDiversityCap(ticketItems, (i) => i.data.userId, effectiveTicketCap, ticketItems.length);
-  const cappedChains  = applyDiversityCap(chainItems,  (i) => i.data.userId, effectiveChainCap,  chainItems.length);
-
-  // Re-merge and sort by hotScore descending, then interleave to prevent
-  // consecutive posts from the same user; request limit+1 to detect hasMore
-  const merged = [...cappedTickets, ...cappedChains].sort((a, b) => b.score - a.score);
-  const interleaved = applyInterleaving(merged, (i) => i.data.userId);
-  const diversified = interleaved.slice(0, limit + 1);
+  //    Small-pool relaxation: lift the cap to show everything when the total
+  //    content is smaller than one full page — cap would only hide content.
+  const effectiveCap = scoredItems.length <= limit ? scoredItems.length : DIVERSITY_CAP;
+  const diversified = applyDiversitySpread(scoredItems, (i) => i.data.userId, effectiveCap, limit + 1);
 
   const hasMore = diversified.length > limit;
   const page = diversified.slice(0, limit);

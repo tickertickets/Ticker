@@ -726,6 +726,7 @@ export async function buildTicket(
     clipUrl: ticket.clipUrl,
     episodeLabel: ticket.episodeLabel,
     hideRating: ticket.hideRating,
+    archivedAt: ticket.archivedAt,
     createdAt: ticket.createdAt,
     movieLiveSnapshot,
   };

@@ -104,43 +104,79 @@ export function applyDiversityCap<T>(
   return result;
 }
 
-// ── Interleaving — prevent consecutive posts from the same user ───────────────
+// ── Diversity spread — cooldown-based interleaving (industry standard) ────────
 //
-// After diversity-cap and score-sort, walk the list and ensure no two adjacent
-// items share the same userId.  When a conflict is detected, the algorithm
-// scans ahead to the next item from a different user, swaps it into position,
-// then continues from where it left off.  This is O(n²) in the worst case but
-// feed pages are small (≤50 items) so it's effectively O(n).
+// At each slot, picks the highest-scoring eligible candidate — i.e. a candidate
+// whose author hasn't appeared in the last `minGap` positions AND hasn't yet
+// hit the per-author hard cap.
 //
-// Score order is preserved as closely as possible: we only skip forward when
-// needed (never backward), so the highest-scoring post still leads the feed.
+//   minGap = floor(pageSize / maxPerUser)
+//
+// For DIVERSITY_CAP=2 on a 20-item page: minGap = 10.
+// This guarantees the same author's two allowed posts sit at least 10 slots
+// apart — a natural spread without any forced alternating pattern.
+//
+// This is the approach used by Instagram, Twitter/X, TikTok, and LinkedIn.
+// It replaces the previous `applyDiversityCap` + `applyInterleaving` pair.
+//
+// Graceful degradation: if the pool has too few distinct authors the cooldown
+// is relaxed (Pass 2) while the hard cap is still enforced, so we never return
+// fewer items than the content allows.
 
-export function applyInterleaving<T>(
-  items: T[],
+export function applyDiversitySpread<T>(
+  sorted: T[],                    // pre-sorted by score desc (highest first)
   getUserId: (item: T) => string,
+  maxPerUser: number,
+  pageSize: number,
 ): T[] {
-  if (items.length <= 1) return items;
-  const arr = [...items];
-  for (let i = 1; i < arr.length; i++) {
-    if (getUserId(arr[i]!) === getUserId(arr[i - 1]!)) {
-      // Find the next item from a different user
-      let swapIdx = -1;
-      for (let j = i + 1; j < arr.length; j++) {
-        if (getUserId(arr[j]!) !== getUserId(arr[i - 1]!)) {
-          swapIdx = j;
-          break;
-        }
+  const minGap = Math.max(2, Math.floor(pageSize / maxPerUser));
+
+  const result: T[]                  = [];
+  const pool    = [...sorted];       // working copy — preserves score order
+  const lastPos = new Map<string, number>(); // userId → last placed position
+  const placed  = new Map<string, number>(); // userId → total placed count
+
+  while (result.length < pageSize && pool.length > 0) {
+    const pos = result.length;
+    let picked = false;
+
+    // Pass 1: ideal path — respect both cooldown AND hard cap
+    for (let i = 0; i < pool.length; i++) {
+      const item = pool[i]!;
+      const uid  = getUserId(item);
+      const last = lastPos.get(uid) ?? -Infinity;
+      const n    = placed.get(uid) ?? 0;
+      if (pos - last >= minGap && n < maxPerUser) {
+        result.push(item);
+        pool.splice(i, 1);
+        lastPos.set(uid, pos);
+        placed.set(uid, n + 1);
+        picked = true;
+        break;
       }
-      if (swapIdx !== -1) {
-        // Rotate arr[i..swapIdx] left by one to bring swapIdx to position i
-        const tmp = arr[swapIdx]!;
-        arr.splice(swapIdx, 1);
-        arr.splice(i, 0, tmp);
-      }
-      // If no swap candidate found, leave as-is (all remaining are same user)
     }
+
+    if (picked) continue;
+
+    // Pass 2: relax cooldown — only the hard cap matters (thin pool)
+    for (let i = 0; i < pool.length; i++) {
+      const item = pool[i]!;
+      const uid  = getUserId(item);
+      const n    = placed.get(uid) ?? 0;
+      if (n < maxPerUser) {
+        result.push(item);
+        pool.splice(i, 1);
+        lastPos.set(uid, pos);
+        placed.set(uid, n + 1);
+        picked = true;
+        break;
+      }
+    }
+
+    if (!picked) break; // all remaining items are over the hard cap
   }
-  return arr;
+
+  return result;
 }
 
 // ── Fresh-post boost ──────────────────────────────────────────────────────────

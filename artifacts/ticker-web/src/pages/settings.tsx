@@ -123,9 +123,23 @@ type ArchivedTicket = {
   archivedAt: string;
 };
 
+type ArchivedAlbum = {
+  id: string;
+  title: string;
+  archivedAt: string;
+  ticketCount: number;
+  posters: (string | null)[];
+};
+
 async function fetchArchived(): Promise<{ tickets: ArchivedTicket[] }> {
   const res = await fetch("/api/tickets/archived", { credentials: "include" });
   if (!res.ok) throw new Error("Failed to fetch archive");
+  return res.json();
+}
+
+async function fetchArchivedAlbums(): Promise<{ albums: ArchivedAlbum[] }> {
+  const res = await fetch("/api/albums/archived", { credentials: "include" });
+  if (!res.ok) throw new Error("Failed to fetch archived albums");
   return res.json();
 }
 
@@ -134,6 +148,14 @@ async function unarchiveTicketApi(ticketId: string) {
     method: "PATCH", credentials: "include",
   });
   if (!res.ok) throw new Error("Failed to unarchive");
+  return res.json();
+}
+
+async function unarchiveAlbumApi(albumId: string) {
+  const res = await fetch(`/api/albums/${albumId}/archive`, {
+    method: "PATCH", credentials: "include",
+  });
+  if (!res.ok) throw new Error("Failed to unarchive album");
   return res.json();
 }
 
@@ -1091,9 +1113,23 @@ export default function Settings() {
     enabled: activeSection === "archive",
   });
 
+  const { data: archivedAlbumsData, isLoading: archivedAlbumsLoading } = useQuery({
+    queryKey: ["archived-albums"],
+    queryFn: fetchArchivedAlbums,
+    enabled: activeSection === "archive",
+  });
+
   const unarchiveMutation = useMutation({
     mutationFn: unarchiveTicketApi,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["archived-tickets"] }),
+  });
+
+  const unarchiveAlbumMutation = useMutation({
+    mutationFn: unarchiveAlbumApi,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["archived-albums"] });
+      queryClient.invalidateQueries({ queryKey: ["albums"] });
+    },
   });
 
   const { data: activitiesData, isLoading: activitiesLoading } = useQuery({
@@ -1825,12 +1861,14 @@ export default function Settings() {
           <p className="text-xs text-muted-foreground mb-4 truncate">
             {t.archiveSectionNote}
           </p>
-          {archiveLoading && (
+          {(archiveLoading || archivedAlbumsLoading) && (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
             </div>
           )}
-          {!archiveLoading && (archiveData?.tickets ?? []).length === 0 && (
+          {!archiveLoading && !archivedAlbumsLoading &&
+            (archiveData?.tickets ?? []).length === 0 &&
+            (archivedAlbumsData?.albums ?? []).length === 0 && (
             <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
               <div className="w-16 h-16 rounded-3xl bg-secondary flex items-center justify-center">
                 <Archive className="w-8 h-8 text-muted-foreground" />
@@ -1840,36 +1878,84 @@ export default function Settings() {
             </div>
           )}
           {!archiveLoading && (archiveData?.tickets ?? []).length > 0 && (
-            <div className="space-y-3">
-              {(archiveData?.tickets ?? []).map(ticket => (
-                <div key={ticket.id} className="flex items-center gap-3 bg-secondary rounded-2xl p-3 border border-border">
-                  <div className="relative w-10 h-14 rounded-xl overflow-hidden bg-zinc-900 flex-shrink-0 border border-border">
-                    {ticket.posterUrl ? (
-                      <img src={ticket.posterUrl} alt={ticket.movieTitle} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Film className="w-4 h-4 text-muted-foreground" />
-                      </div>
-                    )}
+            <div className={(archivedAlbumsData?.albums ?? []).length > 0 ? "mb-5" : ""}>
+              <p className="text-xs font-semibold text-muted-foreground tracking-wide mb-2 px-1">Tickets</p>
+              <div className="space-y-3">
+                {(archiveData?.tickets ?? []).map(ticket => (
+                  <div key={ticket.id} className="flex items-center gap-3 bg-secondary rounded-2xl p-3 border border-border">
+                    <div className="relative w-10 h-14 rounded-xl overflow-hidden bg-zinc-900 flex-shrink-0 border border-border">
+                      {ticket.posterUrl ? (
+                        <img src={ticket.posterUrl} alt={ticket.movieTitle} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Film className="w-4 h-4 text-muted-foreground" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-sm text-foreground leading-tight line-clamp-1">
+                        {ticket.movieTitle}
+                      </p>
+                      {ticket.rankTier && (
+                        <p className="text-xs text-muted-foreground mt-0.5 capitalize">{ticket.rankTier}</p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => unarchiveMutation.mutate(ticket.id)}
+                      disabled={unarchiveMutation.isPending}
+                      className="flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-xl bg-secondary border border-border text-foreground text-xs font-semibold hover:bg-secondary/80 transition-colors flex-shrink-0"
+                    >
+                      <ArchiveRestore className="w-3 h-3" />
+                      {t.unarchive}
+                    </button>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-sm text-foreground leading-tight line-clamp-1">
-                      {ticket.movieTitle}
-                    </p>
-                    {ticket.rankTier && (
-                      <p className="text-xs text-muted-foreground mt-0.5 capitalize">{ticket.rankTier}</p>
-                    )}
+                ))}
+              </div>
+            </div>
+          )}
+          {!archivedAlbumsLoading && (archivedAlbumsData?.albums ?? []).length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground tracking-wide mb-2 px-1">Albums</p>
+              <div className="space-y-3">
+                {(archivedAlbumsData?.albums ?? []).map(album => (
+                  <div key={album.id} className="flex items-center gap-3 bg-secondary rounded-2xl p-3 border border-border">
+                    <div className="flex -space-x-2 flex-shrink-0">
+                      {album.posters.slice(0, 2).map((poster, i) => (
+                        <div key={i} className="w-10 h-14 rounded-xl overflow-hidden bg-zinc-900 border border-border" style={{ zIndex: 2 - i }}>
+                          {poster ? (
+                            <img src={poster} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <Film className="w-4 h-4 text-muted-foreground" />
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      {album.posters.length === 0 && (
+                        <div className="w-10 h-14 rounded-xl overflow-hidden bg-zinc-900 border border-border flex items-center justify-center">
+                          <Film className="w-4 h-4 text-muted-foreground" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-sm text-foreground leading-tight line-clamp-1">
+                        {album.title}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {album.ticketCount} ticket{album.ticketCount !== 1 ? "s" : ""}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => unarchiveAlbumMutation.mutate(album.id)}
+                      disabled={unarchiveAlbumMutation.isPending}
+                      className="flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-xl bg-secondary border border-border text-foreground text-xs font-semibold hover:bg-secondary/80 transition-colors flex-shrink-0"
+                    >
+                      <ArchiveRestore className="w-3 h-3" />
+                      {t.unarchive}
+                    </button>
                   </div>
-                  <button
-                    onClick={() => unarchiveMutation.mutate(ticket.id)}
-                    disabled={unarchiveMutation.isPending}
-                    className="flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-xl bg-secondary border border-border text-foreground text-xs font-semibold hover:bg-secondary/80 transition-colors flex-shrink-0"
-                  >
-                    <ArchiveRestore className="w-3 h-3" />
-                    {t.unarchive}
-                  </button>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           )}
         </div>
