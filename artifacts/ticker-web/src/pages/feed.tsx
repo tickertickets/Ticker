@@ -88,27 +88,55 @@ export default function Feed() {
     refetchOnWindowFocus: true,
   });
 
-  // Sync pagination state from first-page feed data
+  // Sync pagination state from first-page feed data + track seen IDs for dedup
   useEffect(() => {
     if (feedData) {
       setNextCursor(feedData.nextCursor ?? null);
       setHasMore(feedData.hasMore);
-      // Reset extra items whenever the base feed refreshes
       setExtraItems([]);
+      feedData.items.forEach((item) => {
+        seenIdsRef.current.add(item.type === "ticket" ? item.ticket.id : item.chain.id);
+      });
     }
   }, [feedData]);
 
-  // Fetch next page (same mode as first page)
+  // "Not interested" — optimistic hide + persist to backend
+  const handleNotInterested = useCallback(async (itemId: string, itemType: "ticket" | "chain") => {
+    seenIdsRef.current.add(itemId);
+    qc.setQueryData<{ items: FeedItem[]; hasMore: boolean; nextCursor: string | null }>(
+      ["mixed-feed", feedMode],
+      (old) => old ? {
+        ...old,
+        items: old.items.filter((item) =>
+          item.type === "ticket" ? item.ticket.id !== itemId : item.chain.id !== itemId
+        ),
+      } : old,
+    );
+    setExtraItems((prev) => prev.filter((item) =>
+      item.type === "ticket" ? item.ticket.id !== itemId : item.chain.id !== itemId
+    ));
+    fetch("/api/feed/signal", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ itemId, itemType, signalType: "hide" }),
+    }).catch(() => {});
+  }, [qc, feedMode]);
+
+  // Fetch next page — passes seen IDs as exclude to prevent server-side duplicates
   const fetchMore = useCallback(async () => {
     if (loadingMore || !hasMore || !nextCursor) return;
     setLoadingMore(true);
     try {
-      const res = await fetch(
-        `/api/feed?mode=${feedMode}&limit=20&cursor=${encodeURIComponent(nextCursor)}`,
-        { credentials: "include" },
-      );
+      const params = new URLSearchParams({ mode: feedMode, limit: "20", cursor: nextCursor });
+      const excludeStr = [...seenIdsRef.current].join(",");
+      if (excludeStr) params.set("exclude", excludeStr);
+      const res = await fetch(`/api/feed?${params}`, { credentials: "include" });
       if (!res.ok) return;
       const data: { items: FeedItem[]; hasMore: boolean; nextCursor: string | null } = await res.json();
+      data.items.forEach((item) => {
+        seenIdsRef.current.add(item.type === "ticket" ? item.ticket.id : item.chain.id);
+      });
       setExtraItems((prev) => [...prev, ...data.items]);
       setNextCursor(data.nextCursor ?? null);
       setHasMore(data.hasMore);
@@ -335,8 +363,20 @@ export default function Feed() {
         {!isEmpty && (
           <div className="flex flex-col">
             {displayItems.map((item) => {
-              if (item.kind === "ticket") return <TicketCard key={item.key} ticket={item.ticket} />;
-              if (item.kind === "chain") return <ChainCard key={item.key} chain={item.chain} />;
+              if (item.kind === "ticket") return (
+                <TicketCard
+                  key={item.key}
+                  ticket={item.ticket}
+                  onNotInterested={user ? () => handleNotInterested(item.ticket.id, "ticket") : undefined}
+                />
+              );
+              if (item.kind === "chain") return (
+                <ChainCard
+                  key={item.key}
+                  chain={item.chain}
+                  onNotInterested={user ? () => handleNotInterested(item.chain.id, "chain") : undefined}
+                />
+              );
               return <UpcomingCard key={item.key} movie={item.movie} />;
             })}
             {/* Infinite scroll sentinel */}
