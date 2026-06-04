@@ -223,9 +223,9 @@ export function UpcomingCard({ movie }: { movie: UpcomingMovie }) {
   };
 
   return (
-    <div className="block bg-background select-none">
+    <div className="mx-4 my-2 rounded-2xl overflow-hidden border border-border bg-background select-none">
       <MovieCarousel movie={movie} />
-      <div className="px-4 pt-4 pb-6">
+      <div className="px-4 pt-4 pb-5">
         <p className="font-display font-bold text-[17px] leading-snug text-foreground mb-1">
           {movie.title}
         </p>

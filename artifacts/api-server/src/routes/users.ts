@@ -379,6 +379,7 @@ router.get("/:username/tickets", async (req, res) => {
   const conditions: Parameters<typeof and>[0][] = [
     eq(ticketsTable.userId, user.id),
     isNull(ticketsTable.deletedAt),
+    isNull(ticketsTable.archivedAt),
   ];
   if (user.id !== currentUserId) {
     conditions.push(eq(ticketsTable.isPrivate, false));

@@ -386,4 +386,35 @@ router.patch("/:id/archive", async (req, res) => {
   res.json({ success: true, archived: nowArchived });
 });
 
+// ── PATCH /albums/reorder — reorder albums by display order ──────────────────
+router.patch("/reorder", async (req, res) => {
+  const currentUserId = req.session?.userId;
+  if (!currentUserId) {
+    res.status(401).json({ error: "unauthorized" });
+    return;
+  }
+
+  const { albumIds } = req.body;
+  if (!Array.isArray(albumIds) || albumIds.length === 0) {
+    res.status(400).json({ error: "albumIds must be a non-empty array" });
+    return;
+  }
+
+  const owned = await db.select({ id: albumsTable.id })
+    .from(albumsTable)
+    .where(and(eq(albumsTable.userId, currentUserId), isNull(albumsTable.archivedAt)));
+  const ownedSet = new Set(owned.map(a => a.id));
+  const validated = (albumIds as string[]).filter(id => ownedSet.has(id));
+
+  await Promise.all(
+    validated.map((id, i) =>
+      db.update(albumsTable)
+        .set({ displayOrder: i, updatedAt: new Date() })
+        .where(and(eq(albumsTable.id, id), eq(albumsTable.userId, currentUserId))),
+    ),
+  );
+
+  res.json({ success: true });
+});
+
 export default router;

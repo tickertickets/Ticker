@@ -29,7 +29,7 @@ import {
   Loader2, Settings, Link2, Users, X, User as UserIcon,
   Camera, MessageCircle, Lock, Unlock, Flag, MoreHorizontal, ChevronLeft, Bookmark, Share2,
   Heart, Send, Pencil, Trash2, Ticket as TicketIcon, AtSign, Check, Search, EyeOff, Eye, Plus, Globe, GripVertical,
-  Bell, BellOff, FolderOpen,
+  Bell, BellOff, FolderOpen, Archive, ArchiveRestore,
 } from "lucide-react";
 import { cn, fmtCount } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
@@ -574,6 +574,60 @@ function AlbumPillBtn({ label, isActive, onClick, onLongPress }: {
     >
       {label}
     </button>
+  );
+}
+
+// ── SortableAlbumPill — draggable album pill for reorder mode ──────────────
+function SortableAlbumPill({ album, isActive, isReorderMode, onClick, onLongPress }: {
+  album: { id: string; title: string };
+  isActive: boolean;
+  isReorderMode: boolean;
+  onClick: () => void;
+  onLongPress?: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: album.id });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    touchAction: isReorderMode ? "none" : "pan-y",
+    zIndex: isDragging ? 10 : undefined,
+  };
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const didLongPress = useRef(false);
+  const startLong = (e: React.PointerEvent) => {
+    if (isReorderMode) return;
+    e.stopPropagation();
+    didLongPress.current = false;
+    timerRef.current = setTimeout(() => { didLongPress.current = true; onLongPress?.(); }, 500);
+  };
+  const cancelLong = () => { if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; } };
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!didLongPress.current && !isReorderMode) onClick();
+    didLongPress.current = false;
+  };
+  return (
+    <div ref={setNodeRef} style={style} className="flex-shrink-0 flex items-center gap-1">
+      {isReorderMode && (
+        <span {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-muted-foreground px-0.5 touch-none">
+          <GripVertical className="w-3.5 h-3.5" />
+        </span>
+      )}
+      <button
+        className={cn(
+          "text-sm font-semibold px-3 py-1.5 rounded-xl transition-colors",
+          isActive ? "bg-foreground text-background" : "bg-secondary text-foreground/60"
+        )}
+        onClick={handleClick}
+        onPointerDown={startLong}
+        onPointerUp={cancelLong}
+        onPointerCancel={cancelLong}
+        onTouchEnd={cancelLong}
+      >
+        {album.title}
+      </button>
+    </div>
   );
 }
 
@@ -1443,6 +1497,27 @@ export default function Profile() {
     } catch { /* ignore */ } finally { setAlbumActionLoading(false); }
   };
 
+  const handleArchiveAlbum = async (albumId: string) => {
+    setAlbumActionLoading(true);
+    try {
+      await fetch(`/api/albums/${albumId}/archive`, { method: "PATCH", credentials: "include" });
+      if (activeAlbumId === albumId) setActiveAlbumId(null);
+      queryClient.invalidateQueries({ queryKey: ["profile-albums", profileUserId] });
+      setAlbumMenu(null);
+    } catch { /* ignore */ } finally { setAlbumActionLoading(false); }
+  };
+
+  const handleAlbumReorder = async (newOrder: string[]) => {
+    try {
+      await fetch("/api/albums/reorder", {
+        method: "PATCH", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ albumIds: newOrder }),
+      });
+      queryClient.invalidateQueries({ queryKey: ["profile-albums", profileUserId] });
+    } catch { /* ignore */ }
+  };
+
   const [followModal, setFollowModal] = useState<null | "followers" | "following">(null);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [messagingError, setMessagingError] = useState("");
@@ -1535,6 +1610,34 @@ export default function Profile() {
     enabled: !!profileUserId,
     staleTime: 30 * 1000,
   });
+
+  const [albumPillOrder, setAlbumPillOrder] = useState<string[]>([]);
+  const [albumIsReorderMode, setAlbumIsReorderMode] = useState(false);
+  useEffect(() => {
+    const ids = (albumsData?.albums ?? []).map((a: any) => a.id as string);
+    setAlbumPillOrder(prev => {
+      const prevSet = new Set(prev);
+      const newSet = new Set(ids);
+      const sameSet = prevSet.size === newSet.size && ids.every((id: string) => prevSet.has(id));
+      return sameSet ? prev : ids;
+    });
+  }, [albumsData]);
+
+  const albumSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { delay: albumIsReorderMode ? 150 : 99999, tolerance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: albumIsReorderMode ? 150 : 99999, tolerance: 5 } }),
+  );
+
+  const handleAlbumPillDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIdx = albumPillOrder.indexOf(String(active.id));
+    const newIdx = albumPillOrder.indexOf(String(over.id));
+    if (oldIdx === -1 || newIdx === -1) return;
+    const newOrder = arrayMove(albumPillOrder, oldIdx, newIdx);
+    setAlbumPillOrder(newOrder);
+    await handleAlbumReorder(newOrder);
+  };
 
   // Cover mosaic shows ONLY the user's pinned tickets (set via long-press →
   // "ปักหมุดบนโปรไฟล์" on their own cards). One image per pin, max 3,
@@ -1931,28 +2034,52 @@ export default function Profile() {
                 : allAlbumTicketIds.size > 0
                   ? tickets.filter((t: Ticket) => !allAlbumTicketIds.has(t.id))
                   : tickets;
+              const orderedAlbums = albumPillOrder
+                .map(id => albums.find((a: any) => a.id === id))
+                .filter(Boolean) as any[];
               return (
                 <>
                   <div className="overflow-x-auto scrollbar-hide px-3 pt-1 pb-2">
-                    <div className="flex items-center justify-center gap-2 min-w-max mx-auto">
-                      {/* Main/หลัก pill */}
-                      <AlbumPillBtn
-                        label={lang === "th" ? "หลัก" : "Main"}
-                        isActive={!activeAlbumId}
-                        onClick={() => setActiveAlbumId(null)}
-                      />
-                      {/* Custom album pills */}
-                      {albums.map((album: any) => (
+                    <div className="flex items-center gap-2 min-w-max mx-auto">
+                      {/* Main/หลัก pill — never reorderable */}
+                      {!albumIsReorderMode && (
                         <AlbumPillBtn
-                          key={album.id}
-                          label={album.title}
-                          isActive={activeAlbumId === album.id}
-                          onClick={() => setActiveAlbumId(album.id)}
-                          onLongPress={isOwn ? () => { setAlbumMenu({ id: album.id, title: album.title }); setAlbumRenaming(false); setAlbumRenameTitle(album.title); } : undefined}
+                          label={lang === "th" ? "หลัก" : "Main"}
+                          isActive={!activeAlbumId}
+                          onClick={() => setActiveAlbumId(null)}
                         />
-                      ))}
+                      )}
+                      {/* Custom album pills with DnD reorder */}
+                      <DndContext sensors={albumSensors} collisionDetection={closestCenter} onDragEnd={handleAlbumPillDragEnd}>
+                        <SortableContext items={orderedAlbums.map((a: any) => a.id)} strategy={rectSortingStrategy}>
+                          <div className="flex items-center gap-2">
+                            {orderedAlbums.map((album: any) => (
+                              <SortableAlbumPill
+                                key={album.id}
+                                album={album}
+                                isActive={activeAlbumId === album.id}
+                                isReorderMode={albumIsReorderMode}
+                                onClick={() => setActiveAlbumId(album.id)}
+                                onLongPress={isOwn ? () => { setAlbumMenu({ id: album.id, title: album.title }); setAlbumRenaming(false); setAlbumRenameTitle(album.title); } : undefined}
+                              />
+                            ))}
+                          </div>
+                        </SortableContext>
+                      </DndContext>
+                      {/* Reorder toggle (owner only, when >1 album) */}
+                      {isOwn && orderedAlbums.length > 1 && (
+                        <button
+                          onClick={() => setAlbumIsReorderMode(prev => !prev)}
+                          className={cn(
+                            "flex-shrink-0 text-[11px] font-semibold px-2.5 py-1.5 rounded-xl transition-colors",
+                            albumIsReorderMode ? "bg-foreground text-background" : "bg-secondary text-muted-foreground"
+                          )}
+                        >
+                          {albumIsReorderMode ? (lang === "th" ? "เสร็จ" : "Done") : (lang === "th" ? "เรียง" : "Reorder")}
+                        </button>
+                      )}
                       {/* + New album (owner only, max 3 custom) */}
-                      {isOwn && albums.length < 3 && (
+                      {isOwn && albums.length < 3 && !albumIsReorderMode && (
                         <button
                           onClick={() => { setNewAlbumTitle(""); setShowCreateAlbum(true); }}
                           className="flex-shrink-0 flex items-center gap-1 text-sm font-semibold px-3 py-1.5 rounded-xl transition-colors bg-secondary text-foreground/60"
@@ -2081,6 +2208,14 @@ export default function Profile() {
                 >
                   <Pencil className="w-4 h-4" />
                   {lang === "th" ? "เปลี่ยนชื่อ" : "Rename"}
+                </button>
+                <button
+                  onClick={() => handleArchiveAlbum(albumMenu.id)}
+                  disabled={albumActionLoading}
+                  className="w-full h-12 rounded-2xl bg-secondary text-foreground text-sm font-semibold flex items-center gap-3 px-4 disabled:opacity-50"
+                >
+                  {albumActionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Archive className="w-4 h-4" />}
+                  {lang === "th" ? "เก็บถาวร" : "Archive"}
                 </button>
                 <button
                   onClick={() => handleDeleteAlbum(albumMenu.id)}
