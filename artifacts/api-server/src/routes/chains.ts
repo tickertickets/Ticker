@@ -17,7 +17,7 @@ import {
 import { eq, and, desc, isNull, isNotNull, count, max, asc, sql, inArray, or, ilike } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { sanitize } from "../lib/sanitize";
-import { hotScore, makeFreshBoost, applyDiversityCap, DIVERSITY_CAP } from "../lib/hot-score";
+import { hotScore, makeFreshBoost, applyDiversityCap, applyDiversitySpread, DIVERSITY_CAP } from "../lib/hot-score";
 import { tmdbFetch } from "../lib/tmdb-client";
 import { awardXp } from "../services/badge.service";
 import { notifyFollowersNewPost, createNotification } from "../services/notify.service";
@@ -363,11 +363,12 @@ router.get("/", async (req, res) => {
         return b.chain.createdAt.getTime() - a.chain.createdAt.getTime();
       });
 
-      // Diversity cap: max DIVERSITY_CAP chains per user per page.
-      // Relaxed for small pools (< 1 full page) so all content is visible.
+      // Diversity spread: cooldown-based author interleaving (same standard as /api/feed).
+      // Prevents any single author from occupying consecutive chain slots.
+      // Relaxed for small pools so all content is visible.
       const effectiveChainCap = scored.length <= limit ? scored.length : DIVERSITY_CAP;
-      const capped = applyDiversityCap(scored, (s) => s.chain.userId, effectiveChainCap, limit + 1);
-      chains = capped.map(s => s.chain);
+      const spread = applyDiversitySpread(scored, (s) => s.chain.userId, effectiveChainCap, limit + 1);
+      chains = spread.map(s => s.chain);
     } else {
       chains = [];
     }
