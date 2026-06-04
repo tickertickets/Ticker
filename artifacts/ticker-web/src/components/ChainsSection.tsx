@@ -8,7 +8,7 @@ import { useKeyboardHeight } from "@/hooks/use-keyboard-height";
 import { useQuery } from "@tanstack/react-query";
 import { useLang } from "@/lib/i18n";
 import { Link, useLocation } from "wouter";
-import { Loader2, Link2, Heart, Share2, X, Trash2, Users, Search, Bookmark, Flag, Send, MessageCircle, Check, CornerDownRight } from "lucide-react";
+import { Loader2, Link2, Heart, Share2, X, Trash2, Users, Search, Bookmark, Flag, Send, MessageCircle, Check, CornerDownRight, EyeOff } from "lucide-react";
 import { useModalBackButton } from "@/hooks/use-modal-back-button";
 import { cn, fmtCount } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
@@ -809,7 +809,7 @@ function ChainReportButton({ chainId, className }: { chainId: string; className?
 
 // ── ChainCard — matches FeedCard layout exactly ─────────────────────────────
 
-export function ChainCard({ chain }: { chain: ChainItem }) {
+export function ChainCard({ chain, onNotInterested }: { chain: ChainItem; onNotInterested?: () => void }) {
   const { t } = useLang();
   const { user } = useAuth();
   const qc = useQueryClient();
@@ -1003,7 +1003,18 @@ export function ChainCard({ chain }: { chain: ChainItem }) {
                 : <Trash2 className="w-3.5 h-3.5" />}
             </button>
           ) : !isVerified(chain.user?.username) ? (
-            <ChainReportButton chainId={chain.id} className="ml-auto" />
+            <div className="flex items-center gap-0 ml-auto">
+              {onNotInterested && (
+                <button
+                  onClick={e => { e.stopPropagation(); onNotInterested(); }}
+                  className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                  title={t.notInterested}
+                >
+                  <EyeOff className="w-3.5 h-3.5" />
+                </button>
+              )}
+              <ChainReportButton chainId={chain.id} />
+            </div>
           ) : null}
         </div>
 

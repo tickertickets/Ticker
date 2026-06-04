@@ -257,6 +257,52 @@ export function applyContentTypeInterleave<T>(
 export const FRESH_WINDOW_MS = 60 * 60 * 1000; // 60 minutes
 export const FRESH_BOOST_MAX = 15;              // 15× at t=0
 
+// ── Genre / Interest-graph affinity ──────────────────────────────────────────
+//
+// Lightweight interest profile built from the genres of content a user has
+// previously engaged with (own tickets × 1, liked tickets × 1, bookmarked × 2).
+// The resulting map is normalised so the most-engaged genre scores 1.0.
+//
+// makeGenreBoost returns a per-item multiplier from 1.0 (no affinity) up to
+// 1.4 (full affinity — GENRE_BOOST_MAX additive ceiling above 1.0).
+//
+// Design principle: genre signal supplements social / engagement signals —
+// it never overrides them. Cap of 1.4× is intentional (Instagram's topic
+// affinity works the same way: reinforce good content in preferred genres,
+// don't bury content from non-preferred ones).
+
+export const GENRE_BOOST_MAX = 0.4; // additive ceiling — max multiplier is 1.4×
+
+/** Build a frequency map from an array of genre strings (may be comma-separated). */
+export function computeGenreAffinity(genres: string[]): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const g of genres) {
+    if (!g) continue;
+    // Genres stored as e.g. "Action, Drama" — split and trim
+    for (const part of g.split(",").map((s) => s.trim()).filter(Boolean)) {
+      map.set(part, (map.get(part) ?? 0) + 1);
+    }
+  }
+  return map;
+}
+
+/** Returns a function that maps a post's genre string → score multiplier (1.0–1.4). */
+export function makeGenreBoost(
+  affinityMap: Map<string, number>,
+): (genre: string | null | undefined) => number {
+  if (affinityMap.size === 0) return () => 1.0;
+  const maxCount = Math.max(...affinityMap.values());
+  if (maxCount === 0) return () => 1.0;
+  return (genre: string | null | undefined): number => {
+    if (!genre) return 1.0;
+    let best = 0;
+    for (const part of genre.split(",").map((s) => s.trim())) {
+      best = Math.max(best, (affinityMap.get(part) ?? 0) / maxCount);
+    }
+    return 1.0 + best * GENRE_BOOST_MAX;
+  };
+}
+
 export function makeFreshBoost(
   followedSet: Set<string> | null,
   currentUserId?: string | null,

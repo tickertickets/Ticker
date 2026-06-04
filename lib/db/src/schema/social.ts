@@ -135,3 +135,25 @@ export const insertCommentSchema = createInsertSchema(commentsTable).omit({
 
 export type InsertComment = z.infer<typeof insertCommentSchema>;
 export type Comment = typeof commentsTable.$inferSelect;
+
+// ── Feed signals — "Not interested / Hide" user actions ───────────────────────
+//
+// Persists per-user item dismissals so they are excluded from future feed
+// requests.  signalType is always "hide" for now; reserved for expansion
+// (e.g. "not_interested" as a softer signal in future).
+//
+// Primary key on (userId, itemId, itemType) — one signal per user per item.
+// itemType: "ticket" | "chain"
+
+export const feedSignalsTable = pgTable("feed_signals", {
+  userId:     text("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+  itemId:     text("item_id").notNull(),
+  itemType:   text("item_type").notNull(),
+  signalType: text("signal_type").notNull().default("hide"),
+  createdAt:  timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  primaryKey({ columns: [table.userId, table.itemId, table.itemType] }),
+  index("feed_signals_user_id_idx").on(table.userId),
+]);
+
+export type FeedSignal = typeof feedSignalsTable.$inferSelect;

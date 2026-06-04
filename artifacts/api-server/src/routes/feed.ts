@@ -12,6 +12,7 @@ import {
   likesTable,
   commentsTable,
   bookmarksTable,
+  feedSignalsTable,
 } from "@workspace/db/schema";
 import { eq, and, desc, isNull, count, countDistinct, max, inArray, ne, or, sql, lt, gte } from "drizzle-orm";
 import {
@@ -21,6 +22,8 @@ import {
   applyContentTypeInterleave,
   DIVERSITY_CAP,
   AFFINITY_FOLLOWED,
+  computeGenreAffinity,
+  makeGenreBoost,
 } from "../lib/hot-score";
 import { buildChain } from "./chains";
 import { buildTicketBatch } from "../services/tickets.service";
@@ -105,6 +108,28 @@ router.get("/", async (req, res) => {
     }
   }
 
+  // ── Client-side seen-ID exclusion ────────────────────────────────────────────
+  // Frontend passes IDs already shown to prevent ranked duplicates on load-more.
+  const excludeParam = req.query["exclude"] as string | undefined;
+  const clientExcludeIds = excludeParam
+    ? new Set(excludeParam.split(",").map((s) => s.trim()).filter(Boolean))
+    : new Set<string>();
+
+  // ── User "Not interested" / hide signals ─────────────────────────────────────
+  // Items the user has dismissed are permanently excluded from their feed.
+  const hiddenTicketIds = new Set<string>();
+  const hiddenChainIds  = new Set<string>();
+  if (currentUserId) {
+    const signals = await db
+      .select({ itemId: feedSignalsTable.itemId, itemType: feedSignalsTable.itemType })
+      .from(feedSignalsTable)
+      .where(eq(feedSignalsTable.userId, currentUserId));
+    for (const s of signals) {
+      if (s.itemType === "ticket") hiddenTicketIds.add(s.itemId);
+      else if (s.itemType === "chain") hiddenChainIds.add(s.itemId);
+    }
+  }
+
   // ── Get followed user IDs ────────────────────────────────────────────────────
   let followedIds: string[] = [];
   if ((mode === "home" || mode === "following") && currentUserId) {
@@ -136,6 +161,34 @@ router.get("/", async (req, res) => {
   const freshBoostFollowedSet = (mode === "home" || mode === "following") ? followedSet : null;
   const freshBoost = makeFreshBoost(freshBoostFollowedSet, currentUserId);
 
+  // ── Genre affinity (home mode — personalised ranking) ────────────────────────
+  // Computes a genre interest profile from the user's own tickets, liked tickets,
+  // and bookmarked tickets.  Applied as a 1.0–1.4× multiplier during ticket
+  // scoring.  Chains don't carry a genre field, so only tickets are boosted.
+  let genreBoostFn: (genre: string | null | undefined) => number = () => 1.0;
+  if (mode === "home" && currentUserId) {
+    const [ownGenreRows, likedGenreRows, savedGenreRows] = await Promise.all([
+      db.select({ genre: ticketsTable.genre }).from(ticketsTable)
+        .where(and(eq(ticketsTable.userId, currentUserId), isNull(ticketsTable.deletedAt)))
+        .limit(300),
+      db.select({ genre: ticketsTable.genre }).from(ticketsTable)
+        .innerJoin(likesTable, eq(likesTable.ticketId, ticketsTable.id))
+        .where(and(eq(likesTable.userId, currentUserId), isNull(ticketsTable.deletedAt)))
+        .limit(300),
+      db.select({ genre: ticketsTable.genre }).from(ticketsTable)
+        .innerJoin(bookmarksTable, eq(bookmarksTable.ticketId, ticketsTable.id))
+        .where(and(eq(bookmarksTable.userId, currentUserId), isNull(ticketsTable.deletedAt)))
+        .limit(150),
+    ]);
+    const allGenres = [
+      ...ownGenreRows.map((r) => r.genre),
+      ...likedGenreRows.map((r) => r.genre),
+      ...savedGenreRows.map((r) => r.genre),
+      ...savedGenreRows.map((r) => r.genre), // bookmarks double-weighted (strong intent signal)
+    ].filter((g): g is string => Boolean(g));
+    genreBoostFn = makeGenreBoost(computeGenreAffinity(allGenres));
+  }
+
   // ── Pool time window (ranked modes only) ─────────────────────────────────────
   const poolWindowStart = (mode !== "following")
     ? new Date(Date.now() - POOL_DAYS * 24 * 60 * 60 * 1000)
@@ -165,6 +218,8 @@ router.get("/", async (req, res) => {
       ticketPool = raw.filter(
         (t) => t.userId === currentUserId || (!t.isPrivate && (!privateUserIds.has(t.userId) || followedSet.has(t.userId))),
       );
+      if (hiddenTicketIds.size > 0 || clientExcludeIds.size > 0)
+        ticketPool = ticketPool.filter((t) => !hiddenTicketIds.has(t.id) && !clientExcludeIds.has(t.id));
     }
   } else {
     // discover / home: all public non-private non-reel tickets within the time window
@@ -205,6 +260,8 @@ router.get("/", async (req, res) => {
       ticketPool = (mode === "home" && currentUserId)
         ? raw.filter(t => t.userId === currentUserId || !privateUserIds.has(t.userId) || followedSet.has(t.userId))
         : raw;
+      if (hiddenTicketIds.size > 0 || clientExcludeIds.size > 0)
+        ticketPool = ticketPool.filter((t) => !hiddenTicketIds.has(t.id) && !clientExcludeIds.has(t.id));
     }
   }
 
@@ -229,6 +286,8 @@ router.get("/", async (req, res) => {
       chainPool = raw.filter(
         (c) => c.userId === currentUserId || (!c.isPrivate && (!privateUserIds.has(c.userId) || followedSet.has(c.userId))),
       );
+      if (hiddenChainIds.size > 0 || clientExcludeIds.size > 0)
+        chainPool = chainPool.filter((c) => !hiddenChainIds.has(c.id) && !clientExcludeIds.has(c.id));
     }
   } else {
     const publicUserRows2 = await db
@@ -264,6 +323,8 @@ router.get("/", async (req, res) => {
       chainPool = (mode === "home" && currentUserId)
         ? raw.filter(c => c.userId === currentUserId || !privateUserIds.has(c.userId) || followedSet.has(c.userId))
         : raw;
+      if (hiddenChainIds.size > 0 || clientExcludeIds.size > 0)
+        chainPool = chainPool.filter((c) => !hiddenChainIds.has(c.id) && !clientExcludeIds.has(c.id));
     }
   }
 
@@ -314,7 +375,7 @@ router.get("/", async (req, res) => {
       const affinity = (mode === "home" && followedIds.length > 0 && followedSet.has(t.userId) && t.userId !== currentUserId)
         ? AFFINITY_FOLLOWED
         : 1.0;
-      scoredItems.push({ type: "ticket", data: t, score: base * affinity * freshBoost(t.userId, t.createdAt) });
+      scoredItems.push({ type: "ticket", data: t, score: base * affinity * freshBoost(t.userId, t.createdAt) * genreBoostFn(t.genre) });
     }
   }
 
@@ -455,6 +516,35 @@ router.get("/", async (req, res) => {
     .filter(Boolean);
 
   res.json({ items, hasMore, nextCursor });
+});
+
+// ── POST /api/feed/signal — "Not interested / hide" signal ───────────────────
+//
+// The dismissed item is persisted in feed_signals and excluded from all future
+// feed requests for that user.  Frontend calls this on every dismissal and
+// also removes the item from the in-memory feed list optimistically.
+
+router.post("/signal", async (req, res) => {
+  const userId = req.session?.userId;
+  if (!userId) { res.status(401).json({ error: "unauthorized" }); return; }
+
+  const { itemId, itemType, signalType = "hide" } =
+    req.body as { itemId?: string; itemType?: string; signalType?: string };
+
+  if (!itemId || !itemType) { res.status(400).json({ error: "missing fields" }); return; }
+  if (!["ticket", "chain"].includes(itemType)) {
+    res.status(400).json({ error: "invalid itemType" }); return;
+  }
+
+  await db
+    .insert(feedSignalsTable)
+    .values({ userId, itemId, itemType, signalType, createdAt: new Date() })
+    .onConflictDoUpdate({
+      target: [feedSignalsTable.userId, feedSignalsTable.itemId, feedSignalsTable.itemType],
+      set: { signalType, createdAt: new Date() },
+    });
+
+  res.json({ ok: true });
 });
 
 export default router;

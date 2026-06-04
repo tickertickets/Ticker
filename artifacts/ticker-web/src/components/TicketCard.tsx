@@ -53,6 +53,7 @@ interface TicketCardProps {
   viewHref?: string;
   noMenu?: boolean;
   onDoubleTap?: () => void;
+  onNotInterested?: () => void;
 }
 
 // ── Sync reaction state across all cached queries ──────────────────
@@ -1339,7 +1340,18 @@ function FeedCard({ ticket, onLongPress }: { ticket: Ticket; onLongPress?: (t: T
               : <Trash2 className={cn("w-3.5 h-3.5", confirmDelete && "text-foreground")} />}
           </button>
         ) : isVerified(ticket.user?.username) ? null : (
-          <ReportButton ticketId={ticket.id} className="ml-auto" />
+          <div className="flex items-center gap-0 ml-auto">
+            {onNotInterested && (
+              <button
+                onClick={e => { e.stopPropagation(); onNotInterested(); }}
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                title={t.notInterested}
+              >
+                <EyeOff className="w-3.5 h-3.5" />
+              </button>
+            )}
+            <ReportButton ticketId={ticket.id} />
+          </div>
         )}
       </div>
 
@@ -2105,7 +2117,7 @@ function CaptionBlock({ text, isLong, alignClass }: { text: string; isLong: bool
 
 
 // ── Main Export ───────────────────────────────────────────────────
-export function TicketCard({ ticket, compact = false, onLongPress, viewHref, noMenu = false }: TicketCardProps) {
+export function TicketCard({ ticket, compact = false, onLongPress, viewHref, noMenu = false, onNotInterested }: TicketCardProps) {
   const [contextTicket, setContextTicket] = useState<Ticket | null>(null);
 
   const handleLongPress = noMenu ? undefined : (t: Ticket) => {

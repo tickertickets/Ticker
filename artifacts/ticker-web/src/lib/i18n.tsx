@@ -248,6 +248,7 @@ export interface Strings {
   hideRatingDesc: string;
   report: string;
   reportReasons: string[];
+  notInterested: string;
   youPrefix: string;
   episodeLabel: string;
   episodeOptional: string;
@@ -912,6 +913,7 @@ const TH: Strings = {
   hideRatingDesc: "ดาวคะแนนจะไม่แสดงบนการ์ด",
   report: "รายงาน",
   reportReasons: ["สแปม", "ไม่เหมาะสม", "การคุกคาม", "สปอยล์โดยไม่เตือน", "อื่นๆ"],
+  notInterested: "ไม่สนใจ",
   youPrefix: "คุณ: ",
   episodeLabel: "เลือกตอน",
   episodeOptional: "เลือกตอน (ไม่บังคับ)",
@@ -1525,6 +1527,7 @@ const EN: Strings = {
   hideRatingLabel: "Hide rating on ticket",
   hideRatingDesc: "Star rating won't appear on the card",
   report: "Report",
+  notInterested: "Not interested",
   reportReasons: ["Spam", "Inappropriate", "Harassment", "Spoiler without warning", "Other"],
   youPrefix: "You: ",
   episodeLabel: "Select Episode",

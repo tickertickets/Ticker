@@ -49,6 +49,9 @@ export default function Feed() {
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
 
+  // Track all item IDs shown this session for deduplication on load-more
+  const seenIdsRef = useRef<Set<string>>(new Set());
+
   const { user } = useAuth();
   useSocketFeedUpdates();
   const unreadCount = useNotificationCount();
@@ -60,6 +63,7 @@ export default function Feed() {
   const doRefresh = () => {
     // Allow the scroll-tracking reset (below) to fire again after this refresh.
     firstLoadDone.current = false;
+    seenIdsRef.current = new Set(); // reset dedup on refresh
     const el = scrollRef.current;
     if (el) el.scrollTo({ top: 0, behavior: "smooth" });
     setHeaderHidden(false);
