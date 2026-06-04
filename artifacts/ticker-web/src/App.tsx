@@ -282,7 +282,7 @@ function AppRoutes() {
     return (
       <Layout>
         <div className="absolute inset-0">
-          <GuestPersistentTabs activeTab={guestActiveTab} subPageOpen={guestSubPageOpen} />
+          <PageErrorBoundary><GuestPersistentTabs activeTab={guestActiveTab} subPageOpen={guestSubPageOpen} /></PageErrorBoundary>
         </div>
 
         {showGuestMovieLayer && (
@@ -335,7 +335,7 @@ function AppRoutes() {
   return (
     <Layout>
       <div className="absolute inset-0">
-        <PersistentTabs activeTab={activeTab} subPageOpen={subPageOpen} />
+        <PageErrorBoundary><PersistentTabs activeTab={activeTab} subPageOpen={subPageOpen} /></PageErrorBoundary>
       </div>
 
       {showMovieLayer && (

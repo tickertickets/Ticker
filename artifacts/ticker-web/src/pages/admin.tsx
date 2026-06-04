@@ -1,7 +1,7 @@
 import { useState, useRef, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, CheckCircle, XCircle, Trash2, ExternalLink, Clock, Megaphone, Popcorn, Settings, QrCode, Upload, Flag, Users, Search } from "lucide-react";
+import { ArrowLeft, CheckCircle, XCircle, Trash2, ExternalLink, Clock, Megaphone, Popcorn, Settings, QrCode, Upload, Flag, Users, Search, Send } from "lucide-react";
 import { Loader2 } from "lucide-react";
 import { navBack } from "@/lib/nav-back";
 import { useAuth } from "@/hooks/use-auth";

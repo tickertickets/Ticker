@@ -1089,7 +1089,7 @@ function CommentModal({ ticket, onClose }: { ticket: Ticket; onClose: () => void
 
 
 // ── Feed card ──────────────────────────────────────────────────────────────────
-function FeedCard({ ticket, onLongPress }: { ticket: Ticket; onLongPress?: (t: Ticket) => void }) {
+function FeedCard({ ticket, onLongPress, onNotInterested }: { ticket: Ticket; onLongPress?: (t: Ticket) => void; onNotInterested?: () => void }) {
   const { t, lang } = useLang();
   const [hasReacted,        setHasReacted]        = useState((ticket as any).hasReacted ?? ticket.isLiked ?? false);
   const [bookmarked,        setBookmarked]        = useState(ticket.isBookmarked || false);
@@ -2129,7 +2129,7 @@ export function TicketCard({ ticket, compact = false, onLongPress, viewHref, noM
     <>
       {compact
         ? <CompactCard ticket={ticket} onLongPress={handleLongPress} viewHref={viewHref} />
-        : <FeedCard ticket={ticket} onLongPress={handleLongPress} />
+        : <FeedCard ticket={ticket} onLongPress={handleLongPress} onNotInterested={onNotInterested} />
       }
       {!noMenu && contextTicket && (
         <CardContextMenu ticket={contextTicket} onClose={() => setContextTicket(null)} />
