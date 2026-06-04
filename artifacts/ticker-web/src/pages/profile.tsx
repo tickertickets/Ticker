@@ -11,9 +11,9 @@ import { createPortal } from "react-dom";
 import { usePageScroll } from "@/hooks/use-page-scroll";
 import { useRoute, Link, useLocation } from "wouter";
 import { DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
-import { SortableContext, rectSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
+import { SortableContext, rectSortingStrategy, horizontalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { restrictToParentElement } from "@dnd-kit/modifiers";
+import { restrictToParentElement, restrictToHorizontalAxis } from "@dnd-kit/modifiers";
 import { navBack } from "@/lib/nav-back";
 import { compressImage, AVATAR_COMPRESS } from "@/lib/image-compress";
 import {
@@ -519,12 +519,13 @@ function SortableTicketItem({ ticket, isReorderMode }: { ticket: Ticket; isReord
           {...listeners}
           style={{
             position: "absolute",
-            top: 4,
-            right: 4,
-            width: 26,
-            height: 26,
-            borderRadius: 6,
-            background: "rgba(0,0,0,0.55)",
+            bottom: 6,
+            left: "50%",
+            transform: "translateX(-50%)",
+            width: 36,
+            height: 20,
+            borderRadius: 8,
+            background: "rgba(0,0,0,0.6)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -1499,12 +1500,20 @@ export default function Profile() {
 
   const handleArchiveAlbum = async (albumId: string) => {
     setAlbumActionLoading(true);
+    if (activeAlbumId === albumId) setActiveAlbumId(null);
+    setAlbumMenu(null);
+    const prevData = queryClient.getQueryData(["profile-albums", profileUserId]);
+    queryClient.setQueryData(["profile-albums", profileUserId], (old: any) => {
+      if (!old) return old;
+      return { ...old, albums: (old.albums ?? []).filter((a: any) => a.id !== albumId) };
+    });
     try {
-      await fetch(`/api/albums/${albumId}/archive`, { method: "PATCH", credentials: "include" });
-      if (activeAlbumId === albumId) setActiveAlbumId(null);
-      queryClient.invalidateQueries({ queryKey: ["profile-albums", profileUserId] });
-      setAlbumMenu(null);
-    } catch { /* ignore */ } finally { setAlbumActionLoading(false); }
+      const res = await fetch(`/api/albums/${albumId}/archive`, { method: "PATCH", credentials: "include" });
+      if (!res.ok) queryClient.setQueryData(["profile-albums", profileUserId], prevData);
+      else queryClient.invalidateQueries({ queryKey: ["profile-albums", profileUserId] });
+    } catch {
+      queryClient.setQueryData(["profile-albums", profileUserId], prevData);
+    } finally { setAlbumActionLoading(false); }
   };
 
   const handleAlbumReorder = async (newOrder: string[]) => {
@@ -2050,8 +2059,8 @@ export default function Profile() {
                         />
                       )}
                       {/* Custom album pills with DnD reorder */}
-                      <DndContext sensors={albumSensors} collisionDetection={closestCenter} onDragEnd={handleAlbumPillDragEnd}>
-                        <SortableContext items={orderedAlbums.map((a: any) => a.id)} strategy={rectSortingStrategy}>
+                      <DndContext sensors={albumSensors} collisionDetection={closestCenter} onDragEnd={handleAlbumPillDragEnd} modifiers={[restrictToHorizontalAxis, restrictToParentElement]}>
+                        <SortableContext items={orderedAlbums.map((a: any) => a.id)} strategy={horizontalListSortingStrategy}>
                           <div className="flex items-center gap-2">
                             {orderedAlbums.map((album: any) => (
                               <SortableAlbumPill

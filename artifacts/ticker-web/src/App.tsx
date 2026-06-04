@@ -234,6 +234,11 @@ function AppRoutes() {
   if (location === "/privacy")       return <PrivacyPage />;
   if (location === "/badge-preview") return <BadgePreview />;
 
+  // /@username → /profile/username — resolve before auth check so deep-links work for guests
+  if (/^\/@[^/]+$/.test(location)) {
+    return <Redirect to={`/profile/${location.slice(2)}`} />;
+  }
+
   if (!user && isAuthenticating) return (
     <Layout>
       <div className="absolute inset-0 bg-background flex items-center justify-center z-50">

@@ -1105,7 +1105,8 @@ function FeedCard({ ticket, onLongPress, onNotInterested }: { ticket: Ticket; on
   const [shareOpen,      setShareOpen]      = useState(false);
   const [storyShareOpen, setStoryShareOpen] = useState(false);
   const [commentOpen,    setCommentOpen]    = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmDelete,          setConfirmDelete]          = useState(false);
+  const [confirmNotInterested,   setConfirmNotInterested]   = useState(false);
   const [flipped,       setFlipped]       = useState(false);
   const [flipSign,      setFlipSign]      = useState<1 | -1>(1);
   const [cardPressing,  setCardPressing]  = useState(false);
@@ -1341,14 +1342,30 @@ function FeedCard({ ticket, onLongPress, onNotInterested }: { ticket: Ticket; on
           </button>
         ) : isVerified(ticket.user?.username) ? null : (
           <div className="flex items-center gap-0 ml-auto">
-            {onNotInterested && (
+            {onNotInterested && !confirmNotInterested && (
               <button
-                onClick={e => { e.stopPropagation(); onNotInterested(); }}
+                onClick={e => { e.stopPropagation(); setConfirmNotInterested(true); }}
                 className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
                 title={t.notInterested}
               >
                 <EyeOff className="w-3.5 h-3.5" />
               </button>
+            )}
+            {onNotInterested && confirmNotInterested && (
+              <div className="flex items-center gap-1 ml-auto" onClick={e => e.stopPropagation()}>
+                <button
+                  onClick={() => setConfirmNotInterested(false)}
+                  className="px-2 py-1 rounded-lg text-[11px] font-semibold text-muted-foreground bg-secondary transition-colors"
+                >
+                  {t.cancelBtn}
+                </button>
+                <button
+                  onClick={() => { setConfirmNotInterested(false); onNotInterested(); }}
+                  className="px-2 py-1 rounded-lg text-[11px] font-semibold text-background bg-foreground transition-colors"
+                >
+                  {t.notInterested ?? "Hide"}
+                </button>
+              </div>
             )}
             <ReportButton ticketId={ticket.id} />
           </div>
@@ -1809,11 +1826,33 @@ export function CardContextMenu({ ticket, onClose }: CardMenuProps) {
 
   const isArchived = !!(ticket as any).archivedAt;
   const handleArchive = async () => {
+    handleClose();
+    const willBeArchived = !isArchived;
+    // Optimistically update profile-tickets: remove when archiving, add back when unarchiving
+    queryClient.setQueriesData(
+      { queryKey: ["profile-tickets"], exact: false },
+      (old: any) => {
+        if (!old?.tickets) return old;
+        if (willBeArchived) {
+          return { ...old, tickets: old.tickets.filter((t: any) => String(t.id) !== String(ticket.id)) };
+        } else {
+          const already = old.tickets.find((t: any) => String(t.id) === String(ticket.id));
+          if (already) return old;
+          return { ...old, tickets: [{ ...ticket, archivedAt: null }, ...old.tickets] };
+        }
+      }
+    );
     try {
       const res = await fetch(`/api/tickets/${ticket.id}/archive`, { method: "PATCH", credentials: "include" });
-      if (res.ok) queryClient.invalidateQueries();
-    } catch {}
-    handleClose();
+      if (res.ok) {
+        queryClient.invalidateQueries({ queryKey: ["profile-tickets"] });
+        queryClient.invalidateQueries({ queryKey: ["profile-albums"] });
+      } else {
+        queryClient.invalidateQueries({ queryKey: ["profile-tickets"] });
+      }
+    } catch {
+      queryClient.invalidateQueries({ queryKey: ["profile-tickets"] });
+    }
   };
 
   const handleMoveToAlbum = async (albumId: string | null) => {

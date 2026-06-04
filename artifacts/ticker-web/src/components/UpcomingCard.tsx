@@ -67,7 +67,13 @@ export function MovieCarousel({ movie }: { movie: UpcomingMovie }) {
     stopAutoSlide();
     if (totalPages <= 1) return;
     intervalRef.current = setInterval(() => {
-      setPage(p => (p + 1) % totalPages);
+      setPage(p => {
+        if (p >= totalPages - 1) {
+          stopAutoSlide();
+          return p;
+        }
+        return p + 1;
+      });
     }, 4000);
   }, [totalPages, stopAutoSlide]);
 
@@ -225,7 +231,7 @@ export function UpcomingCard({ movie }: { movie: UpcomingMovie }) {
   return (
     <div className="mx-4 my-2 rounded-2xl overflow-hidden border border-border bg-background select-none">
       <MovieCarousel movie={movie} />
-      <div className="px-4 pt-4 pb-5">
+      <div className="px-4 pt-4 pb-4">
         <p className="font-display font-bold text-[17px] leading-snug text-foreground mb-1">
           {movie.title}
         </p>
