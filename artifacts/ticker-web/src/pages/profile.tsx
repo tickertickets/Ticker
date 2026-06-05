@@ -610,11 +610,6 @@ function SortableAlbumPill({ album, isActive, isReorderMode, onClick, onLongPres
   };
   return (
     <div ref={setNodeRef} style={style} className="flex-shrink-0 flex items-center gap-1">
-      {isReorderMode && (
-        <span {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-muted-foreground px-0.5 touch-none">
-          <GripVertical className="w-3.5 h-3.5" />
-        </span>
-      )}
       <button
         className={cn(
           "text-sm font-semibold px-3 py-1.5 rounded-xl transition-colors",
@@ -628,6 +623,11 @@ function SortableAlbumPill({ album, isActive, isReorderMode, onClick, onLongPres
       >
         {album.title}
       </button>
+      {isReorderMode && (
+        <span {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-muted-foreground px-0.5 touch-none">
+          <GripVertical className="w-3.5 h-3.5" />
+        </span>
+      )}
     </div>
   );
 }
@@ -2048,7 +2048,7 @@ export default function Profile() {
               return (
                 <>
                   <div className="overflow-x-auto scrollbar-hide px-3 pt-1 pb-2">
-                    <div className="flex items-center gap-2 min-w-max mx-auto">
+                    <div className="flex items-center gap-2 w-max mx-auto">
                       {/* Main/หลัก pill — never reorderable */}
                       {!isReorderMode && (
                         <AlbumPillBtn
@@ -2074,8 +2074,8 @@ export default function Profile() {
                           </div>
                         </SortableContext>
                       </DndContext>
-                      {/* + New album (owner only, max 3 custom) */}
-                      {isOwn && albums.length < 3 && !isReorderMode && (
+                      {/* + New album (owner only, max 9 custom) */}
+                      {isOwn && albums.length < 9 && !isReorderMode && (
                         <button
                           onClick={() => { setNewAlbumTitle(""); setShowCreateAlbum(true); }}
                           className="flex-shrink-0 flex items-center gap-1 text-sm font-semibold px-3 py-1.5 rounded-xl transition-colors bg-secondary text-foreground/60"

@@ -414,6 +414,7 @@ export default function Search() {
   const { t, lang } = useLang();
   const qc = useQueryClient();
   const { user } = useAuth();
+  const [, navigate] = useLocation();
 
   const [query, setQuery]                   = useState("");
   const [debouncedQuery]                    = useDebounceValue(query, 400);
@@ -682,6 +683,7 @@ export default function Search() {
                 </button>
                 <button
                   onClick={() => {
+                    if (!user) { navigate("/login"); return; }
                     setShowVsPicker(true);
                     sessionStorage.setItem("ticker_fab_seen", "1");
                     setFabHighlight(false);

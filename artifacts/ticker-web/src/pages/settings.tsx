@@ -2208,6 +2208,13 @@ export default function Settings() {
                           <button
                             onClick={async () => {
                               await fetch(`/api/feed/signal/${item.itemId}`, { method: "DELETE", credentials: "include" });
+                              try {
+                                const raw = sessionStorage.getItem("ticker_hidden_ids");
+                                const ids: string[] = raw ? JSON.parse(raw) : [];
+                                const filtered = ids.filter(id => id !== String(item.itemId));
+                                sessionStorage.setItem("ticker_hidden_ids", JSON.stringify(filtered));
+                                window.dispatchEvent(new Event("HIDDEN_CHANGED"));
+                              } catch {}
                               refetchHidden();
                             }}
                             className="flex-shrink-0 flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-xl bg-foreground text-background"

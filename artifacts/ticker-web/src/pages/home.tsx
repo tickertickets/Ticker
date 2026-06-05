@@ -8,7 +8,7 @@ import type { ChainItem } from "@/components/ChainsSection";
 import { UpcomingCard, type UpcomingMovie } from "@/components/UpcomingCard";
 import {
   Loader2, Search as SearchIcon, User, Users, X as XIcon,
-  Ticket, Link2, Newspaper, TrendingUp, TrendingDown, EyeOff, Eye,
+  Ticket, Link2, Newspaper, EyeOff, Eye,
 } from "lucide-react";
 import { useHiddenItems } from "@/hooks/use-hidden-items";
 import { Link, useSearch } from "wouter";
@@ -20,64 +20,6 @@ import { cn } from "@/lib/utils";
 import { scrollStore } from "@/lib/scroll-store";
 import { useSocketFeedUpdates } from "@/hooks/use-socket";
 import { useAuth } from "@/hooks/use-auth";
-
-// ── CommunityRatingsStrip — top/bottom Ticker-rated movies ───────────────────
-
-type CommunityMovie = { imdbId: string; title: string; posterUrl: string | null; avgRating: number; ticketCount: number };
-
-function CommunityRatingsStrip() {
-  const { lang } = useLang();
-  const { data, isLoading } = useQuery<{ top: CommunityMovie[]; bottom: CommunityMovie[] }>({
-    queryKey: ["ticker-community-ratings"],
-    queryFn: async () => {
-      const r = await fetch("/api/movies/ticker-community", { credentials: "include" });
-      if (!r.ok) return { top: [], bottom: [] };
-      return r.json();
-    },
-    staleTime: 5 * 60 * 1000,
-  });
-  const top = (data?.top ?? []).slice(0, 5);
-  const bottom = (data?.bottom ?? []).slice(0, 5);
-  if (isLoading || (top.length === 0 && bottom.length === 0)) return null;
-  const MovieChip = ({ movie }: { movie: CommunityMovie }) => (
-    <Link href={`/movie/${encodeURIComponent(movie.imdbId)}`}>
-      <div className="flex-shrink-0 w-[60px] active:opacity-70">
-        <div className="w-full aspect-[2/3] rounded-xl overflow-hidden border border-border bg-secondary">
-          {movie.posterUrl
-            ? <img src={movie.posterUrl} alt={movie.title} className="w-full h-full object-cover" loading="lazy" />
-            : <div className="w-full h-full bg-secondary" />}
-        </div>
-        <p className="text-[9px] font-bold text-center mt-0.5 truncate text-foreground/70">{movie.avgRating.toFixed(1)}</p>
-      </div>
-    </Link>
-  );
-  return (
-    <div className="px-4 pt-3 pb-1 border-b border-border">
-      {top.length > 0 && (
-        <div className="mb-3">
-          <div className="flex items-center gap-1.5 mb-2">
-            <TrendingUp className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
-            <p className="text-xs font-semibold text-muted-foreground">{lang === "th" ? "คะแนนสูงสุดในชุมชน" : "Highest Ticker-Rated"}</p>
-          </div>
-          <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-0.5">
-            {top.map(m => <MovieChip key={m.imdbId} movie={m} />)}
-          </div>
-        </div>
-      )}
-      {bottom.length > 0 && (
-        <div className="mb-1">
-          <div className="flex items-center gap-1.5 mb-2">
-            <TrendingDown className="w-3.5 h-3.5 text-red-400 flex-shrink-0" />
-            <p className="text-xs font-semibold text-muted-foreground">{lang === "th" ? "คะแนนต่ำสุดในชุมชน" : "Lowest Ticker-Rated"}</p>
-          </div>
-          <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-0.5">
-            {bottom.map(m => <MovieChip key={m.imdbId} movie={m} />)}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 function useUpcomingFeed() {
   return useQuery<UpcomingMovie[]>({
@@ -706,12 +648,7 @@ export default function Home() {
         className="absolute inset-0 overflow-y-auto overscroll-y-none"
         style={{ paddingTop: headerH + (isRefreshing ? 44 : 0), display: tab === "tickets" ? "block" : "none" }}
       >
-        {searchQuery ? <SearchTicketsFeed query={searchQuery} /> : (
-          <>
-            <CommunityRatingsStrip />
-            <TicketsFeed />
-          </>
-        )}
+        {searchQuery ? <SearchTicketsFeed query={searchQuery} /> : <TicketsFeed />}
       </div>
 
       {/* ── Chains tab ── */}

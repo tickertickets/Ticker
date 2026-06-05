@@ -319,7 +319,7 @@ export default function Feed() {
                 )}
               </button>
             </Link>
-          ) : <div className="w-9 h-9" />}
+          ) : <div style={{ width: 64 }} />}
         </div>
       </div>
 

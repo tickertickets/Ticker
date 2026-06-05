@@ -1411,7 +1411,7 @@ function FeedCard({ ticket, onLongPress, onNotInterested }: { ticket: Ticket; on
                   WebkitBackfaceVisibility: "hidden",
                   borderRadius: isPoster ? 0 : "0.75rem",
                   background: isPoster ? POSTER_BG : "#111",
-                  boxShadow: specialColorCfg ? specialColorCfg.glow : (isPoster ? "var(--ticket-shadow-poster)" : ratingStyle.glow.boxShadow),
+                  boxShadow: specialColorCfg ? specialColorCfg.glow : (hideRating ? "0 4px 14px rgba(0,0,0,0.5)" : (isPoster ? "var(--ticket-shadow-poster)" : ratingStyle.glow.boxShadow)),
                 }}
               >
                 <div style={{ position: "absolute", top: 0, left: 0, width: CARD_SEED_W, height: CARD_SEED_H, transformOrigin: "top left", transform: `scale(${FEED_SCALE})` }}>
