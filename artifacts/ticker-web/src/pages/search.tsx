@@ -431,13 +431,13 @@ export default function Search() {
   const [fabHighlight, setFabHighlight]           = useState(() => !sessionStorage.getItem("ticker_fab_seen"));
   useEffect(() => {
     if (!fabHighlight) return;
-    // First visit: slide the Roll/VS bar in then back out — no page scroll
-    const tid0 = setTimeout(() => setShowDiceTab(true), 600);
-    const tid1 = setTimeout(() => setShowDiceTab(false), 2200);
+    // First visit: slide the Roll/VS bar in slowly → pause → slide back out
+    const tid0 = setTimeout(() => setShowDiceTab(true), 500);
+    const tid1 = setTimeout(() => setShowDiceTab(false), 3800);
     const tid2 = setTimeout(() => {
       sessionStorage.setItem("ticker_fab_seen", "1");
       setFabHighlight(false);
-    }, 2800);
+    }, 4700);
     return () => { clearTimeout(tid0); clearTimeout(tid1); clearTimeout(tid2); };
   }, [fabHighlight]);
   const diceTabCollapseRef = useRef(false);
@@ -647,18 +647,19 @@ export default function Search() {
         <div
           className="overflow-hidden"
           style={{
-            maxHeight: showDiceTab ? "80px" : "0px",
-            transition: "max-height 500ms cubic-bezier(0.4, 0, 0.2, 1)",
+            maxHeight: showDiceTab ? "72px" : "0px",
+            transition: showDiceTab
+              ? "max-height 850ms cubic-bezier(0.16, 1, 0.3, 1)"
+              : "max-height 600ms cubic-bezier(0.4, 0, 0.2, 1)",
           }}
         >
-          <div>
-            <div
-              className="flex justify-center py-2"
-              style={{
-                opacity: showDiceTab ? 1 : 0,
-                transition: "opacity 400ms ease-in-out",
-              }}
-            >
+          <div
+            className="h-[72px] flex items-center justify-center"
+            style={{
+              opacity: showDiceTab ? 1 : 0,
+              transition: showDiceTab ? "opacity 500ms ease-out 200ms" : "opacity 300ms ease-in",
+            }}
+          >
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => {

@@ -349,7 +349,11 @@ function NewsFeed() {
   if (isLoading) return null;
   return (
     <div className="flex flex-col">
-      {movies.map((m, idx) => <UpcomingCard key={`news-${idx}`} movie={m} />)}
+      {movies.map((m, idx) => (
+        <div key={`news-${idx}`} className="border-b border-border/50">
+          <UpcomingCard movie={m} />
+        </div>
+      ))}
     </div>
   );
 }
