@@ -400,7 +400,11 @@ export default function Feed() {
                   />
                 );
               }
-              return <UpcomingCard key={item.key} movie={item.movie} />;
+              return (
+                <div key={item.key} className="border-b border-border/50">
+                  <UpcomingCard movie={item.movie} />
+                </div>
+              );
             })}
             {/* Infinite scroll sentinel */}
             <div ref={sentinelRef} className="h-12 flex items-center justify-center">

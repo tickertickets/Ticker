@@ -1531,14 +1531,21 @@ export default function Profile() {
   };
 
   const handleAlbumReorder = async (newOrder: string[]) => {
+    queryClient.setQueryData(["profile-albums", profileUserId], (old: any) => {
+      if (!old?.albums) return old;
+      const albumMap = new Map(old.albums.map((a: any) => [a.id, a]));
+      const reordered = newOrder.map(id => albumMap.get(id)).filter(Boolean);
+      return { ...old, albums: reordered };
+    });
     try {
       await fetch("/api/albums/reorder", {
         method: "PATCH", credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ albumIds: newOrder }),
       });
+    } catch {
       queryClient.invalidateQueries({ queryKey: ["profile-albums", profileUserId] });
-    } catch { /* ignore */ }
+    }
   };
 
   const [followModal, setFollowModal] = useState<null | "followers" | "following">(null);
@@ -2073,25 +2080,39 @@ export default function Profile() {
                           onLongPress={isOwn ? () => { setAlbumMenu({ id: "main", title: mainAlbumTitle }); setAlbumRenaming(false); setAlbumRenameTitle(mainAlbumTitle || (lang === "th" ? "หลัก" : "Main")); setAlbumDeleteConfirm(false); } : undefined}
                         />
                       )}
-                      {/* Custom album pills with DnD reorder */}
-                      <DndContext sensors={albumSensors} collisionDetection={closestCenter} onDragEnd={handleAlbumPillDragEnd} modifiers={[restrictToHorizontalAxis, restrictToParentElement]}>
-                        <SortableContext items={orderedAlbums.map((a: any) => a.id)} strategy={horizontalListSortingStrategy}>
-                          <div className="flex items-center gap-2">
-                            {orderedAlbums.map((album: any) => (
-                              <SortableAlbumPill
-                                key={album.id}
-                                album={album}
-                                isActive={activeAlbumId === album.id}
-                                isReorderMode={isReorderMode}
-                                onClick={() => setActiveAlbumId(album.id)}
-                                onLongPress={isOwn ? () => { setAlbumMenu({ id: album.id, title: album.title }); setAlbumRenaming(false); setAlbumRenameTitle(album.title); } : undefined}
-                              />
-                            ))}
-                          </div>
-                        </SortableContext>
-                      </DndContext>
-                      {/* + New album (owner only, max 9 custom) */}
-                      {isOwn && albums.length < 9 && !isReorderMode && (
+                      {/* Custom album pills — DnD only when in reorder mode */}
+                      {isReorderMode ? (
+                        <DndContext sensors={albumSensors} collisionDetection={closestCenter} onDragEnd={handleAlbumPillDragEnd} modifiers={[restrictToHorizontalAxis, restrictToParentElement]}>
+                          <SortableContext items={orderedAlbums.map((a: any) => a.id)} strategy={horizontalListSortingStrategy}>
+                            <div className="flex items-center gap-2">
+                              {orderedAlbums.map((album: any) => (
+                                <SortableAlbumPill
+                                  key={album.id}
+                                  album={album}
+                                  isActive={activeAlbumId === album.id}
+                                  isReorderMode={isReorderMode}
+                                  onClick={() => setActiveAlbumId(album.id)}
+                                  onLongPress={isOwn ? () => { setAlbumMenu({ id: album.id, title: album.title }); setAlbumRenaming(false); setAlbumRenameTitle(album.title); } : undefined}
+                                />
+                              ))}
+                            </div>
+                          </SortableContext>
+                        </DndContext>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          {orderedAlbums.map((album: any) => (
+                            <AlbumPillBtn
+                              key={album.id}
+                              label={album.title}
+                              isActive={activeAlbumId === album.id}
+                              onClick={() => setActiveAlbumId(album.id)}
+                              onLongPress={isOwn ? () => { setAlbumMenu({ id: album.id, title: album.title }); setAlbumRenaming(false); setAlbumRenameTitle(album.title); setAlbumDeleteConfirm(false); } : undefined}
+                            />
+                          ))}
+                        </div>
+                      )}
+                      {/* + New album (owner only, max 4 custom = 5 total with Main) */}
+                      {isOwn && albums.length < 4 && !isReorderMode && (
                         <button
                           onClick={() => { setNewAlbumTitle(""); setShowCreateAlbum(true); }}
                           className="flex-shrink-0 flex items-center gap-1 text-sm font-semibold px-3 py-1.5 rounded-xl transition-colors bg-secondary text-foreground/60"

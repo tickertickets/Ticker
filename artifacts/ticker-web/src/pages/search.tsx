@@ -629,7 +629,7 @@ export default function Search() {
         style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
       >
         {/* Title */}
-        <div className="flex items-center px-4 pt-4 pb-3">
+        <div className="flex items-center px-4 pt-4 pb-2">
           <div className="w-9 h-9" />
           <button
             onClick={() => setShowDiceTab(prev => !prev)}
@@ -699,7 +699,7 @@ export default function Search() {
         </div>
 
         {/* Search bar */}
-        <div className="px-4 pb-3">
+        <div className="pt-2 px-4 pb-3">
           <div className="relative flex items-center">
             <SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none z-10" />
             <input
