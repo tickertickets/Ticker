@@ -209,8 +209,6 @@ const ALL_CATEGORIES = [
   ...getTimedMiddleOrder().map(id => MIDDLE_CAT_MAP[id]),
   { id: "legendary",     label: "LEGENDARY",       icon: Crown       },
   { id: "cult_classic",  label: "CULT CLASSIC",    icon: Skull       },
-  { id: "ticker_top",    label: "Top Picks",       icon: TrendingUp  },
-  { id: "ticker_bottom", label: "Bottom Shelf",    icon: TrendingUp  },
 ];
 
 // Movie grid categories
@@ -219,7 +217,6 @@ const MOVIE_GRID_IDS = new Set([
   "2am_deep_talk", "brain_rot", "main_character", "heartbreak",
   "chaos_red_flags", "anime", "tokusatsu", "disney_dreamworks",
   "k_wave", "midnight_horror", "marvel_dc",
-  "ticker_top", "ticker_bottom",
 ]);
 
 // ── API helpers ──────────────────────────────────────────────────────────────
@@ -231,8 +228,6 @@ function buildFetchFn(categoryId: string, lang: string) {
   if (categoryId === "legendary")     return (p: number) => fetch(`/api/movies/top-rated?page=${p}${langQs}`).then(r => r.json());
   if (categoryId === "cult_classic")  return (p: number) => fetch(`/api/movies/rare-finds?page=${p}${langQs}`).then(r => r.json());
   if (categoryId === "now_playing")   return (p: number) => fetch(`/api/movies/mood/now_playing?page=${p}${langQs}`).then(r => r.json());
-  if (categoryId === "ticker_top")    return (p: number) => fetch(`/api/movies/ticker-community?sort=top&page=${p}${langQs}`).then(r => r.json());
-  if (categoryId === "ticker_bottom") return (p: number) => fetch(`/api/movies/ticker-community?sort=bottom&page=${p}${langQs}`).then(r => r.json());
   return (p: number) => fetch(`/api/movies/mood/${categoryId}?page=${p}${langQs}`).then(r => r.json());
 }
 
@@ -648,20 +643,20 @@ export default function Search() {
         {/* Compact community extremes — highest / lowest Ticker-rated movies */}
         <SearchTickerExtremes />
 
-        {/* Dice slide-out tab — smooth banner reveal using grid-template-rows */}
+        {/* Dice slide-out tab — smooth banner reveal using max-height */}
         <div
+          className="overflow-hidden"
           style={{
-            display: "grid",
-            gridTemplateRows: showDiceTab ? "1fr" : "0fr",
-            transition: "grid-template-rows 650ms cubic-bezier(0.4, 0, 0.2, 1)",
+            maxHeight: showDiceTab ? "80px" : "0px",
+            transition: "max-height 500ms cubic-bezier(0.4, 0, 0.2, 1)",
           }}
         >
-          <div className="overflow-hidden">
+          <div>
             <div
               className="flex justify-center py-2"
               style={{
                 opacity: showDiceTab ? 1 : 0,
-                transition: "opacity 500ms ease-in-out",
+                transition: "opacity 400ms ease-in-out",
               }}
             >
               <div className="flex items-center gap-3">

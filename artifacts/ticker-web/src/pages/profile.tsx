@@ -1454,6 +1454,11 @@ export default function Profile() {
   const [albumRenaming, setAlbumRenaming] = useState(false);
   const [albumRenameTitle, setAlbumRenameTitle] = useState("");
   const [albumActionLoading, setAlbumActionLoading] = useState(false);
+  const [albumDeleteConfirm, setAlbumDeleteConfirm] = useState(false);
+  const [mainAlbumTitle, setMainAlbumTitle] = useState(() => {
+    try { return localStorage.getItem(`main_album_title_${username}`) || ""; }
+    catch { return ""; }
+  });
 
   const handleCreateAlbum = async () => {
     if (!newAlbumTitle.trim() || albumActionLoading) return;
@@ -1478,7 +1483,17 @@ export default function Profile() {
       if (activeAlbumId === albumId) setActiveAlbumId(null);
       queryClient.invalidateQueries({ queryKey: ["profile-albums", profileUserId] });
       setAlbumMenu(null);
+      setAlbumDeleteConfirm(false);
     } catch { /* ignore */ } finally { setAlbumActionLoading(false); }
+  };
+
+  const handleSaveMainAlbumTitle = (title: string) => {
+    const trimmed = title.trim();
+    setMainAlbumTitle(trimmed);
+    try { localStorage.setItem(`main_album_title_${username}`, trimmed); } catch { /* ignore */ }
+    setAlbumMenu(null);
+    setAlbumRenaming(false);
+    setAlbumRenameTitle("");
   };
 
   const handleRenameAlbum = async () => {
@@ -1813,7 +1828,7 @@ export default function Profile() {
             )}
           </div>
           <span className="flex-1 text-center font-display font-bold text-white text-xl tracking-tight">Ticker</span>
-          {/* Right — Bell (other users) or nothing for own profile; share/settings are stacked below */}
+          {/* Right — Bell (logged-in other), Share (own or guest), nothing otherwise */}
           <div className="w-9 h-9 flex items-center justify-end flex-shrink-0">
             {showBell ? (
               <button
@@ -1826,7 +1841,7 @@ export default function Profile() {
                   ? <Bell className="w-6 h-6 text-white" fill="currentColor" />
                   : <Bell className="w-6 h-6 text-white/70" />}
               </button>
-            ) : isOwn ? (
+            ) : (isOwn || !me) ? (
               <button
                 className="w-9 h-9 flex items-center justify-center active:opacity-70"
                 onClick={async () => {
@@ -1846,8 +1861,8 @@ export default function Profile() {
           </div>
         </div>
 
-        {/* Share — absolute, right-aligned just below Bell/top area — only on other users' profiles */}
-        {!isOwn && (
+        {/* Share — absolute, right-aligned just below Bell/top area — only for logged-in users on other profiles */}
+        {!isOwn && !!me && (
           <button
             className="absolute w-9 h-9 flex items-center justify-center right-4 active:opacity-70"
             style={{ top: "calc(env(safe-area-inset-top, 0px) + 16px + 36px + 8px)" }}
@@ -2049,12 +2064,13 @@ export default function Profile() {
                 <>
                   <div className="overflow-x-auto scrollbar-hide px-3 pt-1 pb-2">
                     <div className="flex items-center gap-2 w-max mx-auto">
-                      {/* Main/หลัก pill — never reorderable */}
+                      {/* Main/หลัก pill — never reorderable, long-press to rename */}
                       {!isReorderMode && (
                         <AlbumPillBtn
-                          label={lang === "th" ? "หลัก" : "Main"}
+                          label={mainAlbumTitle || (lang === "th" ? "หลัก" : "Main")}
                           isActive={!activeAlbumId}
                           onClick={() => setActiveAlbumId(null)}
+                          onLongPress={isOwn ? () => { setAlbumMenu({ id: "main", title: mainAlbumTitle }); setAlbumRenaming(false); setAlbumRenameTitle(mainAlbumTitle || (lang === "th" ? "หลัก" : "Main")); setAlbumDeleteConfirm(false); } : undefined}
                         />
                       )}
                       {/* Custom album pills with DnD reorder */}
@@ -2170,16 +2186,20 @@ export default function Profile() {
 
       {/* Album context menu */}
       {albumMenu && createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/50" onClick={() => { setAlbumMenu(null); setAlbumRenaming(false); }}>
+        <div className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/50" onClick={() => { setAlbumMenu(null); setAlbumRenaming(false); setAlbumDeleteConfirm(false); }}>
           <div className="w-full max-w-lg bg-background rounded-t-3xl p-6 pb-safe" onClick={e => e.stopPropagation()}>
-            <h3 className="font-display font-bold text-sm text-muted-foreground mb-4 truncate">{albumMenu.title}</h3>
+            <h3 className="font-display font-bold text-sm text-muted-foreground mb-4 truncate">{albumMenu.title || (lang === "th" ? "หลัก" : "Main")}</h3>
             {albumRenaming ? (
               <>
                 <input
                   autoFocus
                   value={albumRenameTitle}
                   onChange={e => setAlbumRenameTitle(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && handleRenameAlbum()}
+                  onKeyDown={e => {
+                    if (e.key !== "Enter") return;
+                    if (albumMenu.id === "main") handleSaveMainAlbumTitle(albumRenameTitle);
+                    else handleRenameAlbum();
+                  }}
                   maxLength={40}
                   className="w-full px-4 py-3 rounded-2xl border border-border bg-secondary text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-foreground/20 mb-4"
                 />
@@ -2188,7 +2208,10 @@ export default function Profile() {
                     {lang === "th" ? "ยกเลิก" : "Cancel"}
                   </button>
                   <button
-                    onClick={handleRenameAlbum}
+                    onClick={() => {
+                      if (albumMenu.id === "main") handleSaveMainAlbumTitle(albumRenameTitle);
+                      else handleRenameAlbum();
+                    }}
                     disabled={!albumRenameTitle.trim() || albumActionLoading}
                     className="flex-1 h-11 rounded-2xl bg-foreground text-background text-sm font-bold disabled:opacity-50"
                   >
@@ -2196,33 +2219,57 @@ export default function Profile() {
                   </button>
                 </div>
               </>
+            ) : albumDeleteConfirm ? (
+              <>
+                <p className="text-sm text-muted-foreground mb-6">
+                  {lang === "th"
+                    ? `ลบอัลบั้ม "${albumMenu.title}" ถาวร? ตั๋วในอัลบั้มนี้จะยังอยู่ใน Tickets หลัก`
+                    : `Permanently delete "${albumMenu.title}"? Tickets inside will remain in your main list.`}
+                </p>
+                <div className="flex gap-2">
+                  <button onClick={() => setAlbumDeleteConfirm(false)} className="flex-1 h-11 rounded-2xl border border-border text-sm font-bold text-foreground">
+                    {lang === "th" ? "ยกเลิก" : "Cancel"}
+                  </button>
+                  <button
+                    onClick={() => handleDeleteAlbum(albumMenu.id)}
+                    disabled={albumActionLoading}
+                    className="flex-1 h-11 rounded-2xl bg-red-500 text-white text-sm font-bold disabled:opacity-50"
+                  >
+                    {albumActionLoading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : (lang === "th" ? "ลบเลย" : "Delete")}
+                  </button>
+                </div>
+              </>
             ) : (
               <div className="space-y-2">
                 <button
-                  onClick={() => setAlbumRenaming(true)}
+                  onClick={() => { setAlbumRenaming(true); setAlbumRenameTitle(albumMenu.id === "main" ? (mainAlbumTitle || (lang === "th" ? "หลัก" : "Main")) : albumMenu.title); }}
                   className="w-full h-12 rounded-2xl bg-secondary text-foreground text-sm font-semibold flex items-center gap-3 px-4"
                 >
                   <Pencil className="w-4 h-4" />
                   {lang === "th" ? "เปลี่ยนชื่อ" : "Rename"}
                 </button>
+                {albumMenu.id !== "main" && (
+                  <>
+                    <button
+                      onClick={() => handleArchiveAlbum(albumMenu.id)}
+                      disabled={albumActionLoading}
+                      className="w-full h-12 rounded-2xl bg-secondary text-foreground text-sm font-semibold flex items-center gap-3 px-4 disabled:opacity-50"
+                    >
+                      {albumActionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Archive className="w-4 h-4" />}
+                      {lang === "th" ? "เก็บถาวร" : "Archive"}
+                    </button>
+                    <button
+                      onClick={() => setAlbumDeleteConfirm(true)}
+                      disabled={albumActionLoading}
+                      className="w-full h-12 rounded-2xl bg-red-500/10 text-red-500 text-sm font-semibold flex items-center gap-3 px-4 disabled:opacity-50"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      {lang === "th" ? "ลบอัลบั้ม" : "Delete album"}
+                    </button>
+                  </>
+                )}
                 <button
-                  onClick={() => handleArchiveAlbum(albumMenu.id)}
-                  disabled={albumActionLoading}
-                  className="w-full h-12 rounded-2xl bg-secondary text-foreground text-sm font-semibold flex items-center gap-3 px-4 disabled:opacity-50"
-                >
-                  {albumActionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Archive className="w-4 h-4" />}
-                  {lang === "th" ? "เก็บถาวร" : "Archive"}
-                </button>
-                <button
-                  onClick={() => handleDeleteAlbum(albumMenu.id)}
-                  disabled={albumActionLoading}
-                  className="w-full h-12 rounded-2xl bg-red-500/10 text-red-500 text-sm font-semibold flex items-center gap-3 px-4 disabled:opacity-50"
-                >
-                  {albumActionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                  {lang === "th" ? "ลบอัลบั้ม" : "Delete album"}
-                </button>
-                <button
-                  onClick={() => setAlbumMenu(null)}
+                  onClick={() => { setAlbumMenu(null); setAlbumDeleteConfirm(false); }}
                   className="w-full h-11 rounded-2xl border border-border text-sm font-bold text-muted-foreground mt-1"
                 >
                   {lang === "th" ? "ยกเลิก" : "Cancel"}

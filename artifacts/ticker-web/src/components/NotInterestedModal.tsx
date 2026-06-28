@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useLang } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
@@ -11,25 +12,28 @@ interface NotInterestedModalProps {
 export function NotInterestedModal({ open, onClose, onConfirm }: NotInterestedModalProps) {
   const { t } = useLang();
   const [visible, setVisible] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     if (open) {
+      setMounted(true);
       const id = requestAnimationFrame(() => setVisible(true));
       return () => cancelAnimationFrame(id);
     } else {
       setVisible(false);
-      return undefined;
+      const tid = setTimeout(() => setMounted(false), 350);
+      return () => clearTimeout(tid);
     }
   }, [open]);
 
-  if (!open) return null;
+  if (!mounted) return null;
 
   const handleConfirm = () => {
     onConfirm();
     onClose();
   };
 
-  return (
+  return createPortal(
     <div
       className={cn(
         "fixed inset-0 z-[80] flex items-end",
@@ -66,6 +70,7 @@ export function NotInterestedModal({ open, onClose, onConfirm }: NotInterestedMo
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

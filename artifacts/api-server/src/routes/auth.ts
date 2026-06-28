@@ -194,6 +194,9 @@ router.post("/signup", signupIpLimiter, signupDeviceLimiter, signupEmailLimiter,
     });
 
     req.session.userId = userId;
+    await new Promise<void>((resolve, reject) =>
+      req.session.save((err) => (err ? reject(err) : resolve()))
+    );
     res.status(201).json({ success: true });
   } catch (err) {
     req.log.error({ err }, "Signup failed");
