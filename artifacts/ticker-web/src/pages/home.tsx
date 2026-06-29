@@ -348,11 +348,9 @@ function NewsFeed() {
   const movies = upcomingMovies ?? [];
   if (isLoading) return null;
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col pt-3">
       {movies.map((m, idx) => (
-        <div key={`news-${idx}`} className="border-b border-border/50">
-          <UpcomingCard movie={m} />
-        </div>
+        <UpcomingCard key={`news-${idx}`} movie={m} />
       ))}
     </div>
   );

@@ -1538,11 +1538,12 @@ export default function Profile() {
       return { ...old, albums: reordered };
     });
     try {
-      await fetch("/api/albums/reorder", {
+      const res = await fetch("/api/albums/reorder", {
         method: "PATCH", credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ albumIds: newOrder }),
       });
+      if (!res.ok) throw new Error("reorder failed");
     } catch {
       queryClient.invalidateQueries({ queryKey: ["profile-albums", profileUserId] });
     }
@@ -1608,8 +1609,7 @@ export default function Profile() {
 
   const { data: profileData, isLoading: profileLoading } = useGetUserProfile(username, {
     query: {
-      staleTime: 0,
-      refetchOnMount: true,
+      staleTime: 30_000,
       refetchInterval: 30_000,
     } as any,
   });
