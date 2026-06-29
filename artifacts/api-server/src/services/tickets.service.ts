@@ -427,6 +427,7 @@ export async function buildTicketBatch(
       hideLocation: ticket.hideLocation,
       hideLikes: ticket.hideLikes,
       hideComments: ticket.hideComments,
+      hideRating: ticket.hideRating,
       rating: ticket.rating ? Number(ticket.rating) : null,
       ratingType: ticket.ratingType,
       rankTier: ticket.rankTier,
