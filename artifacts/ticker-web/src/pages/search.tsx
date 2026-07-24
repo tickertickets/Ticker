@@ -1,0 +1,1030 @@
+/**
+ * search.tsx — หน้าค้นหา + หมวดหมู่ภาพยนตร์
+ *
+ * Scroll strategy: CSS display toggle per category
+ * - แต่ละหมวด (trending, now_playing, ...) มี scrollable div ของตัวเอง
+ * - ซ่อน/แสดงด้วย style.display — ไม่ unmount
+ * - browser เก็บ native scrollTop เองอัตโนมัติ — ไม่มี scroll bug ระหว่างหมวด
+ * - lazy mount: เรนเดอร์เฉพาะหมวดที่เคยเข้าชมแล้วเท่านั้น
+ */
+import { useState, useRef, useEffect, useCallback, memo } from "react";
+import { useHorizWheel } from "@/hooks/use-horiz-wheel";
+import { PosterImage } from "@/components/PosterImage";
+import { scrollStore } from "@/lib/scroll-store";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useSearchMovies } from "@workspace/api-client-react";
+import { useDebounceValue } from "usehooks-ts";
+import { useAuth } from "@/hooks/use-auth";
+import {
+  Film, Loader2, Search as SearchIcon, TrendingUp, Crown, Skull,
+  Moon, Smile, Zap, AlertCircle, Clapperboard, X as XIcon,
+  Sparkles, Globe, Wand2, Ghost, Sword, HeartCrack, Shield,
+  Dice5, Swords, TrendingDown, Link2,
+  type LucideIcon,
+} from "lucide-react";
+import { Link, useLocation } from "wouter";
+import { RandomMoviePicker } from "@/components/RandomMoviePicker";
+import { MovieVsPicker } from "@/components/MovieVsPicker";
+import { cn } from "@/lib/utils";
+import {
+  computeCardTier, computeEffectTags, TIER_VISUAL, type ScoreInput,
+} from "@/lib/ranks";
+import { useLang, displayYear } from "@/lib/i18n";
+import { MovieBadges } from "@/components/MovieBadges";
+import { useEnsureMovieCores } from "@/lib/use-movie-cores";
+import { useQueryClient } from "@tanstack/react-query";
+
+// ── Types ──────────────────────────────────────────────────────────────────
+
+type TrendingMovie = {
+  imdbId: string;
+  title: string;
+  year: string | null;
+  releaseDate?: string | null;
+  posterUrl: string | null;
+  tmdbRating?: string | null;
+  voteCount?: number;
+  genreIds?: number[];
+  popularity?: number;
+  franchiseIds?: number[];
+};
+
+type SearchMovieItem = TrendingMovie & { type?: string };
+type PagedMovies = { movies: TrendingMovie[]; page: number; totalPages: number; totalResults: number };
+
+// ── Rank visual ─────────────────────────────────────────────────────────────
+
+function getRankVisual(movie: TrendingMovie, detail?: any | null) {
+  const useDetail = detail != null;
+  const rating     = useDetail ? parseFloat(detail.tmdbRating ?? detail.imdbRating ?? "0") : parseFloat(movie.tmdbRating ?? "0");
+  const voteCount  = useDetail ? (detail.voteCount  ?? 0) : (movie.voteCount  ?? 0);
+  const genreIds   = useDetail ? (detail.genreIds   ?? []) : (movie.genreIds   ?? []);
+  const popularity = useDetail ? (detail.popularity ?? 0) : (movie.popularity ?? 0);
+  const year       = movie.year ? parseInt(movie.year) : undefined;
+  const releaseDate = useDetail ? (detail.releaseDate ?? movie.releaseDate ?? null) : (movie.releaseDate ?? null);
+  const franchiseIds = useDetail ? (detail.franchiseIds ?? []) : (movie.franchiseIds ?? []);
+  const input: ScoreInput = { tmdbRating: rating, voteCount, genreIds, popularity, year, releaseDate, franchiseIds };
+  const tier    = computeCardTier(input);
+  const visual  = TIER_VISUAL[tier];
+  const effects = computeEffectTags(input, tier);
+  return { tier, visual, effects };
+}
+
+// ── MovieCard ────────────────────────────────────────────────────────────────
+
+const MovieCard = memo(function MovieCard({ movie, grid, srclang, eager }: { movie: TrendingMovie; grid?: boolean; srclang?: string; eager?: boolean }) {
+  const { lang } = useLang();
+  const { data: cachedDetail } = useQuery<any>({
+    queryKey: ["/api/movies", movie.imdbId],
+    queryFn: () => fetch(`/api/movies/${encodeURIComponent(movie.imdbId)}`, { credentials: "include" }).then(r => r.json()),
+    enabled: false,
+    staleTime: Infinity,
+  });
+  const { effects, tier } = getRankVisual(movie, cachedDetail ?? null);
+  const movieHref = srclang
+    ? `/movie/${encodeURIComponent(movie.imdbId)}?srclang=${encodeURIComponent(srclang)}`
+    : `/movie/${encodeURIComponent(movie.imdbId)}`;
+  return (
+    <Link href={movieHref} className={grid ? "w-full" : "flex-shrink-0"} onClick={() => { sessionStorage.setItem("search_from_movie", "1"); scrollStore.delete(`movie-${movie.imdbId}`); }}>
+      <div
+        className="relative rounded-xl overflow-hidden bg-zinc-900 border border-border shimmer-no-border"
+        style={{
+          ...(grid ? { aspectRatio: "2/3", width: "100%" } : { width: 100, aspectRatio: "2/3" }),
+          contentVisibility: "auto",
+          containIntrinsicSize: "100px 150px",
+        }}
+      >
+        <PosterImage src={movie.posterUrl} alt={movie.title} eager={eager} fallbackIcon={<Film className="w-5 h-5 text-zinc-500" />} />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/80" />
+        <div className="absolute" style={{ top: 6, right: 6 }}>
+          <MovieBadges tier={tier} effects={effects} size="xs" layout="col" />
+        </div>
+        <div className="absolute inset-x-0 bottom-0 p-1.5">
+          <p className="text-white text-[9px] font-bold line-clamp-2 leading-tight">{movie.title}</p>
+          {movie.year && <p className="text-white/60 text-[8px]">{displayYear(movie.year, lang)}</p>}
+        </div>
+      </div>
+    </Link>
+  );
+});
+
+// ── Category / section config ────────────────────────────────────────────────
+
+type SectionConfig = {
+  title: string; desc: string; icon: LucideIcon; color: string; staleTime?: number;
+};
+
+const SECTION_META: Record<string, SectionConfig> = {
+  trending:          { title: "Trending",            desc: "Everyone's watching — join the conversation",              icon: TrendingUp,   color: "text-red-500"    },
+  now_playing:       { title: "Now Playing",         desc: "Grab your wallet and head to the cinema now!",            icon: Clapperboard, color: "text-blue-400"   },
+  legendary:         { title: "LEGENDARY",           desc: "Watch them and understand why people still talk about them", icon: Crown,      color: "text-amber-400"  },
+  cult_classic:      { title: "CULT CLASSIC",        desc: "Plots so wild you'll go 'wait, what?'",                   icon: Skull,        color: "text-rose-400"   },
+  "2am_deep_talk":   { title: "2 AM Deep Talk",      desc: "Still up at 2am? Something to keep you thinking till dawn", icon: Moon,       color: "text-indigo-400" },
+  brain_rot:         { title: "Brain Rot",           desc: "Let your brain melt — pure unfiltered energy",             icon: Zap,          color: "text-orange-400" },
+  main_character:    { title: "Main Character",      desc: "Watch it and feel like the hero... until you look in the mirror", icon: Smile, color: "text-cyan-400"   },
+  heartbreak:        { title: "Heartbreak Romance",  desc: "It hurts, you forget — then it hurts again",              icon: HeartCrack,   color: "text-rose-400"   },
+  chaos_red_flags:   { title: "Chaos & Red Flags",   desc: "Chaos with style — if you love this, we're the same",     icon: AlertCircle,  color: "text-pink-400"   },
+  anime:             { title: "Anime",               desc: "Easy to get in, impossible to leave",                      icon: Sparkles,     color: "text-purple-400" },
+  tokusatsu:         { title: "Tokusatsu",           desc: "Explosions every episode, no excuses needed",              icon: Sword,        color: "text-green-400"  },
+  disney_dreamworks: { title: "Disney & DreamWorks", desc: "Heart-filling content that recharges your battery",        icon: Wand2,        color: "text-yellow-400" },
+  k_wave:            { title: "K-Wave",              desc: "Get your ramen ready and meet your oppas",                 icon: Globe,        color: "text-teal-400"   },
+  midnight_horror:   { title: "Midnight Horror",     desc: "Not as scary as you'd think... but keep the lights on",   icon: Ghost,        color: "text-red-400"    },
+  marvel_dc:         { title: "Marvel & DC",         desc: "Watch every film, or just jump in — either works",        icon: Shield,       color: "text-sky-400"    },
+  ticker_top:        { title: "Ticker Top Picks",    desc: "Highest rated by the Ticker community",                   icon: TrendingUp,   color: "text-amber-500"  },
+  ticker_bottom:     { title: "Ticker Bottom Shelf", desc: "Lowest rated — enter at your own risk",                   icon: TrendingUp,   color: "text-zinc-400"   },
+};
+
+const MIDDLE_CAT_MAP: Record<string, { id: string; label: string; icon: LucideIcon }> = {
+  "2am_deep_talk":   { id: "2am_deep_talk",    label: "2 AM Deep Talk",     icon: Moon        },
+  brain_rot:         { id: "brain_rot",         label: "Brain Rot",          icon: Zap         },
+  main_character:    { id: "main_character",    label: "Main Character",     icon: Smile       },
+  heartbreak:        { id: "heartbreak",        label: "Heartbreak",         icon: HeartCrack  },
+  chaos_red_flags:   { id: "chaos_red_flags",   label: "Chaos & Red Flags",  icon: AlertCircle },
+  anime:             { id: "anime",             label: "Anime",              icon: Sparkles    },
+  tokusatsu:         { id: "tokusatsu",         label: "Tokusatsu",          icon: Sword       },
+  disney_dreamworks: { id: "disney_dreamworks", label: "Disney & DreamWorks",icon: Wand2       },
+  k_wave:            { id: "k_wave",            label: "K-Wave",             icon: Globe       },
+  midnight_horror:   { id: "midnight_horror",   label: "Midnight Horror",    icon: Ghost       },
+  marvel_dc:         { id: "marvel_dc",         label: "Marvel & DC",        icon: Shield      },
+};
+
+type CommunityMovie = { imdbId: string; title: string; posterUrl: string | null; avgRating: number; ticketCount: number };
+
+function SearchTickerExtremes() {
+  const { lang } = useLang();
+  const { data } = useQuery<{ top: CommunityMovie[]; bottom: CommunityMovie[] }>({
+    queryKey: ["ticker-community-ratings"],
+    queryFn: async () => {
+      const r = await fetch("/api/movies/ticker-community", { credentials: "include" });
+      if (!r.ok) return { top: [], bottom: [] };
+      return r.json();
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+  const highest = data?.top?.[0] ?? null;
+  const lowest  = data?.bottom?.[0] ?? null;
+  if (!highest && !lowest) return null;
+  return (
+    <div className="flex items-center justify-center gap-4 px-4 pb-2">
+      {lowest && (
+        <Link href={`/movie/${encodeURIComponent(lowest.imdbId)}`}>
+          <div className="flex items-center gap-1.5 active:opacity-60">
+            <div className="relative w-6 h-9 rounded-lg overflow-hidden bg-secondary border border-border flex-shrink-0">
+              <PosterImage src={lowest.posterUrl} alt={lowest.title} />
+            </div>
+            <div>
+              <p className="text-[12px] font-black text-red-400 leading-none">{lowest.avgRating.toFixed(1)}</p>
+              <p className="text-[9px] text-muted-foreground leading-tight">{lang === "th" ? "ต่ำสุด" : "Lowest"}</p>
+            </div>
+          </div>
+        </Link>
+      )}
+      <div className="h-6 w-px bg-border" />
+      {highest && (
+        <Link href={`/movie/${encodeURIComponent(highest.imdbId)}`}>
+          <div className="flex items-center gap-1.5 active:opacity-60">
+            <div>
+              <p className="text-[12px] font-black text-emerald-500 leading-none text-right">{highest.avgRating.toFixed(1)}</p>
+              <p className="text-[9px] text-muted-foreground leading-tight text-right">{lang === "th" ? "สูงสุด" : "Highest"}</p>
+            </div>
+            <div className="relative w-6 h-9 rounded-lg overflow-hidden bg-secondary border border-border flex-shrink-0">
+              <PosterImage src={highest.posterUrl} alt={highest.title} />
+            </div>
+          </div>
+        </Link>
+      )}
+    </div>
+  );
+}
+
+function getTimedMiddleOrder(): string[] {
+  const h = new Date().getHours();
+  if (h < 6)  return ["2am_deep_talk", "heartbreak", "midnight_horror", "anime", "k_wave", "chaos_red_flags", "brain_rot", "main_character", "disney_dreamworks", "marvel_dc", "tokusatsu"];
+  if (h < 12) return ["disney_dreamworks", "marvel_dc", "anime", "main_character", "brain_rot", "k_wave", "tokusatsu", "heartbreak", "chaos_red_flags", "2am_deep_talk", "midnight_horror"];
+  if (h < 18) return ["brain_rot", "anime", "disney_dreamworks", "k_wave", "main_character", "tokusatsu", "marvel_dc", "heartbreak", "chaos_red_flags", "2am_deep_talk", "midnight_horror"];
+  return ["chaos_red_flags", "heartbreak", "main_character", "marvel_dc", "k_wave", "anime", "brain_rot", "disney_dreamworks", "2am_deep_talk", "midnight_horror", "tokusatsu"];
+}
+
+// All pill categories in display order — movie categories only
+const ALL_CATEGORIES = [
+  { id: "trending",      label: "Trending",        icon: TrendingUp  },
+  { id: "now_playing",   label: "Now Playing",     icon: Clapperboard},
+  ...getTimedMiddleOrder().map(id => MIDDLE_CAT_MAP[id]),
+  { id: "legendary",     label: "LEGENDARY",       icon: Crown       },
+  { id: "cult_classic",  label: "CULT CLASSIC",    icon: Skull       },
+];
+
+// Movie grid categories
+const MOVIE_GRID_IDS = new Set([
+  "trending", "now_playing", "legendary", "cult_classic",
+  "2am_deep_talk", "brain_rot", "main_character", "heartbreak",
+  "chaos_red_flags", "anime", "tokusatsu", "disney_dreamworks",
+  "k_wave", "midnight_horror", "marvel_dc",
+]);
+
+// ── API helpers ──────────────────────────────────────────────────────────────
+
+// Fetch + validate one page of a movie section. Throws on any failure
+// (non-2xx status, network error, or a malformed body missing `movies`) so
+// TanStack Query's error/retry machinery actually kicks in — a bare
+// `fetch(...).then(r => r.json())` would silently resolve to `{}` on a 500
+// or a dropped connection, which the UI could only read as "zero movies"
+// and wrongly show as a permanent empty state instead of retrying.
+async function fetchMovieSectionPage(url: string): Promise<PagedMovies> {
+  const res = await fetch(url, { credentials: "include" });
+  if (!res.ok) {
+    throw new Error(`Failed to load movies (${res.status})`);
+  }
+  const data = await res.json();
+  if (!data || !Array.isArray(data.movies)) {
+    throw new Error("Malformed movie list response");
+  }
+  return data as PagedMovies;
+}
+
+function buildFetchFn(categoryId: string, lang: string) {
+  const apiLang = lang === "en" ? "en-US" : "th";
+  const langQs = `&lang=${apiLang}`;
+  if (categoryId === "trending")      return (p: number) => fetchMovieSectionPage(`/api/movies/trending?page=${p}${langQs}`);
+  if (categoryId === "legendary")     return (p: number) => fetchMovieSectionPage(`/api/movies/top-rated?page=${p}${langQs}`);
+  if (categoryId === "cult_classic")  return (p: number) => fetchMovieSectionPage(`/api/movies/rare-finds?page=${p}${langQs}`);
+  if (categoryId === "now_playing")   return (p: number) => fetchMovieSectionPage(`/api/movies/mood/now_playing?page=${p}${langQs}`);
+  return (p: number) => fetchMovieSectionPage(`/api/movies/mood/${categoryId}?page=${p}${langQs}`);
+}
+
+function detectSearchLang(text: string): string {
+  if (/[\u0E00-\u0E7F]/.test(text)) return "th";
+  if (/[\u3040-\u30FF]/.test(text)) return "ja";
+  if (/[\uAC00-\uD7AF]/.test(text)) return "ko";
+  if (/[\u4E00-\u9FFF]/.test(text)) return "zh-TW";
+  if (/[\u0600-\u06FF]/.test(text)) return "ar";
+  if (/[\u0400-\u04FF]/.test(text)) return "ru";
+  if (/[\u0900-\u097F]/.test(text)) return "hi";
+  return "en-US";
+}
+
+// ── CategoryScrollDiv — CSS display toggle preserves native scroll ───────────
+
+function CategoryScrollDiv({
+  catId, active, paddingTop, onScrollChange, children,
+}: {
+  catId: string; active: boolean; paddingTop: number;
+  onScrollChange: (y: number, lastY: number) => void;
+  children: React.ReactNode;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const saved = scrollStore.get(`search-cat-${catId}`);
+    if (saved !== undefined) el.scrollTop = saved;
+    return () => { scrollStore.set(`search-cat-${catId}`, el.scrollTop); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !active) return;
+    let lastY = 0;
+    const onScroll = () => {
+      const y = el.scrollTop;
+      onScrollChange(y, lastY);
+      lastY = y;
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [active, onScrollChange]);
+
+  return (
+    <div
+      ref={ref}
+      data-cat-active={active ? "true" : undefined}
+      className="absolute inset-0 overflow-y-auto overscroll-y-none"
+      style={{ paddingTop, display: active ? "block" : "none", WebkitOverflowScrolling: "touch", contain: "content" }}
+    >
+      {children}
+    </div>
+  );
+}
+
+// ── MovieSectionVertical — 3-column movie grid ───────────────────────────────
+
+function MovieSectionVertical({ categoryId }: { categoryId: string }) {
+  const { t, lang } = useLang();
+  const base = SECTION_META[categoryId];
+  const sec = t.sections[categoryId] ?? { title: base?.title ?? categoryId, desc: base?.desc ?? "" };
+  const meta = base ? { ...base, title: sec.title, desc: sec.desc } : undefined;
+
+  const { data, isLoading, isError, refetch, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
+    queryKey: ["movies-section-v", categoryId, lang],
+    queryFn: ({ pageParam }) => buildFetchFn(categoryId, lang)(pageParam as number),
+    initialPageParam: 1,
+    getNextPageParam: (last: PagedMovies, _allPages: PagedMovies[], lastParam: unknown) => {
+      return (lastParam as number) < (last?.totalPages ?? 1) ? (lastParam as number) + 1 : undefined;
+    },
+    staleTime: meta?.staleTime ?? 0,
+    // A failed fetch must never be read as "this category has no movies" — it's
+    // retried a few times with backoff before we tell the user anything is wrong.
+    retry: 3,
+    retryDelay: (attempt) => Math.min(1000 + attempt * 1500, 6000),
+  });
+
+  const _allMovies = data?.pages.flatMap(p => p?.movies ?? []) ?? [];
+  const movies = (() => {
+    const seen = new Set<string>();
+    return _allMovies.filter(m => {
+      if (!m.imdbId || seen.has(m.imdbId)) return false;
+      seen.add(m.imdbId);
+      return true;
+    });
+  })();
+  useEnsureMovieCores(movies.map(m => m.imdbId));
+
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  // Synchronous lock (ref, not state) — an IntersectionObserver callback can
+  // fire again before React has committed the `isFetchingNextPage` update,
+  // especially under fast scrolling. Without this a single sentinel crossing
+  // can queue several overlapping fetchNextPage() calls, which is what made
+  // the spinner "never stop" and jank hard after a handful of loads.
+  const fetchLockRef = useRef(false);
+  useEffect(() => {
+    if (!isFetchingNextPage) fetchLockRef.current = false;
+  }, [isFetchingNextPage]);
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting) return;
+        if (!hasNextPage || isFetchingNextPage || fetchLockRef.current) return;
+        fetchLockRef.current = true;
+        fetchNextPage().finally(() => { fetchLockRef.current = false; });
+      },
+      // Start loading a bit before the sentinel is fully in view so fast
+      // scrolling doesn't out-run the network request.
+      { threshold: 0.1, rootMargin: "200px 0px" },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  const Icon = meta?.icon ?? Film;
+  const color = meta?.color ?? "text-foreground";
+
+  return (
+    <div className="pb-0.5">
+      <div className="px-4 mt-6 mb-3">
+        <div className="flex items-center gap-2">
+          <Icon className={cn("w-4 h-4", color)} />
+          <h2 className={cn("font-display font-bold text-sm", color)}>{meta?.title}</h2>
+        </div>
+        <p className="text-xs text-muted-foreground mt-0.5">{meta?.desc}</p>
+      </div>
+      {isLoading ? (
+        <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+      ) : isError && movies.length === 0 ? (
+        // A fetch error is NOT the same as "no movies" — never claim the category
+        // is empty when we simply failed to load it; offer a retry instead.
+        <div className="flex flex-col items-center justify-center py-8 gap-2 text-center px-8">
+          <Icon className={cn("w-6 h-6 opacity-40", color)} />
+          <p className="text-xs text-muted-foreground">{t.sectionLoadError}</p>
+          <button
+            onClick={() => refetch()}
+            className="mt-1 text-xs font-semibold text-foreground underline underline-offset-2 active:opacity-60"
+          >
+            {t.sectionRetry}
+          </button>
+        </div>
+      ) : movies.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-8 gap-2 text-center px-8">
+          <Icon className={cn("w-6 h-6 opacity-40", color)} />
+          <p className="text-xs text-muted-foreground">{t.emptySection}</p>
+        </div>
+      ) : (
+        <>
+          {/* Every row must be a complete set of 3 — an incomplete trailing row
+              (1–2 real cards + invisible filler) reads as broken, so it's simply
+              held back until enough movies are loaded to fill it. */}
+          <div className="grid grid-cols-3 gap-2.5 px-4 pb-2.5">
+            {movies.slice(0, Math.floor(movies.length / 3) * 3)
+              .map((movie, i) => <MovieCard key={movie.imdbId} movie={movie} grid srclang={lang} eager={i < 6} />)}
+          </div>
+          {isFetchingNextPage && (
+            <div className="flex justify-center py-4">
+              <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+            </div>
+          )}
+          <div ref={sentinelRef} className="h-0" />
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Search result rows ───────────────────────────────────────────────────────
+
+function SearchResultRow({ movie, srclang }: { movie: SearchMovieItem; srclang: string }) {
+  const { lang } = useLang();
+  const { data: cachedDetail } = useQuery<any>({
+    queryKey: ["/api/movies", movie.imdbId],
+    enabled: false,
+    staleTime: Infinity,
+  });
+  const { effects, tier } = getRankVisual(movie, cachedDetail ?? null);
+  const year = movie.year ?? (movie.releaseDate ? movie.releaseDate.slice(0, 4) : null);
+  const movieHref = srclang
+    ? `/movie/${encodeURIComponent(movie.imdbId)}?srclang=${encodeURIComponent(srclang)}`
+    : `/movie/${encodeURIComponent(movie.imdbId)}`;
+  return (
+    <Link href={movieHref} onClick={() => { sessionStorage.setItem("search_from_movie", "1"); scrollStore.delete(`movie-${movie.imdbId}`); }}>
+      <div className="flex items-center gap-3 bg-background rounded-2xl p-3 border border-border active:bg-secondary transition-colors cursor-pointer">
+        <div className="relative w-12 h-[68px] rounded-xl overflow-hidden bg-secondary flex-shrink-0 border border-border shimmer-no-border">
+          <PosterImage src={movie.posterUrl} alt={movie.title} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-sm text-foreground leading-tight line-clamp-2">{movie.title}</p>
+          {year && <p className="text-xs text-muted-foreground mt-0.5">{displayYear(year, lang)}</p>}
+          <div className="mt-1">
+            <MovieBadges tier={tier} effects={effects} size="xs" layout="row" />
+          </div>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+// ── Search result helpers ────────────────────────────────────────────────────
+
+function EmptySearchState({ label }: { label: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 gap-4 text-center px-6">
+      <div className="w-16 h-16 rounded-3xl bg-secondary flex items-center justify-center">
+        <SearchIcon className="w-8 h-8 text-muted-foreground" />
+      </div>
+      <p className="text-sm text-muted-foreground">{label}</p>
+    </div>
+  );
+}
+
+function TicketSearchRow({ ticket }: { ticket: any }) {
+  const { lang } = useLang();
+  return (
+    <Link href={`/ticket/${ticket.id}`}>
+      <div className="flex items-center gap-3 bg-background rounded-2xl p-3 border border-border active:bg-secondary transition-colors cursor-pointer">
+        <div className="relative w-10 h-[58px] rounded-xl overflow-hidden bg-secondary flex-shrink-0 border border-border">
+          <PosterImage src={ticket.posterUrl} alt={ticket.movieTitle} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-sm text-foreground leading-tight line-clamp-1">{ticket.movieTitle}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">@{ticket.username}</p>
+          {ticket.caption && <p className="text-xs text-foreground/60 mt-0.5 line-clamp-1">{ticket.caption}</p>}
+        </div>
+        {ticket.rating != null && (
+          <span className="text-sm font-bold text-foreground shrink-0">{ticket.rating}</span>
+        )}
+      </div>
+    </Link>
+  );
+}
+
+function ChainSearchRow({ chain }: { chain: any }) {
+  return (
+    <Link href={`/chain/${chain.id}`}>
+      <div className="flex items-center gap-3 bg-background rounded-2xl p-3 border border-border active:bg-secondary transition-colors cursor-pointer">
+        <div className="relative w-10 h-10 rounded-xl bg-secondary flex-shrink-0 flex items-center justify-center border border-border overflow-hidden">
+          <PosterImage src={chain.movies?.[0]?.posterUrl} alt="" fallbackIcon={<Link2 className="w-4 h-4 text-muted-foreground" />} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-sm text-foreground leading-tight line-clamp-1">{chain.title}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">@{chain.username} · {chain.chainCount ?? 0} plays</p>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function UserSearchRow({ user }: { user: any }) {
+  return (
+    <Link href={`/profile/${user.username}`}>
+      <div className="flex items-center gap-3 bg-background rounded-2xl p-3 border border-border active:bg-secondary transition-colors cursor-pointer">
+        <div className="w-10 h-10 rounded-full bg-secondary flex-shrink-0 overflow-hidden border border-border">
+          {user.avatarUrl
+            ? <img src={user.avatarUrl} alt={user.displayName ?? user.username} className="w-full h-full object-cover" />
+            : <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm font-bold">{(user.displayName ?? user.username ?? "?")[0]?.toUpperCase()}</div>
+          }
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-sm text-foreground leading-tight line-clamp-1">{user.displayName ?? user.username}</p>
+          <p className="text-xs text-muted-foreground flex items-center gap-1">
+            <span className="inline-flex items-center justify-center w-[13px] h-[13px] rounded-[3px] bg-foreground flex-shrink-0">
+              <span className="font-display font-black text-background leading-none" style={{ fontSize: 7 }}>T</span>
+            </span>
+            @{user.username}
+          </p>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+// ── Main Search page ─────────────────────────────────────────────────────────
+
+export default function Search({ isActive = true }: { isActive?: boolean } = {}) {
+  const { t, lang } = useLang();
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  const [location, navigate] = useLocation();
+
+  const [query, setQuery]                   = useState<string>(() => {
+    try { return new URLSearchParams(window.location.search).get("q") ?? ""; } catch { return ""; }
+  });
+  const [debouncedQuery]                    = useDebounceValue(query, 400);
+  const [activeCategory, setActiveCategory] = useState<string>(() => {
+    // Check URL ?cat= param first (used by push notifications)
+    try {
+      const p = new URLSearchParams(window.location.search);
+      const catParam = p.get("cat");
+      if (catParam && ALL_CATEGORIES.some(c => c.id === catParam)) return catParam;
+    } catch { /* ignore */ }
+    const saved = sessionStorage.getItem("search_category");
+    if (saved && ALL_CATEGORIES.some(c => c.id === saved)) return saved;
+    return "trending";
+  });
+  const [visitedCategories, setVisitedCategories] = useState<Set<string>>(() => new Set([activeCategory]));
+  const [showRandomPicker, setShowRandomPicker]   = useState(false);
+  const [showVsPicker, setShowVsPicker]           = useState(false);
+  const [showDiceTab, setShowDiceTab]             = useState(false);
+  const [fabHighlight, setFabHighlight]           = useState(() => !sessionStorage.getItem("ticker_fab_seen"));
+  const [diceAnimDone, setDiceAnimDone]           = useState(false);
+  const catSwipeRef      = useRef<{ x: number; y: number } | null>(null);
+  // Gated on `isActive` — this tab is always mounted (even off-screen, for
+  // instant swiping), so without this check the intro would play invisibly
+  // before the user ever looks at this tab (mirrors feed.tsx's panel intro).
+  useEffect(() => {
+    if (!isActive || !fabHighlight) return;
+    // First visit: slide the Roll/VS bar in slowly → pause → slide back out
+    const tid0 = setTimeout(() => setShowDiceTab(true), 500);
+    const tid1 = setTimeout(() => setShowDiceTab(false), 3800);
+    const tid2 = setTimeout(() => {
+      sessionStorage.setItem("ticker_fab_seen", "1");
+      setFabHighlight(false);
+    }, 4700);
+    return () => { clearTimeout(tid0); clearTimeout(tid1); clearTimeout(tid2); };
+  }, [isActive, fabHighlight]);
+
+  // Delay bounce until after the panel open transition finishes (~390ms —
+  // 340ms max-height + 50ms inner delay), not the old 920ms which left the
+  // icon looking frozen well after the panel had visibly settled.
+  useEffect(() => {
+    if (!showDiceTab) { setDiceAnimDone(false); return; }
+    const tid = setTimeout(() => setDiceAnimDone(true), 420);
+    return () => clearTimeout(tid);
+  }, [showDiceTab]);
+  const diceTabCollapseRef = useRef(false);
+  // Reset collapse flag on category change (do not auto-open)
+  useEffect(() => { diceTabCollapseRef.current = false; }, [activeCategory]);
+  // headerWrapRef  — whole header (collapsible + pills) slides up as one unit
+  // collapsibleRef — title + dice tab + search bar (measured for scroll threshold)
+  const headerWrapRef    = useRef<HTMLDivElement>(null);
+  const collapsibleRef   = useRef<HTMLDivElement>(null);
+  const pillsRowRef      = useRef<HTMLDivElement>(null);
+  const pillContainerRef  = useRef<HTMLDivElement>(null);
+  const pillRefs          = useRef<Map<string, HTMLButtonElement>>(new Map());
+  const searchResultsRef  = useRef<HTMLDivElement>(null);
+  useHorizWheel(pillContainerRef);   // desktop: category pills
+
+  const [collapsibleH, setCollapsibleH]     = useState(90);
+  const [pillsH, setPillsH]                 = useState(48);
+  const [headerHidden, setHeaderHidden]     = useState(false);
+  const [pillContainerW, setPillContainerW] = useState(0);
+  // Total header height used for content paddingTop (keeps content below pills always)
+  const headerH = collapsibleH + pillsH;
+
+  // Measure pill container width (for centering)
+  useEffect(() => {
+    const el = pillContainerRef.current;
+    if (!el) return;
+    const m = () => setPillContainerW(el.clientWidth);
+    m();
+    const ro = new ResizeObserver(m);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Measure collapsible section height (title + dice tab + search bar).
+  // This drives how far both the collapsible slides up AND how far the
+  // pills row chases it, so they meet cleanly at the top of the viewport.
+  useEffect(() => {
+    const el = collapsibleRef.current;
+    if (!el) return;
+    const measure = () => setCollapsibleH(el.offsetHeight);
+    measure();
+    const tid = setTimeout(measure, 300);
+    const obs = new ResizeObserver(measure);
+    obs.observe(el);
+    return () => { obs.disconnect(); clearTimeout(tid); };
+  }, []);
+
+  // Measure pills row height so content paddingTop stays accurate.
+  useEffect(() => {
+    const el = pillsRowRef.current;
+    if (!el) return;
+    const measure = () => setPillsH(el.offsetHeight);
+    measure();
+    const obs = new ResizeObserver(measure);
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
+  // Accumulate upward scroll — bar only reappears after scrolling up 40 px
+  const scrollUpDeltaRef = useRef(0);
+  const SHOW_THRESHOLD = 150;
+
+  // Header auto-hide on scroll
+  const handleScrollChange = useCallback((y: number, lastY: number) => {
+    const delta = y - lastY;
+    if (y <= 0) {
+      setHeaderHidden(false);
+      scrollUpDeltaRef.current = 0;
+    } else if (delta > 0) {
+      // Scrolling down — hide header, collapse dice tab on first scroll past 60px
+      if (y > headerH) setHeaderHidden(true);
+      if (y > 60 && !diceTabCollapseRef.current) {
+        diceTabCollapseRef.current = true;
+        setShowDiceTab(false);
+      }
+      scrollUpDeltaRef.current = 0;
+    } else if (delta < 0) {
+      // Scrolling up — accumulate; only show bar once threshold is reached
+      scrollUpDeltaRef.current += Math.abs(delta);
+      if (scrollUpDeltaRef.current >= SHOW_THRESHOLD) {
+        setHeaderHidden(false);
+        scrollUpDeltaRef.current = 0;
+      }
+    }
+  }, [headerH]);
+
+  // Scroll listener for search results overlay
+  useEffect(() => {
+    const el = searchResultsRef.current;
+    if (!el || !debouncedQuery) return;
+    let lastY = 0;
+    const onScroll = () => {
+      const y = el.scrollTop;
+      handleScrollChange(y, lastY);
+      lastY = y;
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [debouncedQuery, handleScrollChange]);
+
+  // When location changes (e.g. genre pill navigates to /search?q=Drama),
+  // pick up the ?q= param so the search field is pre-populated.
+  useEffect(() => {
+    try {
+      const q = new URLSearchParams(window.location.search).get("q") ?? "";
+      if (q) { setQuery(q); setHeaderHidden(false); }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location]);
+
+  // nav-refresh: tap search icon when already on search page — clear query only, keep active category
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const ce = e as CustomEvent;
+      if (ce.detail?.href === "/search") {
+        setQuery("");
+        setHeaderHidden(false);
+        qc.invalidateQueries({ queryKey: ["movies-section-v", activeCategory] });
+      }
+    };
+    window.addEventListener("nav-refresh", handler);
+    return () => window.removeEventListener("nav-refresh", handler);
+  }, [qc, activeCategory]);
+
+  const handleCategoryChange = (catId: string) => {
+    setVisitedCategories(prev => new Set([...prev, catId]));
+    setActiveCategory(catId);
+    setHeaderHidden(false);
+    sessionStorage.setItem("search_category", catId);
+  };
+
+  // Center active pill
+  const centerPillRanRef = useRef(false);
+  useEffect(() => {
+    if (!pillContainerW) return;
+    let cancelled = false;
+    const apply = (smooth: boolean) => {
+      if (cancelled) return;
+      const container = pillContainerRef.current;
+      const pill = pillRefs.current.get(activeCategory);
+      if (!container || !pill || pill.offsetWidth === 0) return;
+      const target = pill.offsetLeft - (container.clientWidth - pill.offsetWidth) / 2;
+      const max = Math.max(0, container.scrollWidth - container.clientWidth);
+      const left = Math.max(0, Math.min(max, target));
+      try { container.scrollTo({ left, behavior: smooth ? "smooth" : "auto" }); }
+      catch { container.scrollLeft = left; }
+    };
+    const isFirst = !centerPillRanRef.current;
+    centerPillRanRef.current = true;
+    apply(!isFirst);
+    if (isFirst) {
+      const raf1 = requestAnimationFrame(() => requestAnimationFrame(() => apply(false)));
+      const fonts = (document as Document & { fonts?: { ready?: Promise<unknown> } }).fonts;
+      fonts?.ready?.then(() => apply(false)).catch(() => {});
+      const tid = setTimeout(() => apply(false), 250);
+      return () => { cancelled = true; cancelAnimationFrame(raf1); clearTimeout(tid); };
+    }
+    return () => { cancelled = true; };
+  }, [activeCategory, lang, pillContainerW]);
+
+  // ── Queries ──────────────────────────────────────────────────────────────
+
+  const { data: movieSearchData, isLoading: movieSearchLoading } = useSearchMovies(
+    { query: debouncedQuery, page: 1 },
+    { query: { enabled: debouncedQuery.length > 1 } as any }
+  );
+  const searchedMovies = (movieSearchData?.movies ?? []) as unknown as SearchMovieItem[];
+  useEnsureMovieCores(searchedMovies.map(m => m.imdbId));
+
+  const srclang = detectSearchLang(debouncedQuery);
+
+  // ── Smart-search: genre/keyword/topic-aware discovery ─────────────────────
+  const smartLang = lang === "en" ? "en-US" : "th";
+  const { data: smartSearchData, isLoading: smartSearchLoading } = useQuery<{
+    results: TrendingMovie[];
+    genreIds: number[];
+    keywordIds: number[];
+  }>({
+    queryKey: ["smart-search", debouncedQuery, smartLang],
+    queryFn: () =>
+      fetch(`/api/movies/smart-search?q=${encodeURIComponent(debouncedQuery)}&lang=${smartLang}`, { credentials: "include" })
+        .then(r => r.json()),
+    enabled: debouncedQuery.length > 1,
+    staleTime: 60_000,
+  });
+  const smartMovies: TrendingMovie[] = smartSearchData?.results ?? [];
+  // Show "You might like" section when: genre match, keyword match, or topic resolved (isTopicSearch)
+  const isSmartResult = !!(smartSearchData?.results?.length && (
+    smartSearchData?.genreIds?.length ||
+    smartSearchData?.keywordIds?.length ||
+    (smartSearchData as any)?.isTopicSearch
+  ));
+  const searchedImdbIds = new Set(searchedMovies.map(m => m.imdbId));
+  const uniqueSmartMovies = smartMovies.filter(m => !searchedImdbIds.has(m.imdbId));
+
+  // ── Translated categories for pills ──────────────────────────────────────
+
+  const CATEGORIES_T = ALL_CATEGORIES.map(cat => {
+    if (SECTION_META[cat.id]) {
+      const sec = t.sections[cat.id];
+      return sec ? { ...cat, label: sec.title } : cat;
+    }
+    return cat;
+  });
+
+  return (
+    <div
+      className="relative h-full overflow-hidden"
+      onTouchStart={(e) => {
+        if (debouncedQuery) return;
+        catSwipeRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      }}
+      onTouchEnd={(e) => {
+        if (!catSwipeRef.current || debouncedQuery) return;
+        const dx = e.changedTouches[0].clientX - catSwipeRef.current.x;
+        const dy = Math.abs(e.changedTouches[0].clientY - catSwipeRef.current.y);
+        catSwipeRef.current = null;
+        // Only trigger if horizontal movement dominates and exceeds threshold
+        if (Math.abs(dx) < 60 || Math.abs(dx) < dy * 1.5) return;
+        const catIds = CATEGORIES_T.map((c) => c.id);
+        const ci = catIds.indexOf(activeCategory);
+        if (dx < 0 && ci < catIds.length - 1) handleCategoryChange(catIds[ci + 1]);
+        else if (dx > 0 && ci > 0) handleCategoryChange(catIds[ci - 1]);
+      }}
+    >
+
+      {/* ── Header: entire block (title + search + pills) slides up as one unit ──
+          Matches the home page behaviour: when the user scrolls down past the
+          full header height the whole bar disappears, and reappears after a
+          SHOW_THRESHOLD px upward flick. Content paddingTop = headerH is kept
+          constant so there is no layout jump when the bar hides/shows. ── */}
+      <div
+        ref={headerWrapRef}
+        className="absolute top-0 left-0 right-0 z-30 bg-background border-b border-border transition-transform duration-300 ease-in-out will-change-transform"
+        style={{
+          paddingTop: "max(1rem, var(--sai-top))",
+          transform: headerHidden ? "translateY(-100%)" : "translateY(0)",
+        }}
+      >
+
+        {/* ── Collapsible section: title + community bar + dice tab + search bar ── */}
+        <div ref={collapsibleRef}>
+          {/* Title */}
+          <div className="flex items-center px-4 pb-3">
+            <div className="w-9 h-9" />
+            <button
+              onClick={() => setShowDiceTab(prev => !prev)}
+              className="font-display font-bold text-xl tracking-tight text-foreground flex-1 text-center active:opacity-60 transition-opacity select-none"
+            >
+              Ticker
+            </button>
+            <div className="w-9 h-9" />
+          </div>
+
+          {/* Compact community extremes — highest / lowest Ticker-rated movies */}
+          <SearchTickerExtremes />
+
+          {/* Dice slide-out tab — smooth banner reveal.
+              Uses max-height (not grid-template-rows) for compat with older
+              Android Chrome / WebView where 0fr→1fr does not animate. */}
+          <div
+            style={{
+              maxHeight: showDiceTab ? "90px" : "0px",
+              overflow: "hidden",
+              transition: "max-height 320ms cubic-bezier(0.65, 0, 0.35, 1)",
+            }}
+          >
+            <div
+              className="h-[90px] w-full flex items-center justify-center overflow-hidden"
+            >
+              <div
+                className="flex items-center gap-6"
+                style={{
+                  opacity: showDiceTab ? 1 : 0,
+                  transform: showDiceTab ? "translateY(0)" : "translateY(-16px)",
+                  transition: "opacity 260ms ease, transform 320ms cubic-bezier(0.65, 0, 0.35, 1)",
+                }}
+              >
+                <button
+                  onClick={() => {
+                    setShowRandomPicker(true);
+                    sessionStorage.setItem("ticker_fab_seen", "1");
+                    setFabHighlight(false);
+                    const activeDiv = document.querySelector('[data-cat-active="true"]') as HTMLElement | null;
+                    if (activeDiv) activeDiv.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  className="flex flex-col items-center gap-1 min-w-[64px] active:opacity-60 transition-opacity"
+                >
+                  <div className={cn(
+                    "w-10 h-10 rounded-2xl bg-secondary border border-border flex items-center justify-center shadow-sm",
+                    fabHighlight && diceAnimDone && "animate-bounce"
+                  )}>
+                    <Dice5 className="w-5 h-5 text-foreground" />
+                  </div>
+                  <span className="text-[10px] font-semibold text-foreground leading-none text-center">{lang === "th" ? "สุ่มหนัง" : "Roll"}</span>
+                </button>
+                <button
+                  onClick={() => {
+                    if (!user) { navigate("/login"); return; }
+                    setShowVsPicker(true);
+                    sessionStorage.setItem("ticker_fab_seen", "1");
+                    setFabHighlight(false);
+                    const activeDiv = document.querySelector('[data-cat-active="true"]') as HTMLElement | null;
+                    if (activeDiv) activeDiv.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  className="flex flex-col items-center gap-1 min-w-[64px] active:opacity-60 transition-opacity"
+                >
+                  <div className={cn(
+                    "w-10 h-10 rounded-2xl bg-secondary border border-border flex items-center justify-center shadow-sm",
+                    fabHighlight && diceAnimDone && "animate-bounce"
+                  )}>
+                    <Swords className="w-5 h-5 text-foreground" />
+                  </div>
+                  <span className="text-[10px] font-semibold text-foreground leading-none text-center">{lang === "th" ? "คัดเลือก" : "VS"}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Search bar */}
+          <div className="px-4 pb-3">
+            <div className="relative flex items-center">
+              <SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none z-10" />
+              <input
+                className="search-bar w-full"
+                style={{ paddingLeft: "2.75rem", paddingRight: query ? "2.75rem" : undefined }}
+                placeholder={t.searchAnyLang}
+                value={query}
+                onChange={e => { setQuery(e.target.value); setHeaderHidden(false); }}
+              />
+              {query && (
+                <button
+                  onClick={() => { setQuery(""); setHeaderHidden(false); }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-muted-foreground/20 flex items-center justify-center z-10"
+                >
+                  <XIcon className="w-3 h-3 text-muted-foreground" />
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* ── Pills row — part of the single sliding header ── */}
+        <div ref={pillsRowRef}>
+          <div ref={pillContainerRef} className="flex items-center gap-2 pb-3 px-4 overflow-x-auto scrollbar-hide overscroll-x-contain">
+            {CATEGORIES_T.map(cat => {
+              const Icon = cat.icon;
+              return (
+                <button
+                  key={cat.id}
+                  ref={el => { if (el) pillRefs.current.set(cat.id, el); else pillRefs.current.delete(cat.id); }}
+                  onClick={() => handleCategoryChange(cat.id)}
+                  className={`filter-pill shrink-0 ${activeCategory === cat.id ? "active" : ""} flex items-center gap-1`}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  {cat.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Search results overlay (Movies) ── */}
+      {debouncedQuery && (
+        <div
+          ref={searchResultsRef}
+          className="absolute inset-0 overflow-y-auto overscroll-y-none z-20"
+          style={{ paddingTop: headerH + 16 }}
+        >
+          {/* ── Movies ── */}
+          {(
+            <div className="px-4 pt-2">
+              {movieSearchLoading && (
+                <div className="flex justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+              )}
+              {!movieSearchLoading && searchedMovies.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-16 gap-4 text-center px-6">
+                  <div className="w-16 h-16 rounded-3xl bg-secondary flex items-center justify-center">
+                    <Clapperboard className="w-8 h-8 text-muted-foreground" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="font-display font-bold text-foreground">{t.noSearchResults}</p>
+                    <p className="text-sm text-muted-foreground">{lang === "th" ? "ลองค้นหาด้วยชื่ออื่น" : "Try a different title"}</p>
+                  </div>
+                </div>
+              )}
+              <div className="flex flex-col gap-2 pb-2">
+                {searchedMovies.map(movie => <SearchResultRow key={movie.imdbId} movie={movie} srclang={srclang} />)}
+              </div>
+              {isSmartResult && uniqueSmartMovies.length > 0 && !movieSearchLoading && (
+                <div className="pb-4">
+                  <div className="flex items-center gap-1.5 mb-2 mt-1">
+                    <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                    <p className="text-xs font-semibold text-muted-foreground tracking-widest">
+                      {lang === "th" ? "คุณอาจชอบ" : "You might like"}
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    {uniqueSmartMovies.slice(0, 10).map(movie => (
+                      <SearchResultRow key={movie.imdbId} movie={movie as SearchMovieItem} srclang={srclang} />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {isSmartResult && smartSearchLoading && !movieSearchLoading && (
+                <div className="flex justify-center py-4">
+                  <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Movie grid sections (lazy-mount via CSS display toggle) ── */}
+      {CATEGORIES_T
+        .filter(cat => visitedCategories.has(cat.id) && MOVIE_GRID_IDS.has(cat.id))
+        .map(cat => (
+          <CategoryScrollDiv
+            key={cat.id}
+            catId={cat.id}
+            active={!debouncedQuery && activeCategory === cat.id}
+            paddingTop={headerH}
+            onScrollChange={handleScrollChange}
+          >
+            <MovieSectionVertical categoryId={cat.id} />
+          </CategoryScrollDiv>
+        ))
+      }
+
+      {/* ── Random Movie Picker ── */}
+      {showRandomPicker && (
+        <RandomMoviePicker
+          onClose={() => setShowRandomPicker(false)}
+          isGuest={!user}
+        />
+      )}
+
+      {/* ── VS Movie Picker ── */}
+      {showVsPicker && (
+        <MovieVsPicker
+          onClose={() => setShowVsPicker(false)}
+        />
+      )}
+
+    </div>
+  );
+}
