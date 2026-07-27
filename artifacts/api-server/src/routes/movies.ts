@@ -2027,11 +2027,18 @@ router.get(
       posters?:   TMDBImage[];
     }>(
       `/${isTv ? "tv" : "movie"}/${tmdbId}/images`,
-      { include_image_language: "en,null" },
+      // No language filter — sortImages puts language-neutral (iso_639_1=null) first,
+      // then quality-sorted. Filtering by "en,null" was silently excluding nearly all
+      // images for non-English-language films.
     );
 
-    const sortedPosters   = sortImages(data.posters   ?? []).slice(0, 20);
-    const sortedBackdrops = sortImages(data.backdrops ?? []).slice(0, 20);
+    // Posters first (up to 20), backdrops fill remaining slots up to total 40.
+    const MAX_TOTAL   = 40;
+    const MAX_POSTERS = 20;
+    const sortedPosters   = sortImages(data.posters   ?? []).slice(0, MAX_POSTERS);
+    const postersCount    = sortedPosters.length;
+    const backdropLimit   = MAX_TOTAL - postersCount;
+    const sortedBackdrops = sortImages(data.backdrops ?? []).slice(0, backdropLimit);
 
     type ImageResult = { url: string; type: "poster" | "backdrop" | "still" };
     const images: ImageResult[] = [
@@ -2055,7 +2062,6 @@ router.get(
       try {
         const seasonData = await tmdbFetch<{ posters?: TMDBImage[] }>(
           `/tv/${tmdbId}/season/${seasonParam}/images`,
-          { include_image_language: "en,null" },
         );
         const sortedSeasonPosters = sortImages(seasonData.posters ?? []).slice(0, 10);
         images.push(...sortedSeasonPosters.map(p => ({ url: `${TMDB_IMG}${p.file_path}`, type: "still" as const })));

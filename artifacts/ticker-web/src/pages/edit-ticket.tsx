@@ -269,13 +269,19 @@ export default function EditTicket() {
   const backdropImages = coverImages.filter(i => i.type === "backdrop");
   const stillImages    = coverImages.filter(i => i.type === "still");
 
-  // Auto-select first image when switching to poster theme (mirrors create-ticket behaviour)
+  // Auto-select first image when switching to poster theme.
+  // Falls back to the ticket's existing posterUrl so the card is never blank
+  // while the API is still loading (mirrors create-ticket behaviour).
   useEffect(() => {
-    if (cardTheme === "poster" && coverImages.length > 0 && !selectedBackdropUrl) {
-      setSelectedBackdropUrl(coverImages[0]?.url ?? null);
+    if (cardTheme !== "poster") return;
+    if (selectedBackdropUrl) return;
+    const firstCover = coverImages[0]?.url ?? null;
+    const fallback = firstCover ?? (ticket?.posterUrl || null);
+    if (fallback) {
+      setSelectedBackdropUrl(fallback);
       setCardOffsetX(50);
     }
-  }, [cardTheme, coverImages, selectedBackdropUrl]);
+  }, [cardTheme, coverImages, selectedBackdropUrl, ticket?.posterUrl]);
 
   const addInvitee = useCallback((u: UserSearchResult) => {
     if (partyInvitees.find(p => p.id === u.id)) return;

@@ -485,11 +485,17 @@ export default function CreateTicket() {
   const stillImages    = coverImages.filter(i => i.type === "still");
 
   useEffect(() => {
-    if (cardTheme === "poster" && coverImages.length > 0 && !selectedBackdropUrl) {
-      setSelectedBackdropUrl(coverImages[0]?.url ?? null);
+    if (cardTheme !== "poster") return;
+    if (selectedBackdropUrl) return; // user already picked something (or posterUrl already set)
+    // Use first API image if loaded, otherwise fall back immediately to the movie's
+    // own posterUrl so the card is never blank while the API is still loading.
+    const firstCover = coverImages[0]?.url ?? null;
+    const fallback = firstCover ?? (posterUrl || null);
+    if (fallback) {
+      setSelectedBackdropUrl(fallback);
       setCardOffsetX(50);
     }
-  }, [cardTheme, coverImages, selectedBackdropUrl]);
+  }, [cardTheme, coverImages, selectedBackdropUrl, posterUrl]);
 
   useEffect(() => {
     if (!coverImages.length) return;
