@@ -285,7 +285,7 @@ function AccordionContent({ open, children }: { open: boolean; children?: ReactN
 
 // ── BackdropCarousel — single 16/9 auto-slide block (mirrors UpcomingCard's MovieCarousel) ──
 function BackdropCarousel({ backdrops, title, paused = false }: { backdrops: string[]; title: string; paused?: boolean }) {
-  const pool = backdrops.slice(0, 5);
+  const pool = backdrops.slice(0, 20);
   const totalPages = pool.length;
   const [page, setPage] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -1004,17 +1004,21 @@ export default function MovieDetail() {
     gcTime: 4 * 60 * 60 * 1000,
   });
 
-  const { data: backdropsData } = useQuery<{ backdrops: string[] }>({
+  type MovieImage = { url: string; type: "poster" | "backdrop" | "still" };
+  const { data: backdropsData } = useQuery<{ images: MovieImage[] }>({
     queryKey: ["/api/movies", movieId, "backdrops"],
     queryFn: async () => {
       const res = await fetch(`/api/movies/${encodeURIComponent(movieId)}/backdrops`, { credentials: "include" });
-      if (!res.ok) return { backdrops: [] };
+      if (!res.ok) return { images: [] };
       return res.json();
     },
     enabled: !!movieId,
     staleTime: 60 * 60 * 1000,
     gcTime: 4 * 60 * 60 * 1000,
   });
+  const allMovieImages: MovieImage[] = backdropsData?.images ?? [];
+  const posterImages   = allMovieImages.filter(i => i.type === "poster").map(i => i.url);
+  const backdropImages = allMovieImages.filter(i => i.type === "backdrop" || i.type === "still").map(i => i.url);
 
   const collectionMovieCount = (collectionData?.movies ?? []).filter(m => !m.isSpinoff).length;
   const isFranchise = isTvShowEarly || collectionMovieCount > 1;
@@ -1422,8 +1426,27 @@ export default function MovieDetail() {
 
       </div>
 
-      {/* ── Backdrops gallery ── */}
-      {(backdropsData?.backdrops ?? []).length > 0 && (
+      {/* ── Poster gallery (up to 20) ── */}
+      {posterImages.length > 0 && (
+        <div className="pt-4">
+          <div className="flex items-center gap-2 mb-2 px-5">
+            <Images className="w-3.5 h-3.5 text-foreground flex-shrink-0" />
+            <p className="text-xs font-bold text-foreground">{lang === "th" ? "โปสเตอร์" : "Posters"}</p>
+          </div>
+          <div className="px-5">
+            <div className="grid grid-cols-3 gap-2">
+              {posterImages.map((url, i) => (
+                <div key={url} className="relative aspect-[2/3] rounded-xl overflow-hidden bg-secondary">
+                  <PosterImage src={url} alt={`${movie?.title ?? ""} poster ${i + 1}`} eager={i < 3} />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Backdrops gallery (up to 20) ── */}
+      {backdropImages.length > 0 && (
         <div className="pt-4">
           <div className="flex items-center gap-2 mb-2 px-5">
             <Images className="w-3.5 h-3.5 text-foreground flex-shrink-0" />
@@ -1431,7 +1454,7 @@ export default function MovieDetail() {
           </div>
           <div className="px-5">
             <div className="rounded-2xl overflow-hidden">
-              <BackdropCarousel backdrops={backdropsData?.backdrops ?? []} title={movie?.title ?? ""} paused={trailerInView} />
+              <BackdropCarousel backdrops={backdropImages} title={movie?.title ?? ""} paused={trailerInView} />
             </div>
           </div>
         </div>
