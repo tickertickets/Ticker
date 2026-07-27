@@ -6,8 +6,8 @@
 
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { eq, isNull, and } from "drizzle-orm";
-import { ticketsTable, usersTable, chainsTable } from "@workspace/db/schema";
+import { eq, isNull, and, asc } from "drizzle-orm";
+import { ticketsTable, usersTable, chainsTable, chainMoviesTable } from "@workspace/db/schema";
 import { asyncHandler } from "../middlewares/error-handler";
 
 const router = Router();
@@ -109,6 +109,7 @@ router.get("/chain/:id", async (req, res) => {
         title: chainsTable.title,
         description: chainsTable.description,
         coverUrl: chainsTable.coverUrl,
+        taggedMoviePosterUrl: chainsTable.taggedMoviePosterUrl,
       })
       .from(chainsTable)
       .where(and(eq(chainsTable.id, id), isNull(chainsTable.deletedAt)))
@@ -120,8 +121,19 @@ router.get("/chain/:id", async (req, res) => {
     }
 
     const title = `${chain.title} — ${SITE_NAME}`;
-    const description = chain.description?.trim() || `Chain collection on Ticker`;
-    const image = (chain.coverUrl as string | null) || DEFAULT_IMAGE;
+    const description = chain.description?.trim() || `ร่วมดูหนังใน Chains "${chain.title}" บน Ticker`;
+
+    // Image priority: coverUrl → taggedMoviePosterUrl → first chain movie poster → default
+    let image: string = (chain.coverUrl as string | null) || (chain.taggedMoviePosterUrl as string | null) || "";
+    if (!image) {
+      const [firstMovie] = await db
+        .select({ posterUrl: chainMoviesTable.posterUrl })
+        .from(chainMoviesTable)
+        .where(eq(chainMoviesTable.chainId, id))
+        .orderBy(asc(chainMoviesTable.position))
+        .limit(1);
+      image = firstMovie?.posterUrl ?? DEFAULT_IMAGE;
+    }
 
     res.set(OG_HEADERS).send(renderOgHtml({ title, description, image, redirectTo }));
   } catch {

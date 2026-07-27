@@ -2050,6 +2050,18 @@ router.get(
       } catch { /* episode stills are optional — ignore errors */ }
     }
 
+    // Season posters for TV shows when only a season is selected (no specific episode)
+    if (isTv && !isNaN(seasonParam) && isNaN(episodeParam)) {
+      try {
+        const seasonData = await tmdbFetch<{ posters?: TMDBImage[] }>(
+          `/tv/${tmdbId}/season/${seasonParam}/images`,
+          { include_image_language: "en,null" },
+        );
+        const sortedSeasonPosters = sortImages(seasonData.posters ?? []).slice(0, 10);
+        images.push(...sortedSeasonPosters.map(p => ({ url: `${TMDB_IMG}${p.file_path}`, type: "still" as const })));
+      } catch { /* season images are optional — ignore errors */ }
+    }
+
     res.json({ images });
   }),
 );
