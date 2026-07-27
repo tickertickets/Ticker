@@ -18,7 +18,7 @@ export function getNotifText(type: string, lang: Lang, fallback: string): string
     case "comment":
       return th ? "คอมเมนต์ตั๋วของคุณ" : "commented on your ticket";
     case "tag":
-      return th ? "แท็กคุณในการ์ด" : "tagged you in a ticket";
+      return th ? "แท็กคุณในตั๋ว" : "tagged you in a ticket";
     case "ticket_share":
       return th ? "แชร์ตั๋วถึงคุณ" : "shared a ticket with you";
     case "party_invite":
@@ -32,7 +32,7 @@ export function getNotifText(type: string, lang: Lang, fallback: string): string
         ? "สีปาร์ตี้ถูกรีเซ็ตกลับสู่สถานะปกติ"
         : "Party color was reverted";
     case "memory_request":
-      return th ? "ขอดูความทรงจำส่วนตัวในการ์ดของคุณ" : "requested to read your memory";
+      return th ? "ขอดูความทรงจำส่วนตัวในตั๋วของคุณ" : "requested to read your memory";
     case "memory_approved":
       return th
         ? "อนุมัติคำขอดูความทรงจำแล้ว คุณสามารถอ่านได้ภายใน 7 วัน"

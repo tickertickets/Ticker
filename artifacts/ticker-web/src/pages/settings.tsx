@@ -2207,7 +2207,7 @@ export default function Settings() {
                               ? t.activitiesLikedTicket
                               : item.kind === "comment"
                               ? t.activitiesCommentedTicket
-                              : (lang === "th" ? "โพสต์ตั๋ว" : "Posted ticket")
+                              : (lang === "th" ? "สร้างตั๋ว" : "Posted ticket")
                           }
                           timeStr={relTime(item.createdAt)}
                           comment={item.kind === "comment" ? (item as ActivityTicketComment & { kind: "comment" }).content : undefined}

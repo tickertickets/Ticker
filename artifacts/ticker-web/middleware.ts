@@ -7,7 +7,7 @@
 const API_BASE = "https://ticker-api-server.onrender.com";
 
 const CRAWLER_RE =
-  /facebookexternalhit|facebot|twitterbot|linkedinbot|slackbot|discordbot|telegrambot|whatsapp|instagram|line-poker|googlebot|bingbot|yandexbot|duckduckbot|applebot|ia_archiver|semrushbot|screaming.frog|wget|curl\/[0-9]/i;
+  /facebookexternalhit|facebot|twitterbot|linkedinbot|slackbot|discordbot|telegrambot|whatsapp|instagram|line-poker|linebot|line\/|liff|kakaostory|googlebot|bingbot|yandexbot|duckduckbot|applebot|ia_archiver|semrushbot|screaming.frog|wget|curl\/[0-9]/i;
 
 function getOgPath(pathname: string): string | null {
   const ticket  = pathname.match(/^\/ticket\/([a-zA-Z0-9_-]+)/);
@@ -30,7 +30,7 @@ export default async function middleware(request: Request): Promise<Response | u
   try {
     const apiRes = await fetch(`${API_BASE}${ogPath}`, {
       headers: { "User-Agent": ua, Accept: "text/html" },
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(12000),
     });
     if (!apiRes.ok) return undefined; // API error — fall through to SPA
     const html = await apiRes.text();

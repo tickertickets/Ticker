@@ -518,6 +518,7 @@ function AppRoutes() {
       /^\/@[^/]+$/.test(location) ||
       /^\/movie\/.+$/.test(location) ||
       /^\/chain\/(?!new$)[^/]+$/.test(location) ||
+      /^\/chains\/(?!new$)[^/]+$/.test(location) ||
       /^\/person\/[^/]+$/.test(location) ||
       /^\/character\/[^/]+$/.test(location) ||
       /^\/wiki\/[^/]+$/.test(location);
@@ -577,6 +578,7 @@ function AppRoutes() {
                 <Route path="/profile/:username" component={Profile} />
                 <Route path="/@:username">{(p: Record<string,string>) => <Redirect to={`/profile/${p.username}`} />}</Route>
                 <Route path="/chain/:id"         component={ChainDetail} />
+                <Route path="/chains/:id"        component={ChainDetail} />
                 <Route path="/person/:personId"  component={PersonDetail} />
                 <Route path="/character/:wikidataId" component={CharacterDetail} />
                 <Route path="/wiki/:wikiPageId"  component={WikiDetail} />
@@ -664,6 +666,7 @@ function AppRoutes() {
               <Route path="/chain/new"         component={CreateChain} />
               <Route path="/chain/:id/edit"    component={EditChain} />
               <Route path="/chain/:id"         component={ChainDetail} />
+              <Route path="/chains/:id"        component={ChainDetail} />
               <Route path="/person/:personId"  component={PersonDetail} />
               <Route path="/character/:wikidataId" component={CharacterDetail} />
               <Route path="/wiki/:wikiPageId"  component={WikiDetail} />

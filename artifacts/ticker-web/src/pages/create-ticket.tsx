@@ -1854,7 +1854,7 @@ export default function CreateTicket() {
             </p>
             <p className="text-[11px] text-amber-600 dark:text-amber-400 text-center leading-relaxed mb-3 px-1 bg-amber-50 dark:bg-amber-950/30 rounded-xl py-2">
               {lang === "th"
-                ? "⚠️ ภาพประกอบบนโพสต์ตั๋วที่คุณเลือกอาจอยู่ภายใต้ลิขสิทธิ์ของบุคคลที่สาม Ticker ไม่ได้เป็นเจ้าของหรืออ้างสิทธิ์ในภาพดังกล่าว และไม่รับผิดชอบต่อการเลือกใช้ภาพของผู้ใช้ หากเจ้าของสิทธิ์ยื่นคำร้อง DMCA Takedown ที่มีมูล ภาพในโพสต์ของคุณอาจถูกนำออกโดยไม่แจ้งล่วงหน้า การกด \"โพสต์\" ถือว่าคุณรับทราบและยอมรับเงื่อนไขนี้"
+                ? "⚠️ ภาพประกอบบนตั๋วที่คุณเลือกอาจอยู่ภายใต้ลิขสิทธิ์ของบุคคลที่สาม Ticker ไม่ได้เป็นเจ้าของหรืออ้างสิทธิ์ในภาพดังกล่าว และไม่รับผิดชอบต่อการเลือกใช้ภาพของผู้ใช้ หากเจ้าของสิทธิ์ยื่นคำร้อง DMCA Takedown ที่มีมูล ภาพในตั๋วของคุณอาจถูกนำออกโดยไม่แจ้งล่วงหน้า การกด \"สร้างตั๋ว\" ถือว่าคุณรับทราบและยอมรับเงื่อนไขนี้"
                 : "⚠️ The cover image you select may be protected by third-party copyright. Ticker does not own or claim any rights to such images and is not responsible for users' image choices. If a rights holder submits a valid DMCA Takedown Notice, your post's cover image may be removed without prior notice. By tapping \"Post,\" you acknowledge and accept this condition."}</p>
             <div className="flex flex-col gap-2">
               <button
