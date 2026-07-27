@@ -285,7 +285,7 @@ function AccordionContent({ open, children }: { open: boolean; children?: ReactN
 
 // ── BackdropCarousel — single 16/9 auto-slide block (mirrors UpcomingCard's MovieCarousel) ──
 function BackdropCarousel({ backdrops, title, paused = false }: { backdrops: string[]; title: string; paused?: boolean }) {
-  const pool = backdrops.slice(0, 20);
+  const pool = backdrops.slice(0, 5); // matches Upcomings MovieCarousel pool size
   const totalPages = pool.length;
   const [page, setPage] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -1017,8 +1017,8 @@ export default function MovieDetail() {
     gcTime: 4 * 60 * 60 * 1000,
   });
   const allMovieImages: MovieImage[] = backdropsData?.images ?? [];
-  const posterImages   = allMovieImages.filter(i => i.type === "poster").map(i => i.url);
-  const backdropImages = allMovieImages.filter(i => i.type === "backdrop" || i.type === "still").map(i => i.url);
+  // Movie detail shows only backdrops in the ภาพฉาก section (mirrors Upcomings / MovieCarousel).
+  const backdropImages = allMovieImages.filter(i => i.type === "backdrop").map(i => i.url);
 
   const collectionMovieCount = (collectionData?.movies ?? []).filter(m => !m.isSpinoff).length;
   const isFranchise = isTvShowEarly || collectionMovieCount > 1;
@@ -1426,26 +1426,7 @@ export default function MovieDetail() {
 
       </div>
 
-      {/* ── Poster gallery (up to 20) ── */}
-      {posterImages.length > 0 && (
-        <div className="pt-4">
-          <div className="flex items-center gap-2 mb-2 px-5">
-            <Images className="w-3.5 h-3.5 text-foreground flex-shrink-0" />
-            <p className="text-xs font-bold text-foreground">{lang === "th" ? "โปสเตอร์" : "Posters"}</p>
-          </div>
-          <div className="px-5">
-            <div className="grid grid-cols-3 gap-2">
-              {posterImages.map((url, i) => (
-                <div key={url} className="relative aspect-[2/3] rounded-xl overflow-hidden bg-secondary">
-                  <PosterImage src={url} alt={`${movie?.title ?? ""} poster ${i + 1}`} eager={i < 3} />
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Backdrops gallery (up to 20) ── */}
+      {/* ── Backdrops / ภาพฉาก — mirrors Upcomings MovieCarousel (backdrops only, same 5-image pool) ── */}
       {backdropImages.length > 0 && (
         <div className="pt-4">
           <div className="flex items-center gap-2 mb-2 px-5">
