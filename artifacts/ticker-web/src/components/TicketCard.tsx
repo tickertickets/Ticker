@@ -1554,15 +1554,15 @@ function FeedCard({ ticket, onLongPress, onNotInterested }: { ticket: Ticket; on
       {/* Associated users (tagged + party members) — horizontal scroll row below card */}
       {(() => {
         const tagged = (((ticket as unknown) as Record<string, unknown>)["taggedUsers"] as Array<{ id?: string; username: string; displayName: string | null }> | undefined) ?? [];
-        const party  = (((ticket as unknown) as Record<string, unknown>)["partyMembers"] as Array<{ seatNumber?: number; username: string; displayName: string | null; avatarUrl?: string | null }> | undefined) ?? [];
+        const party  = (((ticket as unknown) as Record<string, unknown>)["partyMembers"] as Array<{ seatNumber?: number; ticketId?: string | null; username: string; displayName: string | null; avatarUrl?: string | null }> | undefined) ?? [];
         // merge + deduplicate by username, exclude the ticket owner
         const ownerUsername = ticket.user?.username;
         const seen = new Set<string>();
-        const all: { username: string }[] = [];
+        const all: { username: string; ticketId?: string | null }[] = [];
         for (const u of [...tagged, ...party]) {
           if (u.username && u.username !== ownerUsername && !seen.has(u.username)) {
             seen.add(u.username);
-            all.push(u);
+            all.push({ username: u.username, ticketId: (u as any).ticketId ?? null });
           }
         }
         if (all.length === 0) return null;
@@ -1574,7 +1574,7 @@ function FeedCard({ ticket, onLongPress, onNotInterested }: { ticket: Ticket; on
             {all.map((u, i) => (
               <span key={u.username} className="flex-shrink-0 flex items-center">
                 {i > 0 && <span className="text-muted-foreground/50 text-xs select-none mx-1.5">·</span>}
-                <Link href={`/profile/${u.username}`} onClick={e => e.stopPropagation()}>
+                <Link href={u.ticketId ? `/ticket/${u.ticketId}` : `/profile/${u.username}`} onClick={e => e.stopPropagation()}>
                   <span className="whitespace-nowrap text-xs text-muted-foreground font-semibold hover:text-foreground transition-colors flex items-center gap-1">
                     @{u.username}
                   </span>

@@ -375,6 +375,8 @@ function AppRoutes() {
 
     // ── Horizontal tab swipe — main-tab surfaces only ──────────────────
     if (!isTabPath(location)) return;
+    // หน้า Search จัดการ swipe เองระหว่าง mood pills — ห้ามให้ระดับ app เปลี่ยน tab
+    if (location === "/search") return;
     // NOTE: /following was previously excluded here to avoid conflicting with
     // its internal pill-switching swipes, but the startsInHorizScroller()
     // guard above already filters out touches that begin inside the pill row,

@@ -703,7 +703,10 @@ router.post(
 
     // Release date guard — only allow posting movies that have already been released
     if (!isReel) {
-      const releaseDateStr = (snapshot as any)?.releaseDate as string | null | undefined;
+      // ใช้ thReleaseDate (วันฉายไทย) ก่อน ถ้าไม่มีถึงใช้ releaseDate (วันฉายสากล)
+      const thReleaseDateStr = (snapshot as any)?.thReleaseDate as string | null | undefined;
+      const globalReleaseDateStr = (snapshot as any)?.releaseDate as string | null | undefined;
+      const releaseDateStr = thReleaseDateStr || globalReleaseDateStr;
       if (releaseDateStr) {
         const today = new Date();
         // Compare at date granularity (YYYY-MM-DD), no time component

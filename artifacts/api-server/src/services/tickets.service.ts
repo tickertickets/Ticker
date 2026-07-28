@@ -147,6 +147,7 @@ export async function calculateRankTier(
     }
 
     // ── Cache miss / stale — fetch from TMDB ─────────────────────────────────
+    // append_to_response=release_dates เพื่อดึงวันฉายในแต่ละประเทศ (รวมไทย) ในคำขอเดียว
     const data = await tmdbFetch<{
       vote_average?: number;
       vote_count?: number;
@@ -161,7 +162,13 @@ export async function calculateRankTier(
       backdrop_path?: string | null;
       overview?: string | null;
       success?: boolean;
-    }>(`/movie/${tmdbId}`);
+      release_dates?: {
+        results?: Array<{
+          iso_3166_1: string;
+          release_dates: Array<{ release_date: string; type: number }>;
+        }>;
+      };
+    }>(`/movie/${tmdbId}`, { append_to_response: "release_dates" });
 
     if (data.success === false) {
       return { tier: "common", score: 0, snapshot: empty };
@@ -178,6 +185,16 @@ export async function calculateRankTier(
       ? parseInt(data.release_date.slice(0, 4), 10)
       : null;
 
+    // ── Parse วันฉายไทย จาก append_to_response=release_dates ────────────────
+    // type 3 = Theatrical (โรงหนัง) — ใช้ก่อน, fallback ไป entry แรก
+    const thEntry = data.release_dates?.results?.find((r) => r.iso_3166_1 === "TH");
+    const thDateEntry =
+      thEntry?.release_dates?.find((d) => d.type === 3) ??
+      thEntry?.release_dates?.[0];
+    const thReleaseDate = thDateEntry?.release_date
+      ? thDateEntry.release_date.slice(0, 10)
+      : null;
+
     // ── Upsert into movies table ──────────────────────────────────────────────
     try {
       await db
@@ -190,6 +207,7 @@ export async function calculateRankTier(
           backdropUrl: data.backdrop_path ? `https://image.tmdb.org/t/p/w1280${data.backdrop_path}` : null,
           overview: data.overview ?? null,
           releaseDate: data.release_date ?? null,
+          thReleaseDate,
           voteAverage: rating.toString(),
           voteCount: votes,
           popularity: popularity.toString(),
@@ -205,6 +223,7 @@ export async function calculateRankTier(
             popularity: popularity.toString(),
             genreIds,
             franchiseIds,
+            thReleaseDate,
             fetchedAt: new Date(),
           },
         });
@@ -223,6 +242,8 @@ export async function calculateRankTier(
       popularity,
       genreIds,
       franchiseIds,
+      releaseDate: data.release_date ?? null,
+      thReleaseDate,
     };
 
     return { tier, score, snapshot };
@@ -351,12 +372,13 @@ export async function buildTicketBatch(
 
   // Fetch party members for all party tickets
   const partyGroupIds = [...new Set(tickets.filter(t => t.partyGroupId).map(t => t.partyGroupId!))];
-  type PartyMemberRow = { partyGroupId: string; seatNumber: number; userId: string; username: string | null; displayName: string | null; avatarUrl: string | null };
+  type PartyMemberRow = { partyGroupId: string; seatNumber: number; userId: string; ticketId: string | null; username: string | null; displayName: string | null; avatarUrl: string | null };
   let allPartyMemberRows: PartyMemberRow[] = [];
   if (partyGroupIds.length > 0) {
     // (1) Members who have already posted their own ticket in this party
     const ticketRows = await db
       .select({
+        id: ticketsTable.id,
         partyGroupId: ticketsTable.partyGroupId,
         seatNumber: ticketsTable.partySeatNumber,
         userId: ticketsTable.userId,
@@ -368,7 +390,14 @@ export async function buildTicketBatch(
       .innerJoin(usersTable, eq(ticketsTable.userId, usersTable.id))
       .where(and(inArray(ticketsTable.partyGroupId, partyGroupIds), isNull(ticketsTable.deletedAt)));
 
-    const postedUserIds = new Set(ticketRows.map(r => r.userId));
+    // Track postedUserIds PER partyGroupId — a global set would incorrectly exclude
+    // users who posted in party A from appearing as invitees in party B.
+    const postedUserIdsByGroup = new Map<string, Set<string>>();
+    for (const r of ticketRows) {
+      if (!r.partyGroupId) continue;
+      if (!postedUserIdsByGroup.has(r.partyGroupId)) postedUserIdsByGroup.set(r.partyGroupId, new Set());
+      postedUserIdsByGroup.get(r.partyGroupId)!.add(r.userId);
+    }
 
     // (2) Accepted invitees who haven't posted their ticket yet — fill the gap
     const inviteRows = await db
@@ -392,17 +421,19 @@ export async function buildTicketBatch(
         partyGroupId: r.partyGroupId!,
         seatNumber: r.seatNumber ?? 0,
         userId: r.userId,
+        ticketId: r.id,
         username: r.username,
         displayName: r.displayName,
         avatarUrl: r.avatarUrl,
       })),
-      // Only include invite rows for users not already represented by a ticket
+      // Only include invite rows for users not already represented by a ticket IN THIS GROUP
       ...inviteRows
-        .filter((r) => !postedUserIds.has(r.inviteeUserId))
+        .filter((r) => !postedUserIdsByGroup.get(r.partyGroupId!)?.has(r.inviteeUserId))
         .map((r): PartyMemberRow => ({
           partyGroupId: r.partyGroupId!,
           seatNumber: r.assignedSeat ?? 0,
           userId: r.inviteeUserId,
+          ticketId: null,
           username: r.username,
           displayName: r.displayName,
           avatarUrl: r.avatarUrl,
@@ -500,7 +531,7 @@ export async function buildTicketBatch(
         ? allPartyMemberRows
             .filter(m => m.partyGroupId === ticket.partyGroupId && m.userId !== ticket.userId)
             .sort((a, b) => a.seatNumber - b.seatNumber)
-            .map(m => ({ seatNumber: m.seatNumber, username: m.username!, displayName: m.displayName, avatarUrl: m.avatarUrl }))
+            .map(m => ({ seatNumber: m.seatNumber, ticketId: m.ticketId, username: m.username!, displayName: m.displayName, avatarUrl: m.avatarUrl }))
         : [],
       specialColor: ticket.specialColor,
       customRankTier: ticket.customRankTier,
@@ -674,11 +705,12 @@ export async function buildTicket(
     }
   }
 
-  let partyMembers: Array<{ seatNumber: number; username: string; displayName: string | null; avatarUrl: string | null }> = [];
+  let partyMembers: Array<{ seatNumber: number; ticketId: string | null; username: string; displayName: string | null; avatarUrl: string | null }> = [];
   if (ticket.partyGroupId) {
     // (1) Members who have already posted their own ticket in this party
     const ticketRows = await db
       .select({
+        id: ticketsTable.id,
         seatNumber: ticketsTable.partySeatNumber,
         userId: ticketsTable.userId,
         username: usersTable.username,
@@ -707,14 +739,14 @@ export async function buildTicket(
         eq(partyInvitesTable.status, "accepted"),
       ));
 
-    type MemberEntry = { seatNumber: number; username: string; displayName: string | null; avatarUrl: string | null };
+    type MemberEntry = { seatNumber: number; ticketId: string | null; username: string; displayName: string | null; avatarUrl: string | null };
     const merged: MemberEntry[] = [
       ...ticketRows
         .filter((r) => r.userId !== ticket.userId)
-        .map((r): MemberEntry => ({ seatNumber: r.seatNumber ?? 0, username: r.username!, displayName: r.displayName, avatarUrl: r.avatarUrl })),
+        .map((r): MemberEntry => ({ seatNumber: r.seatNumber ?? 0, ticketId: r.id, username: r.username!, displayName: r.displayName, avatarUrl: r.avatarUrl })),
       ...inviteRows
         .filter((r) => r.inviteeUserId !== ticket.userId && !postedUserIds.has(r.inviteeUserId))
-        .map((r): MemberEntry => ({ seatNumber: r.assignedSeat ?? 0, username: r.username!, displayName: r.displayName, avatarUrl: r.avatarUrl })),
+        .map((r): MemberEntry => ({ seatNumber: r.assignedSeat ?? 0, ticketId: null, username: r.username!, displayName: r.displayName, avatarUrl: r.avatarUrl })),
     ];
     partyMembers = merged.sort((a, b) => a.seatNumber - b.seatNumber);
   }

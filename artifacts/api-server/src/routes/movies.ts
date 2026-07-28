@@ -714,13 +714,35 @@ router.get(
         poolState = cachedPool as PoolState;
       }
 
+      // Cache key สำหรับ pool ที่ดีที่สุดที่เคยได้มา (7 วัน) — fallback สุดท้ายเมื่อ TMDB ไม่ตอบ
+      const lastGoodKey = `mood-pool-${moodId}-${subFilter || "main"}-${lang}-last-good`;
+      const LAST_GOOD_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7 วัน
+
       if (!poolState) {
         const batch = await fetchMoodPoolBatch(cfg, urlFn, startPage, GROWTH_TMDB_PAGES, startPage, lang);
-        poolState = {
-          allMovies: batch.movies as Record<string, any>[],
-          tmdbPagesFetched: GROWTH_TMDB_PAGES,
-          tmdbTotalPages: batch.tmdbTotalPages || TMDB_MAX_PAGE,
-        };
+        if (batch.movies.length === 0 && startPage > 1) {
+          // Daily rotation หยิบ page นอกช่วงที่ TMDB มี — fallback กลับ page 1
+          const fallback = await fetchMoodPoolBatch(cfg, urlFn, 1, GROWTH_TMDB_PAGES, 1, lang);
+          poolState = {
+            allMovies: fallback.movies as Record<string, any>[],
+            tmdbPagesFetched: GROWTH_TMDB_PAGES,
+            tmdbTotalPages: fallback.tmdbTotalPages || TMDB_MAX_PAGE,
+          };
+        } else {
+          poolState = {
+            allMovies: batch.movies as Record<string, any>[],
+            tmdbPagesFetched: GROWTH_TMDB_PAGES,
+            tmdbTotalPages: batch.tmdbTotalPages || TMDB_MAX_PAGE,
+          };
+        }
+
+        // ถ้า fetch ทั้งหมดยังได้ 0 (TMDB rate-limit / ล่ม) — ใช้ pool วันก่อนๆ แทน
+        if (poolState.allMovies.length === 0) {
+          const lastGood = await getCached(lastGoodKey, LAST_GOOD_TTL_MS);
+          if (lastGood && Array.isArray((lastGood as any).allMovies) && (lastGood as any).allMovies.length > 0) {
+            poolState = lastGood as PoolState;
+          }
+        }
       }
 
       // Grow the pool while the requested page needs more items than we have

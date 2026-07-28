@@ -14,7 +14,8 @@ const router = Router();
 
 const APP_URL = process.env["APP_URL"] ?? "https://ticker-tickets.vercel.app";
 const SITE_NAME = "Ticker";
-const DEFAULT_IMAGE = `${APP_URL}/og-default.png`;
+// Use icon-512.png as fallback — og-default.png may not exist in every deployment
+const DEFAULT_IMAGE = `${APP_URL}/icon-512.png`;
 
 function renderOgHtml({
   title,
@@ -96,8 +97,12 @@ router.get("/ticket/:id", async (req, res) => {
     if (ticket.movieYear) titleParts.push(`(${ticket.movieYear})`);
     const title = `${titleParts.join(" ")} — ${SITE_NAME}`;
     const description = ticket.caption?.trim() || `ดู ${ticket.movieTitle} บน Ticker`;
-    // ถ้าตั๋วเป็น poster mode ให้ใช้ cardBackdropUrl (ภาพที่ผู้ใช้เลือก) ก่อน posterUrl
-    const image = (ticket.cardBackdropUrl as string | null) || ticket.posterUrl || DEFAULT_IMAGE;
+    // ใช้ภาพโปสเตอร์/backdrop โดยตรงจาก TMDB CDN (โหลดทันที ไม่ต้องรอ Render generate)
+    // export-card.png ต้องการ Render ตื่น → crawler หมดเวลาก่อน → ใช้ static image แทน
+    const image =
+      (ticket.cardBackdropUrl as string | null) ||
+      (ticket.posterUrl as string | null) ||
+      DEFAULT_IMAGE;
 
     res.set(OG_HEADERS).send(renderOgHtml({ title, description, image, redirectTo, browserRedirectTo: `${redirectTo}?_r=1` }));
   } catch {

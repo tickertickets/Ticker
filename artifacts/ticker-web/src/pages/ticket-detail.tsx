@@ -440,17 +440,17 @@ export default function TicketDetail() {
   const hideLikes = (td["hideLikes"] as boolean | undefined) ?? false;
   const episodeLabel = (td["episodeLabel"] as string | null) ?? null;
   const taggedUsers = (td["taggedUsers"] as Array<{ id: string; username: string }> | undefined) ?? [];
-  const partyMembers = (td["partyMembers"] as Array<{ username: string; displayName: string | null }> | undefined) ?? [];
+  const partyMembers = (td["partyMembers"] as Array<{ username: string; displayName: string | null; ticketId?: string | null }> | undefined) ?? [];
   const tagRatings = (td["tagRatings"] as Array<{ userId: string; rating: number }> | undefined) ?? [];
   const isTagged = !!user && taggedUsers.some((u) => u.id === user.id);
 
   const ownerUsername = ticket.user?.username;
   const seenUsernames = new Set<string>();
-  const associatedUsers: { username: string }[] = [];
+  const associatedUsers: { username: string; ticketId?: string | null }[] = [];
   for (const u of [...taggedUsers, ...partyMembers]) {
     if (u.username && u.username !== ownerUsername && !seenUsernames.has(u.username)) {
       seenUsernames.add(u.username);
-      associatedUsers.push(u);
+      associatedUsers.push({ username: u.username, ticketId: (u as any).ticketId ?? null });
     }
   }
 
@@ -571,7 +571,7 @@ export default function TicketDetail() {
             {associatedUsers.map((u, i) => (
               <span key={u.username} className="flex-shrink-0 flex items-center">
                 {i > 0 && <span className="text-muted-foreground/40 text-xs select-none mx-1.5">·</span>}
-                <Link href={`/profile/${u.username}`}>
+                <Link href={u.ticketId ? `/ticket/${u.ticketId}` : `/profile/${u.username}?tab=films`}>
                   <span className="whitespace-nowrap text-xs text-muted-foreground font-semibold hover:text-foreground transition-colors">
                     @{u.username}
                   </span>
@@ -678,7 +678,7 @@ export default function TicketDetail() {
 
         {/* Creator + Likes row */}
         <div className="mx-4 mt-4 flex items-center gap-3">
-          <Link href={`/profile/${ticket.user?.username}`}>
+          <Link href={`/profile/${ticket.user?.username}?tab=films`}>
             <div className="w-10 h-10 rounded-xl overflow-hidden bg-secondary border border-border flex-shrink-0">
               {ticket.user?.avatarUrl ? (
                 <img src={ticket.user.avatarUrl} alt={ticket.user.displayName ?? ""} className="w-full h-full object-cover" />
@@ -690,7 +690,7 @@ export default function TicketDetail() {
             </div>
           </Link>
           <div className="flex-1 min-w-0">
-            <Link href={`/profile/${ticket.user?.username}`}>
+            <Link href={`/profile/${ticket.user?.username}?tab=films`}>
               <div className="flex items-center gap-1">
                 <p className="text-sm font-bold text-foreground hover:underline">{ticket.user?.displayName}</p>
                 {isVerified(ticket.user?.username) && <VerifiedBadge />}

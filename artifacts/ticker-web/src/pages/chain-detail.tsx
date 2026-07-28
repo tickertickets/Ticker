@@ -608,7 +608,7 @@ export default function ChainDetail() {
 
         {/* ── Owner info ── */}
         {chain.user && (
-          <Link href={`/profile/${chain.user.username}`}>
+          <Link href={`/profile/${chain.user.username}?tab=chain`}>
             {/* Sized to match the owner row used on ticket detail (w-10 avatar,
                 text-sm name) rather than the smaller in-list avatar sizes. */}
             <div className="flex items-center gap-3 ml-1">
@@ -1158,7 +1158,7 @@ export default function ChainDetail() {
           };
           const renderComment = (c: ChainComment, isReply = false) => (
             <div id={`comment-${c.id}`} key={c.id} className={cn("flex gap-2.5", isReply && "ml-7 pl-3 border-l border-border")}>
-              <Link href={`/profile/${c.username}`}>
+              <Link href={`/profile/${c.username}?tab=chain`}>
                 <div className={cn("rounded-lg overflow-hidden bg-secondary border border-border flex-shrink-0 flex items-center justify-center", isReply ? "w-7 h-7" : "w-8 h-8")}>
                   {c.avatarUrl
                     ? <img src={c.avatarUrl} alt="" className="w-full h-full object-cover" />
@@ -1167,7 +1167,7 @@ export default function ChainDetail() {
               </Link>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
-                  <Link href={`/profile/${c.username}`}>
+                  <Link href={`/profile/${c.username}?tab=chain`}>
                     <span className="text-xs font-bold text-foreground">{c.displayName ?? c.username}</span>
                   </Link>
                   {isVerified(c.username) && <VerifiedBadge className="w-3 h-3 flex-shrink-0" />}
