@@ -372,7 +372,9 @@ export function MovieCarousel({
   // there — only when there are multiple images to swipe through.
   useEffect(() => {
     const el = containerRef.current;
-    if (!el || totalPages <= 1) return;
+    if (!el) return;
+    // Always block outer tab-swipe — even for single-image carousels the inner
+    // image area should never accidentally fire the explore-tab swipe handler.
     const stopProp = (e: TouchEvent) => { e.stopPropagation(); };
     el.addEventListener("touchstart", stopProp);
     return () => { el.removeEventListener("touchstart", stopProp); };

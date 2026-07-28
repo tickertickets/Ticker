@@ -607,6 +607,7 @@ router.post(
       cardTheme,
       cardBackdropUrl,
       cardBackdropOffsetX,
+      cardBackdropOffsetY,
       cardRuntime,
       cardDirector,
       cardProducer,
@@ -767,6 +768,10 @@ router.post(
       cardBackdropOffsetX:
         cardTheme === "poster" && cardBackdropOffsetX != null
           ? Number(cardBackdropOffsetX)
+          : 50,
+      cardBackdropOffsetY:
+        cardTheme === "poster" && cardBackdropOffsetY != null
+          ? Number(cardBackdropOffsetY)
           : 50,
       cardRuntime: cardTheme === "poster" ? (cardRuntime ?? null) : null,
       cardDirector: cardTheme === "poster" ? (cardDirector ?? null) : null,
@@ -1276,7 +1281,7 @@ router.patch(
     if (!ticket) throw new NotFoundError("Ticket");
     if (ticket.userId !== currentUserId) throw new ForbiddenError();
     const isReel = ticket.imdbId === "reel";
-    const { caption, captionAlign, memoryNote, rating, ratingType, watchedAt, location, isSpoiler, hideRating, partyMode, partySize, partySeatNumber, partyInviteeIds, removedInviteIds, cardTheme, cardBackdropUrl, cardBackdropOffsetX, episodeLabel } = req.body;
+    const { caption, captionAlign, memoryNote, rating, ratingType, watchedAt, location, isSpoiler, hideRating, partyMode, partySize, partySeatNumber, partyInviteeIds, removedInviteIds, cardTheme, cardBackdropUrl, cardBackdropOffsetX, cardBackdropOffsetY, episodeLabel } = req.body;
 
     // Party field validation and update preparation
     let partyUpdate: Record<string, unknown> = {};
@@ -1313,6 +1318,7 @@ router.patch(
           cardTheme,
           cardBackdropUrl: cardTheme === "poster" ? (typeof cardBackdropUrl === "string" ? cardBackdropUrl : ticket.cardBackdropUrl) : null,
           cardBackdropOffsetX: cardTheme === "poster" && typeof cardBackdropOffsetX === "number" ? cardBackdropOffsetX : ticket.cardBackdropOffsetX,
+          cardBackdropOffsetY: cardTheme === "poster" && typeof cardBackdropOffsetY === "number" ? cardBackdropOffsetY : ticket.cardBackdropOffsetY,
         } : {}),
         ...partyUpdate,
       })

@@ -80,6 +80,7 @@ export default function EditTicket() {
   const [cardTheme, setCardTheme] = useState<"classic" | "poster">(() => ((src as any)?.cardTheme ?? "classic") as "classic" | "poster");
   const [selectedBackdropUrl, setSelectedBackdropUrl] = useState<string | null>(() => (src as any)?.cardBackdropUrl ?? null);
   const [cardOffsetX, setCardOffsetX] = useState<number>(() => Number((src as any)?.cardBackdropOffsetX ?? 50));
+  const [cardOffsetY, setCardOffsetY] = useState<number>(() => Number((src as any)?.cardBackdropOffsetY ?? 50));
   // Party mode state (seeded from ticket data)
   const [partyMode, setPartyMode] = useState(() => Boolean((src as any)?.partyMode));
   const [partySize, setPartySize] = useState(() => Number((src as any)?.partySize) || 2);
@@ -109,24 +110,27 @@ export default function EditTicket() {
   // Drag-to-pan refs for poster preview
   const isDraggingRef = useRef(false);
   const panMovedRef   = useRef(false);
-  const dragStartRef  = useRef({ x: 0, offset: 50 });
+  const dragStartRef  = useRef({ x: 0, y: 0, offset: 50, offsetY: 50 });
 
   const onPanPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     e.currentTarget.setPointerCapture(e.pointerId);
     isDraggingRef.current = true;
     panMovedRef.current   = false;
-    dragStartRef.current  = { x: e.clientX, offset: cardOffsetX };
+    dragStartRef.current  = { x: e.clientX, y: e.clientY, offset: cardOffsetX, offsetY: cardOffsetY };
     e.currentTarget.style.cursor = "grabbing";
-  }, [cardOffsetX]);
+  }, [cardOffsetX, cardOffsetY]);
 
   const onPanPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (!isDraggingRef.current) return;
-    const containerWidth = e.currentTarget.offsetWidth || 178;
+    const containerWidth  = e.currentTarget.offsetWidth  || 178;
+    const containerHeight = e.currentTarget.offsetHeight || 178;
     const deltaX = e.clientX - dragStartRef.current.x;
-    if (Math.abs(deltaX) > 3) panMovedRef.current = true;
-    const deltaPercent = (deltaX / containerWidth) * 180;
-    const newOffset = Math.max(0, Math.min(100, dragStartRef.current.offset - deltaPercent));
-    setCardOffsetX(Math.round(newOffset));
+    const deltaY = e.clientY - dragStartRef.current.y;
+    if (Math.abs(deltaX) > 3 || Math.abs(deltaY) > 3) panMovedRef.current = true;
+    const newOffsetX = Math.max(0, Math.min(100, dragStartRef.current.offset  - (deltaX / containerWidth)  * 180));
+    const newOffsetY = Math.max(0, Math.min(100, dragStartRef.current.offsetY - (deltaY / containerHeight) * 180));
+    setCardOffsetX(Math.round(newOffsetX));
+    setCardOffsetY(Math.round(newOffsetY));
   }, []);
 
   const onPanPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
@@ -169,6 +173,7 @@ export default function EditTicket() {
       setCardTheme(((tk["cardTheme"] as string) ?? "classic") as "classic" | "poster");
       setSelectedBackdropUrl((tk["cardBackdropUrl"] as string | null) ?? null);
       setCardOffsetX(Number(tk["cardBackdropOffsetX"] ?? 50));
+      setCardOffsetY(Number(tk["cardBackdropOffsetY"] ?? 50));
       setSelectedEpisodeLabel((tk["episodeLabel"] as string | null) ?? null);
       setSeeded(true);
     }
@@ -280,6 +285,7 @@ export default function EditTicket() {
     if (fallback) {
       setSelectedBackdropUrl(fallback);
       setCardOffsetX(50);
+      setCardOffsetY(50);
     }
   }, [cardTheme, coverImages, selectedBackdropUrl, ticket?.posterUrl]);
 
@@ -337,7 +343,7 @@ export default function EditTicket() {
           isSpoiler, hideRating,
           episodeLabel: isTvShow ? (selectedEpisodeLabel ?? null) : undefined,
           // Poster theme fields (server ignores these for reels)
-          cardTheme, cardBackdropUrl: cardTheme === "poster" ? selectedBackdropUrl : null, cardBackdropOffsetX: cardOffsetX,
+          cardTheme, cardBackdropUrl: cardTheme === "poster" ? selectedBackdropUrl : null, cardBackdropOffsetX: cardOffsetX, cardBackdropOffsetY: cardOffsetY,
           // Party fields
           partyMode,
           partySize: partyMode ? partySize : undefined,
@@ -466,7 +472,7 @@ export default function EditTicket() {
                       onClick={(e) => { if (panMovedRef.current) { e.stopPropagation(); panMovedRef.current = false; } }}
                     >
                       {selectedBackdropUrl ? (
-                        <img src={selectedBackdropUrl} alt={displayTitle} className="absolute inset-0 w-full h-full object-cover" style={{ objectPosition: `${cardOffsetX}% center`, pointerEvents: "none" }} />
+                        <img src={selectedBackdropUrl} alt={displayTitle} className="absolute inset-0 w-full h-full object-cover" style={{ objectPosition: `${cardOffsetX}% ${cardOffsetY}%`, pointerEvents: "none" }} />
                       ) : (
                         <div className="absolute inset-0" style={{ background: "#b0ada8" }} />
                       )}
@@ -591,7 +597,7 @@ export default function EditTicket() {
                         <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">{t.coverSectionPosters}</p>
                         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none -mx-4 px-4">
                           {posterImages.map((img, i) => (
-                            <button key={`p-${i}`} onClick={() => { setSelectedBackdropUrl(img.url); setCardOffsetX(50); }}
+                            <button key={`p-${i}`} onClick={() => { setSelectedBackdropUrl(img.url); setCardOffsetX(50); setCardOffsetY(50); }}
                               className={cn("relative shrink-0 w-[42px] h-[63px] rounded-xl overflow-hidden border-2 transition-all",
                                 selectedBackdropUrl === img.url ? "border-foreground ring-2 ring-foreground/20" : "border-border")}>
                               <img src={img.url} alt={`poster ${i+1}`} className="w-full h-full object-cover" />
@@ -610,7 +616,7 @@ export default function EditTicket() {
                         <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">{t.coverSectionBackdrops}</p>
                         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none -mx-4 px-4">
                           {backdropImages.map((img, i) => (
-                            <button key={`b-${i}`} onClick={() => { setSelectedBackdropUrl(img.url); setCardOffsetX(50); }}
+                            <button key={`b-${i}`} onClick={() => { setSelectedBackdropUrl(img.url); setCardOffsetX(50); setCardOffsetY(50); }}
                               className={cn("relative shrink-0 w-28 h-[63px] rounded-xl overflow-hidden border-2 transition-all",
                                 selectedBackdropUrl === img.url ? "border-foreground ring-2 ring-foreground/20" : "border-border")}>
                               <img src={img.url} alt={`backdrop ${i+1}`} className="w-full h-full object-cover" />
@@ -629,7 +635,7 @@ export default function EditTicket() {
                         <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">{t.coverSectionStills}</p>
                         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none -mx-4 px-4">
                           {stillImages.map((img, i) => (
-                            <button key={`s-${i}`} onClick={() => { setSelectedBackdropUrl(img.url); setCardOffsetX(50); }}
+                            <button key={`s-${i}`} onClick={() => { setSelectedBackdropUrl(img.url); setCardOffsetX(50); setCardOffsetY(50); }}
                               className={cn("relative shrink-0 w-28 h-[63px] rounded-xl overflow-hidden border-2 transition-all",
                                 selectedBackdropUrl === img.url ? "border-foreground ring-2 ring-foreground/20" : "border-border")}>
                               <img src={img.url} alt={`still ${i+1}`} className="w-full h-full object-cover" />

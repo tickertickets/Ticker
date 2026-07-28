@@ -229,6 +229,7 @@ export function PosterCardFront({
   const t           = (ticket as unknown) as Record<string, unknown>;
   const backdropUrl = imageSrcOverride !== undefined ? imageSrcOverride : (t["cardBackdropUrl"] as string | null | undefined);
   const offsetX     = (t["cardBackdropOffsetX"] as number | null | undefined) ?? 50;
+  const offsetY     = (t["cardBackdropOffsetY"] as number | null | undefined) ?? 50;
   const ratingType  = (t["ratingType"] as string | undefined) ?? "star";
   const { lang }    = useLang();
   const imageLoaded = useImageLoaded(backdropUrl);
@@ -267,7 +268,7 @@ export function PosterCardFront({
                 style={{
                   backgroundImage: `url("${backdropUrl}")`,
                   backgroundSize: "cover",
-                  backgroundPosition: `${offsetX}% center`,
+                  backgroundPosition: `${offsetX}% ${offsetY}%`,
                   backgroundRepeat: "no-repeat",
                   opacity: imageLoaded ? 1 : 0,
                 }}

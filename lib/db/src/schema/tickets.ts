@@ -60,6 +60,7 @@ export const ticketsTable = pgTable("tickets", {
   cardTheme: text("card_theme").default("classic"),
   cardBackdropUrl: text("card_backdrop_url"),
   cardBackdropOffsetX: integer("card_backdrop_offset_x").default(50),
+  cardBackdropOffsetY: integer("card_backdrop_offset_y").default(50),
   cardRuntime: text("card_runtime"),
   cardDirector: text("card_director"),
   cardProducer: text("card_producer"),

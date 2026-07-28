@@ -123,6 +123,7 @@ interface Draft {
   cardTheme: "classic" | "poster";
   selectedBackdropUrl: string | null;
   cardOffsetX: number;
+  cardOffsetY: number;
   isPrivate: boolean;
   isPrivateMemory: boolean;
   hideRating?: boolean;
@@ -267,6 +268,7 @@ export default function CreateTicket() {
   const [cardTheme, setCardTheme] = useState<"classic" | "poster">("classic");
   const [selectedBackdropUrl, setSelectedBackdropUrl] = useState<string | null>(null);
   const [cardOffsetX, setCardOffsetX] = useState(50);
+  const [cardOffsetY, setCardOffsetY] = useState(50);
 
   // Date picker state
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -278,24 +280,27 @@ export default function CreateTicket() {
   // Drag-to-pan refs (used in poster preview)
   const isDraggingRef = useRef(false);
   const panMovedRef   = useRef(false); // tracks if pointer moved enough to suppress card-flip click
-  const dragStartRef  = useRef({ x: 0, offset: 50 });
+  const dragStartRef  = useRef({ x: 0, y: 0, offset: 50, offsetY: 50 });
 
   const onPanPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     e.currentTarget.setPointerCapture(e.pointerId);
     isDraggingRef.current = true;
     panMovedRef.current   = false;
-    dragStartRef.current  = { x: e.clientX, offset: cardOffsetX };
+    dragStartRef.current  = { x: e.clientX, y: e.clientY, offset: cardOffsetX, offsetY: cardOffsetY };
     e.currentTarget.style.cursor = "grabbing";
-  }, [cardOffsetX]);
+  }, [cardOffsetX, cardOffsetY]);
 
   const onPanPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (!isDraggingRef.current) return;
-    const containerWidth = e.currentTarget.offsetWidth || 178;
+    const containerWidth  = e.currentTarget.offsetWidth  || 178;
+    const containerHeight = e.currentTarget.offsetHeight || 178;
     const deltaX = e.clientX - dragStartRef.current.x;
-    if (Math.abs(deltaX) > 3) panMovedRef.current = true;
-    const deltaPercent = (deltaX / containerWidth) * 180;
-    const newOffset = Math.max(0, Math.min(100, dragStartRef.current.offset - deltaPercent));
-    setCardOffsetX(Math.round(newOffset));
+    const deltaY = e.clientY - dragStartRef.current.y;
+    if (Math.abs(deltaX) > 3 || Math.abs(deltaY) > 3) panMovedRef.current = true;
+    const newOffsetX = Math.max(0, Math.min(100, dragStartRef.current.offset  - (deltaX / containerWidth)  * 180));
+    const newOffsetY = Math.max(0, Math.min(100, dragStartRef.current.offsetY - (deltaY / containerHeight) * 180));
+    setCardOffsetX(Math.round(newOffsetX));
+    setCardOffsetY(Math.round(newOffsetY));
   }, []);
 
   const onPanPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
@@ -494,6 +499,7 @@ export default function CreateTicket() {
     if (fallback) {
       setSelectedBackdropUrl(fallback);
       setCardOffsetX(50);
+      setCardOffsetY(50);
     }
   }, [cardTheme, coverImages, selectedBackdropUrl, posterUrl]);
 
@@ -522,11 +528,11 @@ export default function CreateTicket() {
       savedAt: Date.now(),
       rating, ratingType: isDyingStar ? "blackhole" : "star",
       memoryNote, caption, captionAlign,
-      watchDate, watchLocation, cardTheme, selectedBackdropUrl, cardOffsetX,
+      watchDate, watchLocation, cardTheme, selectedBackdropUrl, cardOffsetX, cardOffsetY,
       isPrivate, isPrivateMemory, hideRating, isSpoiler, partyMode, partySize, partySeatNumber,
     };
   }, [selectedMovieId, movieDetails, rating, isDyingStar, memoryNote, caption, captionAlign,
-      watchDate, watchLocation, cardTheme, selectedBackdropUrl, cardOffsetX,
+      watchDate, watchLocation, cardTheme, selectedBackdropUrl, cardOffsetX, cardOffsetY,
       isPrivate, isPrivateMemory, hideRating, isSpoiler, partyMode, partySize, partySeatNumber, hasFormChanges]);
 
   // Debounced auto-save (600ms) — persists draft while user is editing
@@ -560,7 +566,7 @@ export default function CreateTicket() {
     setRating(0); setHoverRating(0); setIsDyingStar(false); setHideRating(false);
     setMemoryNote(""); setCaption(""); setCaptionAlign("left");
     setWatchDate(""); setWatchLocation("");
-    setCardTheme("classic"); setSelectedBackdropUrl(null); setCardOffsetX(50);
+    setCardTheme("classic"); setSelectedBackdropUrl(null); setCardOffsetX(50); setCardOffsetY(50);
     setPartyMode(false); setPartySize(2); setPartySeatNumber(1); setPartyInvitees([]);
     setIsPrivate(false); setIsPrivateMemory(false); setIsSpoiler(false);
     setSubmitError(""); setPreviewFlipped(false); setPreviewFlipSign(1);
@@ -572,7 +578,7 @@ export default function CreateTicket() {
     setIsDyingStar(d.ratingType === "blackhole");
     setMemoryNote(d.memoryNote); setCaption(d.caption); setCaptionAlign(d.captionAlign);
     setWatchDate(d.watchDate); setWatchLocation(d.watchLocation);
-    setCardTheme(d.cardTheme); setSelectedBackdropUrl(d.selectedBackdropUrl); setCardOffsetX(d.cardOffsetX);
+    setCardTheme(d.cardTheme); setSelectedBackdropUrl(d.selectedBackdropUrl); setCardOffsetX(d.cardOffsetX); setCardOffsetY(d.cardOffsetY ?? 50);
     setIsPrivate(d.isPrivate ?? false); setIsPrivateMemory(d.isPrivateMemory ?? false);
     setHideRating(d.hideRating ?? false); setIsSpoiler(d.isSpoiler ?? false);
     setPartyMode(d.partyMode); setPartySize(d.partySize); setPartySeatNumber(d.partySeatNumber);
@@ -633,7 +639,7 @@ export default function CreateTicket() {
       savedAt: Date.now(),
       rating, ratingType: isDyingStar ? "blackhole" : "star", memoryNote, caption, captionAlign,
       watchDate, watchLocation, cardTheme, selectedBackdropUrl,
-      cardOffsetX, isPrivate, isPrivateMemory, hideRating, isSpoiler, partyMode, partySize, partySeatNumber,
+      cardOffsetX, cardOffsetY, isPrivate, isPrivateMemory, hideRating, isSpoiler, partyMode, partySize, partySeatNumber,
     };
     writeDraft(draftKey, d, user?.id);
     const updated = readDrafts(draftKey);
@@ -778,6 +784,7 @@ export default function CreateTicket() {
           cardTheme,
           cardBackdropUrl: cardTheme === "poster" ? (selectedBackdropUrl ?? undefined) : undefined,
           cardBackdropOffsetX: cardTheme === "poster" ? cardOffsetX : undefined,
+          cardBackdropOffsetY: cardTheme === "poster" ? cardOffsetY : undefined,
           cardRuntime: cardTheme === "poster" ? (movieDetails.runtime ?? undefined) : undefined,
           cardDirector: cardTheme === "poster" ? (movieDetails.director ?? undefined) : undefined,
           cardProducer: cardTheme === "poster" ? (movieDetails.producer ?? undefined) : undefined,
@@ -1050,7 +1057,7 @@ export default function CreateTicket() {
                             src={selectedBackdropUrl}
                             alt={displayTitle}
                             className="absolute inset-0 w-full h-full object-cover"
-                            style={{ objectPosition: `${cardOffsetX}% center`, pointerEvents: "none" }}
+                            style={{ objectPosition: `${cardOffsetX}% ${cardOffsetY}%`, pointerEvents: "none" }}
                           />
                         ) : (
                           <div
@@ -1244,7 +1251,7 @@ export default function CreateTicket() {
                           <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">{t.coverSectionPosters}</p>
                           <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none -mx-4 px-4">
                             {posterImages.map((img, i) => (
-                              <button key={`p-${i}`} onClick={() => { setSelectedBackdropUrl(img.url); setCardOffsetX(50); }}
+                              <button key={`p-${i}`} onClick={() => { setSelectedBackdropUrl(img.url); setCardOffsetX(50); setCardOffsetY(50); }}
                                 className={cn("relative shrink-0 w-[42px] h-[63px] rounded-xl overflow-hidden border-2 transition-all",
                                   selectedBackdropUrl === img.url ? "border-foreground ring-2 ring-foreground/20" : "border-border")}>
                                 <img src={img.url} alt={`poster ${i+1}`} className="w-full h-full object-cover" />
@@ -1263,7 +1270,7 @@ export default function CreateTicket() {
                           <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">{t.coverSectionBackdrops}</p>
                           <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none -mx-4 px-4">
                             {backdropImages.map((img, i) => (
-                              <button key={`b-${i}`} onClick={() => { setSelectedBackdropUrl(img.url); setCardOffsetX(50); }}
+                              <button key={`b-${i}`} onClick={() => { setSelectedBackdropUrl(img.url); setCardOffsetX(50); setCardOffsetY(50); }}
                                 className={cn("relative shrink-0 w-28 h-[63px] rounded-xl overflow-hidden border-2 transition-all",
                                   selectedBackdropUrl === img.url ? "border-foreground ring-2 ring-foreground/20" : "border-border")}>
                                 <img src={img.url} alt={`backdrop ${i+1}`} className="w-full h-full object-cover" />
@@ -1282,7 +1289,7 @@ export default function CreateTicket() {
                           <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">{t.coverSectionStills}</p>
                           <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none -mx-4 px-4">
                             {stillImages.map((img, i) => (
-                              <button key={`s-${i}`} onClick={() => { setSelectedBackdropUrl(img.url); setCardOffsetX(50); }}
+                              <button key={`s-${i}`} onClick={() => { setSelectedBackdropUrl(img.url); setCardOffsetX(50); setCardOffsetY(50); }}
                                 className={cn("relative shrink-0 w-28 h-[63px] rounded-xl overflow-hidden border-2 transition-all",
                                   selectedBackdropUrl === img.url ? "border-foreground ring-2 ring-foreground/20" : "border-border")}>
                                 <img src={img.url} alt={`still ${i+1}`} className="w-full h-full object-cover" />

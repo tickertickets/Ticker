@@ -813,6 +813,21 @@ export default function Search({ isActive = true }: { isActive?: boolean } = {})
         if (debouncedQuery) return;
         catSwipeRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
       }}
+      onTouchMove={(e) => {
+        // Block the event from leaking to any parent navigator when at a boundary
+        // pill (Trending = first, Cult Classic = last) — prevents "swiping out of
+        // the search page" when there are no more categories in that direction.
+        if (!catSwipeRef.current || debouncedQuery) return;
+        const dx = e.touches[0].clientX - catSwipeRef.current.x;
+        const dy = Math.abs(e.touches[0].clientY - catSwipeRef.current.y);
+        if (Math.abs(dx) < 8 || Math.abs(dx) < dy * 1.2) return;
+        const catIds = CATEGORIES_T.map((c) => c.id);
+        const ci = catIds.indexOf(activeCategory);
+        const atStart = ci === 0;
+        const atEnd   = ci === catIds.length - 1;
+        // swipe left (dx<0) at last pill, or swipe right (dx>0) at first pill → block
+        if ((dx < 0 && atEnd) || (dx > 0 && atStart)) e.preventDefault();
+      }}
       onTouchEnd={(e) => {
         if (!catSwipeRef.current || debouncedQuery) return;
         const dx = e.changedTouches[0].clientX - catSwipeRef.current.x;

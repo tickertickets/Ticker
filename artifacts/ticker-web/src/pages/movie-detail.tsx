@@ -285,7 +285,7 @@ function AccordionContent({ open, children }: { open: boolean; children?: ReactN
 
 // ── BackdropCarousel — single 16/9 auto-slide block (mirrors UpcomingCard's MovieCarousel) ──
 function BackdropCarousel({ backdrops, title, paused = false }: { backdrops: string[]; title: string; paused?: boolean }) {
-  const pool = backdrops.slice(0, 5); // matches Upcomings MovieCarousel pool size
+  const pool = backdrops.slice(0, 10); // backdrops + stills, up to 10
   const totalPages = pool.length;
   const [page, setPage] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -1017,8 +1017,8 @@ export default function MovieDetail() {
     gcTime: 4 * 60 * 60 * 1000,
   });
   const allMovieImages: MovieImage[] = backdropsData?.images ?? [];
-  // Movie detail shows only backdrops in the ภาพฉาก section (mirrors Upcomings / MovieCarousel).
-  const backdropImages = allMovieImages.filter(i => i.type === "backdrop").map(i => i.url);
+  // Movie detail ภาพฉาก: backdrops + stills mixed, up to 10 in carousel.
+  const backdropImages = allMovieImages.filter(i => i.type === "backdrop" || i.type === "still").map(i => i.url);
 
   const collectionMovieCount = (collectionData?.movies ?? []).filter(m => !m.isSpinoff).length;
   const isFranchise = isTvShowEarly || collectionMovieCount > 1;

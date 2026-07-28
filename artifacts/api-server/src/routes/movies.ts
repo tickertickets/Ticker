@@ -2027,9 +2027,10 @@ router.get(
       posters?:   TMDBImage[];
     }>(
       `/${isTv ? "tv" : "movie"}/${tmdbId}/images`,
-      // No language filter — sortImages puts language-neutral (iso_639_1=null) first,
-      // then quality-sorted. Filtering by "en,null" was silently excluding nearly all
-      // images for non-English-language films.
+      // Broad language list so TMDB returns images for all major languages + language-neutral
+      // (iso_639_1=null). Without this, TMDB defaults to English-only and non-English films
+      // return 0 images. sortImages() still puts language-neutral (cleanest) images first.
+      { include_image_language: "en,th,ja,ko,zh,fr,de,it,ru,pt,es,null" },
     );
 
     // Posters first (up to 20), backdrops fill remaining slots up to total 40.
