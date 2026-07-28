@@ -24,6 +24,7 @@ function renderOgHtml({
   redirectTo,
   browserRedirectTo,
   type = "website",
+  bodyContent,
 }: {
   title: string;
   description: string;
@@ -34,6 +35,8 @@ function renderOgHtml({
    *  is reached via a Vercel rewrite (to break the redirect loop). */
   browserRedirectTo?: string;
   type?: string;
+  /** Optional rich text body for SEO — visible to crawlers that index this page directly */
+  bodyContent?: string;
 }) {
   const redir = browserRedirectTo ?? redirectTo;
   const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -54,10 +57,11 @@ function renderOgHtml({
 <meta name="twitter:description" content="${esc(description)}" />
 <meta name="twitter:image" content="${esc(image)}" />
 <meta http-equiv="refresh" content="0;url=${esc(redir)}" />
+<style>body{font-family:sans-serif;max-width:680px;margin:40px auto;padding:0 16px;color:#111}h1{font-size:1.5rem;margin-bottom:.5rem}p{color:#444;margin:.5rem 0}ul{padding-left:1.2rem;color:#333}a.cta{display:inline-block;margin-top:1rem;background:#111;color:#fff;padding:.6rem 1.2rem;border-radius:8px;text-decoration:none}</style>
 </head>
 <body>
 <script>window.location.replace(${JSON.stringify(redir)});</script>
-<p>Redirecting to <a href="${esc(redir)}">${esc(title)}</a>…</p>
+${bodyContent ?? `<p>Redirecting to <a href="${esc(redir)}">${esc(title)}</a>…</p>`}
 </body>
 </html>`;
 }
@@ -135,41 +139,48 @@ router.get("/chain/:id", async (req, res) => {
     const title = `${chain.title} — ${SITE_NAME}`;
     const description = chain.description?.trim() || `ร่วมดูหนังใน Chains "${chain.title}" บน Ticker`;
 
-    // Image priority: taggedMoviePosterUrl → first chain movie poster → moviesTable lookup → default
+    // Fetch chain movies for image + SEO body content
+    const chainMovies = await db
+      .select({ posterUrl: chainMoviesTable.posterUrl, imdbId: chainMoviesTable.imdbId, movieTitle: chainMoviesTable.movieTitle, movieYear: chainMoviesTable.movieYear })
+      .from(chainMoviesTable)
+      .where(eq(chainMoviesTable.chainId, id))
+      .orderBy(asc(chainMoviesTable.position))
+      .limit(20);
+
+    // Image priority: taggedMoviePosterUrl → chain movie posterUrl → moviesTable lookup → default
     let image: string = (chain.taggedMoviePosterUrl as string | null) || "";
     if (!image) {
-      // Get up to 5 chain movies so we have fallbacks if early ones lack posters
-      const chainMovies = await db
-        .select({ posterUrl: chainMoviesTable.posterUrl, imdbId: chainMoviesTable.imdbId })
-        .from(chainMoviesTable)
-        .where(eq(chainMoviesTable.chainId, id))
-        .orderBy(asc(chainMoviesTable.position))
-        .limit(5);
-
-      // Try posterUrl stored directly in chain_movies first
       for (const cm of chainMovies) {
         if (cm.posterUrl) { image = cm.posterUrl; break; }
       }
-
-      // Still no image → look up poster in movies table (moviesTable is keyed by TMDB ID)
-      if (!image) {
-        for (const cm of chainMovies) {
-          // imdbId in this codebase is the TMDB numeric ID stored as a string
-          const tmdbId = /^\d+$/.test(cm.imdbId) ? parseInt(cm.imdbId, 10) : NaN;
-          if (isNaN(tmdbId)) continue;
-          const [mv] = await db
-            .select({ posterUrl: moviesTable.posterUrl })
-            .from(moviesTable)
-            .where(eq(moviesTable.tmdbId, tmdbId))
-            .limit(1);
-          if (mv?.posterUrl) { image = mv.posterUrl; break; }
-        }
-      }
-
-      image = image || DEFAULT_IMAGE;
     }
+    if (!image) {
+      for (const cm of chainMovies.slice(0, 5)) {
+        const tmdbId = /^\d+$/.test(cm.imdbId) ? parseInt(cm.imdbId, 10) : NaN;
+        if (isNaN(tmdbId)) continue;
+        const [mv] = await db
+          .select({ posterUrl: moviesTable.posterUrl })
+          .from(moviesTable)
+          .where(eq(moviesTable.tmdbId, tmdbId))
+          .limit(1);
+        if (mv?.posterUrl) { image = mv.posterUrl; break; }
+      }
+    }
+    image = image || DEFAULT_IMAGE;
 
-    res.set(OG_HEADERS).send(renderOgHtml({ title, description, image, redirectTo, browserRedirectTo: `${redirectTo}?_r=1` }));
+    // Build rich SEO body — visible to crawlers indexing this page directly
+    const esc2 = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const movieListHtml = chainMovies.length > 0
+      ? `<ul>${chainMovies.map((m) => `<li>${esc2(m.movieTitle)}${m.movieYear ? ` (${esc2(m.movieYear)})` : ""}</li>`).join("")}</ul>`
+      : "";
+    const bodyContent = `
+<h1>${esc2(chain.title)}</h1>
+${chain.description ? `<p>${esc2(chain.description)}</p>` : ""}
+${movieListHtml ? `<h2>รายการหนังใน Chain นี้</h2>${movieListHtml}` : ""}
+<p>สร้างโดย Ticker — แอปบันทึกหนังสำหรับคนรักหนัง</p>
+<a class="cta" href="${esc2(redirectTo)}?_r=1">ดู Chain นี้บน Ticker</a>`;
+
+    res.set(OG_HEADERS).send(renderOgHtml({ title, description, image, redirectTo, browserRedirectTo: `${redirectTo}?_r=1`, bodyContent }));
   } catch {
     res.set(OG_HEADERS).send(fallbackOg(redirectTo));
   }
@@ -244,7 +255,7 @@ router.get(
     }
     for (const c of chains) {
       const lastmod = (c.updatedAt instanceof Date ? c.updatedAt : new Date(c.updatedAt ?? today)).toISOString().slice(0, 10);
-      lines.push(`  <url><loc>${APP_URL}/chain/${c.id}</loc><lastmod>${lastmod}</lastmod><changefreq>weekly</changefreq><priority>0.6</priority></url>`);
+      lines.push(`  <url><loc>${APP_URL}/chains/${c.id}</loc><lastmod>${lastmod}</lastmod><changefreq>weekly</changefreq><priority>0.6</priority></url>`);
     }
 
     lines.push("</urlset>");

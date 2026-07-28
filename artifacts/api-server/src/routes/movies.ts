@@ -323,6 +323,9 @@ async function ensureMovieCores(
           const isTV = m["mediaType"] === "tv";
           const tmdbId = m["tmdbId"] as number;
           const path = isTV ? `/tv/${tmdbId}` : `/movie/${tmdbId}`;
+          // For movies, include release_dates so we can store thReleaseDate in moviesTable
+          const params: Record<string, string> = { language: "en-US" };
+          if (!isTV) params["append_to_response"] = "release_dates";
           const data = await tmdbFetch<{
             vote_average?: number;
             vote_count?: number;
@@ -331,7 +334,27 @@ async function ensureMovieCores(
             release_date?: string;
             first_air_date?: string;
             belongs_to_collection?: { id: number } | null;
-          }>(path, { language: "en-US" });
+            title?: string;
+            name?: string;
+            poster_path?: string | null;
+            backdrop_path?: string | null;
+            overview?: string | null;
+            release_dates?: {
+              results?: Array<{
+                iso_3166_1: string;
+                release_dates: Array<{ release_date: string; type: number }>;
+              }>;
+            };
+          }>(path, params);
+
+          // Parse Thai release date for movies
+          let thReleaseDate: string | null = null;
+          if (!isTV && data.release_dates?.results) {
+            const thEntry = data.release_dates.results.find((r) => r.iso_3166_1 === "TH");
+            const thDateEntry = thEntry?.release_dates?.find((d) => d.type === 3) ?? thEntry?.release_dates?.[0];
+            thReleaseDate = thDateEntry?.release_date ? thDateEntry.release_date.slice(0, 10) : null;
+          }
+
           const core: MovieCore = {
             tmdbRating:
               data.vote_average != null
@@ -345,9 +368,33 @@ async function ensureMovieCores(
             franchiseIds: data.belongs_to_collection
               ? [data.belongs_to_collection.id]
               : [],
+            thReleaseDate,
           };
           coreMap.set(tmdbId, core);
           setMovieCore(tmdbId, core);
+
+          // Upsert movie to moviesTable so thReleaseDate is available for release guard
+          if (!isTV) {
+            db.insert(moviesTable).values({
+              tmdbId,
+              mediaType: "movie",
+              title: data.title || String(tmdbId),
+              posterUrl: data.poster_path ? `https://image.tmdb.org/t/p/w500${data.poster_path}` : null,
+              backdropUrl: data.backdrop_path ? `https://image.tmdb.org/t/p/w1280${data.backdrop_path}` : null,
+              overview: data.overview ?? null,
+              releaseDate: data.release_date ?? null,
+              thReleaseDate,
+              voteAverage: data.vote_average != null ? String(data.vote_average) : null,
+              voteCount: data.vote_count ?? 0,
+              popularity: data.popularity != null ? String(data.popularity) : null,
+              genreIds: (data.genres ?? []).map((g) => g.id),
+              franchiseIds: data.belongs_to_collection ? [data.belongs_to_collection.id] : [],
+              fetchedAt: new Date(),
+            }).onConflictDoUpdate({
+              target: moviesTable.tmdbId,
+              set: { thReleaseDate, fetchedAt: new Date() },
+            }).catch(() => {/* non-fatal */});
+          }
         } catch {
           // Per-movie failure is non-fatal. That single card will fall
           // back to whatever fields the list endpoint provided.
@@ -399,19 +446,75 @@ async function ensureMovieCores(
   //    This lets the frontend show the correct "isUnreleased" state for movies
   //    that have already launched globally but not yet in Thai cinemas.
   try {
-    const tmdbIds = movies
-      .map((m) => m["tmdbId"])
-      .filter((id): id is number => typeof id === "number");
+    const movieCandidates = movies.filter(
+      (m) => typeof m["tmdbId"] === "number" && m["mediaType"] !== "tv",
+    );
+    const tmdbIds = movieCandidates.map((m) => m["tmdbId"] as number);
     if (tmdbIds.length > 0) {
       const thRows = await db
         .select({ tmdbId: moviesTable.tmdbId, thReleaseDate: moviesTable.thReleaseDate })
         .from(moviesTable)
         .where(inArray(moviesTable.tmdbId, tmdbIds));
       const thMap = new Map(thRows.map((r) => [r.tmdbId, r.thReleaseDate]));
-      for (const m of movies) {
-        if (typeof m["tmdbId"] !== "number") continue;
+
+      // Apply known thReleaseDates immediately
+      for (const m of movieCandidates) {
         const thRd = thMap.get(m["tmdbId"] as number);
         if (thRd !== undefined) m["thReleaseDate"] = thRd;
+      }
+
+      // For movies NOT in moviesTable (thReleaseDate=undefined) whose releaseDate is
+      // within ±90 days (they could have regional delays), fetch thReleaseDate from TMDB
+      // synchronously so this request already reflects the correct Thai lock state.
+      const today = Date.now();
+      const WINDOW_MS = 90 * 24 * 60 * 60 * 1000;
+      const needsFetch = movieCandidates.filter((m) => {
+        if (thMap.has(m["tmdbId"] as number)) return false; // already in moviesTable
+        const rd = m["releaseDate"] as string | null;
+        if (!rd) return false;
+        const diff = Math.abs(today - new Date(rd).getTime());
+        return diff < WINDOW_MS;
+      });
+
+      if (needsFetch.length > 0) {
+        await Promise.allSettled(
+          needsFetch.map(async (m) => {
+            try {
+              const tmdbId = m["tmdbId"] as number;
+              const data = await tmdbFetch<{
+                release_dates?: {
+                  results?: Array<{
+                    iso_3166_1: string;
+                    release_dates: Array<{ release_date: string; type: number }>;
+                  }>;
+                };
+                title?: string;
+                release_date?: string;
+              }>(`/movie/${tmdbId}`, { append_to_response: "release_dates", language: "en-US" });
+
+              const thEntry = data.release_dates?.results?.find((r) => r.iso_3166_1 === "TH");
+              const thDateEntry = thEntry?.release_dates?.find((d) => d.type === 3) ?? thEntry?.release_dates?.[0];
+              const thReleaseDate = thDateEntry?.release_date ? thDateEntry.release_date.slice(0, 10) : null;
+
+              m["thReleaseDate"] = thReleaseDate;
+
+              // Persist to moviesTable for future requests
+              db.insert(moviesTable).values({
+                tmdbId,
+                mediaType: "movie",
+                title: data.title || String(tmdbId),
+                releaseDate: data.release_date ?? (m["releaseDate"] as string | null) ?? null,
+                thReleaseDate,
+                fetchedAt: new Date(),
+              }).onConflictDoUpdate({
+                target: moviesTable.tmdbId,
+                set: { thReleaseDate, fetchedAt: new Date() },
+              }).catch(() => {/* non-fatal */});
+            } catch {
+              /* per-movie failure is non-fatal */
+            }
+          }),
+        );
       }
     }
   } catch {

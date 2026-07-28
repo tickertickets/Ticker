@@ -1,4 +1,5 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://ticker-api-server.onrender.com/api/sitemap.xml
+# Sitemap proxied through Vercel CDN (domain-independent — update when domain changes)
+Sitemap: https://ticker-tickets.vercel.app/api/sitemap.xml
