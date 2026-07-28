@@ -21,14 +21,20 @@ function renderOgHtml({
   description,
   image,
   redirectTo,
+  browserRedirectTo,
   type = "website",
 }: {
   title: string;
   description: string;
   image: string;
   redirectTo: string;
+  /** URL the browser is sent to after reading OG tags.
+   *  Defaults to redirectTo but should include ?_r=1 when this endpoint
+   *  is reached via a Vercel rewrite (to break the redirect loop). */
+  browserRedirectTo?: string;
   type?: string;
 }) {
+  const redir = browserRedirectTo ?? redirectTo;
   const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   return `<!DOCTYPE html>
 <html lang="th">
@@ -46,11 +52,11 @@ function renderOgHtml({
 <meta name="twitter:title" content="${esc(title)}" />
 <meta name="twitter:description" content="${esc(description)}" />
 <meta name="twitter:image" content="${esc(image)}" />
-<meta http-equiv="refresh" content="0;url=${esc(redirectTo)}" />
+<meta http-equiv="refresh" content="0;url=${esc(redir)}" />
 </head>
 <body>
-<script>window.location.replace(${JSON.stringify(redirectTo)});</script>
-<p>Redirecting to <a href="${esc(redirectTo)}">${esc(title)}</a>…</p>
+<script>window.location.replace(${JSON.stringify(redir)});</script>
+<p>Redirecting to <a href="${esc(redir)}">${esc(title)}</a>…</p>
 </body>
 </html>`;
 }
@@ -93,7 +99,7 @@ router.get("/ticket/:id", async (req, res) => {
     // ถ้าตั๋วเป็น poster mode ให้ใช้ cardBackdropUrl (ภาพที่ผู้ใช้เลือก) ก่อน posterUrl
     const image = (ticket.cardBackdropUrl as string | null) || ticket.posterUrl || DEFAULT_IMAGE;
 
-    res.set(OG_HEADERS).send(renderOgHtml({ title, description, image, redirectTo }));
+    res.set(OG_HEADERS).send(renderOgHtml({ title, description, image, redirectTo, browserRedirectTo: `${redirectTo}?_r=1` }));
   } catch {
     // DB unavailable — return safe fallback so middleware doesn't surface a JSON error
     res.set(OG_HEADERS).send(fallbackOg(redirectTo));
@@ -137,7 +143,7 @@ router.get("/chain/:id", async (req, res) => {
       image = firstMovie?.posterUrl ?? DEFAULT_IMAGE;
     }
 
-    res.set(OG_HEADERS).send(renderOgHtml({ title, description, image, redirectTo }));
+    res.set(OG_HEADERS).send(renderOgHtml({ title, description, image, redirectTo, browserRedirectTo: `${redirectTo}?_r=1` }));
   } catch {
     res.set(OG_HEADERS).send(fallbackOg(redirectTo));
   }
@@ -170,7 +176,7 @@ router.get("/user/:username", async (req, res) => {
     const description = (user.bio as string | null)?.trim() || `${displayName} บน Ticker`;
     const image = (user.avatarUrl as string | null) || DEFAULT_IMAGE;
 
-    res.set(OG_HEADERS).send(renderOgHtml({ title, description, image, redirectTo }));
+    res.set(OG_HEADERS).send(renderOgHtml({ title, description, image, redirectTo, browserRedirectTo: `${redirectTo}?_r=1` }));
   } catch {
     res.set(OG_HEADERS).send(fallbackOg(redirectTo));
   }

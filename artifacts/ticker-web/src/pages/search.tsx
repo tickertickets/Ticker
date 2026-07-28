@@ -834,7 +834,7 @@ export default function Search({ isActive = true }: { isActive?: boolean } = {})
         const dy = Math.abs(e.changedTouches[0].clientY - catSwipeRef.current.y);
         catSwipeRef.current = null;
         // Only trigger if horizontal movement dominates and exceeds threshold
-        if (Math.abs(dx) < 60 || Math.abs(dx) < dy * 1.5) return;
+        if (Math.abs(dx) < 40 || dy > Math.abs(dx) * 0.8) return;
         const catIds = CATEGORIES_T.map((c) => c.id);
         const ci = catIds.indexOf(activeCategory);
         if (dx < 0 && ci < catIds.length - 1) handleCategoryChange(catIds[ci + 1]);

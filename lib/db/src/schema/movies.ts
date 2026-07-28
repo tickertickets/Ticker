@@ -19,6 +19,9 @@ export const moviesTable = pgTable("movies", {
   backdropUrl: text("backdrop_url"),
   overview: text("overview"),
   releaseDate: text("release_date"),
+  /** Thailand-specific release date (YYYY-MM-DD) fetched from TMDB /release_dates.
+   *  Null when TMDB has no TH entry (falls back to global releaseDate for the lock check). */
+  thReleaseDate: text("th_release_date"),
   voteAverage: numeric("vote_average", { precision: 4, scale: 2 }),
   voteCount: integer("vote_count"),
   popularity: numeric("popularity", { precision: 12, scale: 4 }),

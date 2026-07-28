@@ -778,7 +778,7 @@ export default function Home({ isActive = true }: { isActive?: boolean }) {
       const dy = Math.abs(e.changedTouches[0].clientY - tabSwipeRef.current.y);
       tabSwipeRef.current = null;
       // Require clearly horizontal gesture (dx dominates dy, and meets minimum)
-      if (Math.abs(dx) < 45 || dy > Math.abs(dx) * 0.7) return;
+      if (Math.abs(dx) < 40 || dy > Math.abs(dx) * 0.8) return;
       const tabIds = TABS.map((tb) => tb.id);
       const ti = tabIds.indexOf(tabRef.current);
       if (dx < 0 && ti < tabIds.length - 1) handleTabChangeRef.current(tabIds[ti + 1]);

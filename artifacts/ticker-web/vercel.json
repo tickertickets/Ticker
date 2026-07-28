@@ -6,6 +6,21 @@
       "destination": "https://ticker-api-server.onrender.com/api/:path*"
     },
     {
+      "source": "/chains/:id",
+      "missing": [{ "type": "query", "key": "_r" }],
+      "destination": "https://ticker-api-server.onrender.com/api/og/chain/:id"
+    },
+    {
+      "source": "/ticket/:id",
+      "missing": [{ "type": "query", "key": "_r" }],
+      "destination": "https://ticker-api-server.onrender.com/api/og/ticket/:id"
+    },
+    {
+      "source": "/profile/:username",
+      "missing": [{ "type": "query", "key": "_r" }],
+      "destination": "https://ticker-api-server.onrender.com/api/og/user/:username"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }

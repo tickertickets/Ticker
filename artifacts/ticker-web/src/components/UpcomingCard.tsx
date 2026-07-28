@@ -364,33 +364,47 @@ export function MovieCarousel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sequence.length, stopAutoSlide]);
 
-  // ── Prevent parent tab-swipe from intercepting backdrop carousel swipes ───
-  // home.tsx attaches a native touchstart listener to the outer container to
-  // implement left/right tab-switching. Because native listeners on an ancestor
-  // fire before React synthetic handlers on a descendant, we must add our own
-  // native listener directly on the carousel div and call stopPropagation()
-  // there — only when there are multiple images to swipe through.
+  // ── Refs so native listeners always read the latest values ───────────────
+  const currentStepRef  = useRef(currentStep);
+  currentStepRef.current = currentStep;
+  const totalPagesRef   = useRef(totalPages);
+  totalPagesRef.current  = totalPages;
+  const stopAutoSlideRef = useRef(stopAutoSlide);
+  stopAutoSlideRef.current = stopAutoSlide;
+
+  // ── Native touch listeners: stopProp + image swipe ───────────────────────
+  // (1) stopPropagation on touchstart blocks the ancestor tab-swipe handler
+  //     in home.tsx from stealing horizontal gestures inside the carousel.
+  // (2) Image-swipe listeners are also native so they co-exist with (1).
+  //     stopPropagation only prevents bubbling to ANCESTORS; multiple native
+  //     listeners on the SAME element all still fire — unlike React synthetic
+  //     events which use root delegation and are therefore silenced by stopProp.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    // Always block outer tab-swipe — even for single-image carousels the inner
-    // image area should never accidentally fire the explore-tab swipe handler.
-    const stopProp = (e: TouchEvent) => { e.stopPropagation(); };
-    el.addEventListener("touchstart", stopProp);
-    return () => { el.removeEventListener("touchstart", stopProp); };
-  }, [totalPages]);
 
-  // ── Touch swipe (images step only) ───────────────────────────────────────
-  const txRef = useRef(0);
-  const onTouchStart = (e: React.TouchEvent) => { txRef.current = e.touches[0].clientX; };
-  const onTouchEnd   = (e: React.TouchEvent) => {
-    if (currentStep !== "images") return;
-    const dx = e.changedTouches[0].clientX - txRef.current;
-    if (Math.abs(dx) < 40) return;
-    userSwipedRef.current = true;
-    stopAutoSlide();
-    setPage(p => dx < 0 ? Math.min(p + 1, totalPages - 1) : Math.max(p - 1, 0));
-  };
+    let startX = 0;
+
+    const stopProp   = (e: TouchEvent) => { e.stopPropagation(); };
+    const onNativeStart = (e: TouchEvent) => { startX = e.touches[0].clientX; };
+    const onNativeEnd   = (e: TouchEvent) => {
+      if (currentStepRef.current !== "images") return;
+      const dx = e.changedTouches[0].clientX - startX;
+      if (Math.abs(dx) < 40) return;
+      userSwipedRef.current = true;
+      stopAutoSlideRef.current();
+      setPage(p => dx < 0 ? Math.min(p + 1, totalPagesRef.current - 1) : Math.max(p - 1, 0));
+    };
+
+    el.addEventListener("touchstart", stopProp,      { passive: true });
+    el.addEventListener("touchstart", onNativeStart, { passive: true });
+    el.addEventListener("touchend",   onNativeEnd,   { passive: true });
+    return () => {
+      el.removeEventListener("touchstart", stopProp);
+      el.removeEventListener("touchstart", onNativeStart);
+      el.removeEventListener("touchend",   onNativeEnd);
+    };
+  }, []); // empty deps — uses refs for latest values
 
   // ── Empty state ───────────────────────────────────────────────────────────
   if (sequence.length === 0) {
@@ -408,8 +422,6 @@ export function MovieCarousel({
       ref={containerRef}
       className="relative w-full overflow-hidden bg-black"
       style={{ aspectRatio: "16/9" }}
-      onTouchStart={onTouchStart}
-      onTouchEnd={onTouchEnd}
     >
       {/* Backdrop images */}
       {pool.map((src, i) => (

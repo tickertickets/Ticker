@@ -23,6 +23,7 @@ import {
   notificationsTable,
   moviesTable,
   ticketReactionsTable,
+  partyInvitesTable,
 } from "@workspace/db/schema";
 import { eq, and, desc, count, isNull, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
@@ -74,6 +75,10 @@ export type TmdbSnapshot = {
   popularity: number;
   genreIds: number[];
   franchiseIds?: number[];
+  /** Global (primary) release date from TMDB, YYYY-MM-DD */
+  releaseDate?: string | null;
+  /** Thailand-specific theatrical release date (TMDB /release_dates, iso TH), YYYY-MM-DD */
+  thReleaseDate?: string | null;
 };
 
 // ── calculateRankTier ─────────────────────────────────────────────────────────
@@ -132,7 +137,11 @@ export async function calculateRankTier(
         return {
           tier,
           score: Math.round(ws * 10),
-          snapshot: { tmdbRating: rating, voteCount: votes, year: releaseYear, popularity, genreIds, franchiseIds },
+          snapshot: {
+            tmdbRating: rating, voteCount: votes, year: releaseYear, popularity, genreIds, franchiseIds,
+            releaseDate: cached.releaseDate ?? null,
+            thReleaseDate: (cached as any).thReleaseDate ?? null,
+          },
         };
       }
     }
@@ -345,7 +354,8 @@ export async function buildTicketBatch(
   type PartyMemberRow = { partyGroupId: string; seatNumber: number; userId: string; username: string | null; displayName: string | null; avatarUrl: string | null };
   let allPartyMemberRows: PartyMemberRow[] = [];
   if (partyGroupIds.length > 0) {
-    const rows = await db
+    // (1) Members who have already posted their own ticket in this party
+    const ticketRows = await db
       .select({
         partyGroupId: ticketsTable.partyGroupId,
         seatNumber: ticketsTable.partySeatNumber,
@@ -357,17 +367,47 @@ export async function buildTicketBatch(
       .from(ticketsTable)
       .innerJoin(usersTable, eq(ticketsTable.userId, usersTable.id))
       .where(and(inArray(ticketsTable.partyGroupId, partyGroupIds), isNull(ticketsTable.deletedAt)));
-    // Include ALL party members regardless of seatNumber — some members may not
-  // have a seat assigned yet; filtering them out caused inconsistent @user lists
-  // across tickets in the same party.
-  allPartyMemberRows = rows.map(r => ({
-      partyGroupId: r.partyGroupId!,
-      seatNumber: r.seatNumber ?? 0,  // default 0 so sort is safe
-      userId: r.userId,
-      username: r.username,
-      displayName: r.displayName,
-      avatarUrl: r.avatarUrl,
-    }));
+
+    const postedUserIds = new Set(ticketRows.map(r => r.userId));
+
+    // (2) Accepted invitees who haven't posted their ticket yet — fill the gap
+    const inviteRows = await db
+      .select({
+        partyGroupId: partyInvitesTable.partyGroupId,
+        assignedSeat: partyInvitesTable.assignedSeat,
+        inviteeUserId: partyInvitesTable.inviteeUserId,
+        username: usersTable.username,
+        displayName: usersTable.displayName,
+        avatarUrl: usersTable.avatarUrl,
+      })
+      .from(partyInvitesTable)
+      .innerJoin(usersTable, eq(partyInvitesTable.inviteeUserId, usersTable.id))
+      .where(and(
+        inArray(partyInvitesTable.partyGroupId, partyGroupIds),
+        eq(partyInvitesTable.status, "accepted"),
+      ));
+
+    allPartyMemberRows = [
+      ...ticketRows.map((r): PartyMemberRow => ({
+        partyGroupId: r.partyGroupId!,
+        seatNumber: r.seatNumber ?? 0,
+        userId: r.userId,
+        username: r.username,
+        displayName: r.displayName,
+        avatarUrl: r.avatarUrl,
+      })),
+      // Only include invite rows for users not already represented by a ticket
+      ...inviteRows
+        .filter((r) => !postedUserIds.has(r.inviteeUserId))
+        .map((r): PartyMemberRow => ({
+          partyGroupId: r.partyGroupId!,
+          seatNumber: r.assignedSeat ?? 0,
+          userId: r.inviteeUserId,
+          username: r.username,
+          displayName: r.displayName,
+          avatarUrl: r.avatarUrl,
+        })),
+    ];
   }
 
   return tickets.map((ticket) => {
@@ -636,7 +676,8 @@ export async function buildTicket(
 
   let partyMembers: Array<{ seatNumber: number; username: string; displayName: string | null; avatarUrl: string | null }> = [];
   if (ticket.partyGroupId) {
-    const rows = await db
+    // (1) Members who have already posted their own ticket in this party
+    const ticketRows = await db
       .select({
         seatNumber: ticketsTable.partySeatNumber,
         userId: ticketsTable.userId,
@@ -647,10 +688,35 @@ export async function buildTicket(
       .from(ticketsTable)
       .innerJoin(usersTable, eq(ticketsTable.userId, usersTable.id))
       .where(and(eq(ticketsTable.partyGroupId, ticket.partyGroupId), isNull(ticketsTable.deletedAt)));
-    partyMembers = rows
-      .filter(r => r.userId !== ticket.userId && r.seatNumber != null)
-      .map(r => ({ seatNumber: r.seatNumber!, username: r.username!, displayName: r.displayName, avatarUrl: r.avatarUrl }))
-      .sort((a, b) => a.seatNumber - b.seatNumber);
+
+    const postedUserIds = new Set(ticketRows.map(r => r.userId));
+
+    // (2) Accepted invitees who haven't posted their ticket yet
+    const inviteRows = await db
+      .select({
+        assignedSeat: partyInvitesTable.assignedSeat,
+        inviteeUserId: partyInvitesTable.inviteeUserId,
+        username: usersTable.username,
+        displayName: usersTable.displayName,
+        avatarUrl: usersTable.avatarUrl,
+      })
+      .from(partyInvitesTable)
+      .innerJoin(usersTable, eq(partyInvitesTable.inviteeUserId, usersTable.id))
+      .where(and(
+        eq(partyInvitesTable.partyGroupId, ticket.partyGroupId),
+        eq(partyInvitesTable.status, "accepted"),
+      ));
+
+    type MemberEntry = { seatNumber: number; username: string; displayName: string | null; avatarUrl: string | null };
+    const merged: MemberEntry[] = [
+      ...ticketRows
+        .filter((r) => r.userId !== ticket.userId)
+        .map((r): MemberEntry => ({ seatNumber: r.seatNumber ?? 0, username: r.username!, displayName: r.displayName, avatarUrl: r.avatarUrl })),
+      ...inviteRows
+        .filter((r) => r.inviteeUserId !== ticket.userId && !postedUserIds.has(r.inviteeUserId))
+        .map((r): MemberEntry => ({ seatNumber: r.assignedSeat ?? 0, username: r.username!, displayName: r.displayName, avatarUrl: r.avatarUrl })),
+    ];
+    partyMembers = merged.sort((a, b) => a.seatNumber - b.seatNumber);
   }
 
   return {
