@@ -7,7 +7,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { eq, isNull, and, asc } from "drizzle-orm";
-import { ticketsTable, usersTable, chainsTable, chainMoviesTable } from "@workspace/db/schema";
+import { ticketsTable, usersTable, chainsTable, chainMoviesTable, moviesTable } from "@workspace/db/schema";
 import { asyncHandler } from "../middlewares/error-handler";
 
 const router = Router();
@@ -121,7 +121,6 @@ router.get("/chain/:id", async (req, res) => {
         id: chainsTable.id,
         title: chainsTable.title,
         description: chainsTable.description,
-        coverUrl: chainsTable.coverUrl,
         taggedMoviePosterUrl: chainsTable.taggedMoviePosterUrl,
       })
       .from(chainsTable)
@@ -136,16 +135,38 @@ router.get("/chain/:id", async (req, res) => {
     const title = `${chain.title} — ${SITE_NAME}`;
     const description = chain.description?.trim() || `ร่วมดูหนังใน Chains "${chain.title}" บน Ticker`;
 
-    // Image priority: coverUrl → taggedMoviePosterUrl → first chain movie poster → default
-    let image: string = (chain.coverUrl as string | null) || (chain.taggedMoviePosterUrl as string | null) || "";
+    // Image priority: taggedMoviePosterUrl → first chain movie poster → moviesTable lookup → default
+    let image: string = (chain.taggedMoviePosterUrl as string | null) || "";
     if (!image) {
-      const [firstMovie] = await db
-        .select({ posterUrl: chainMoviesTable.posterUrl })
+      // Get up to 5 chain movies so we have fallbacks if early ones lack posters
+      const chainMovies = await db
+        .select({ posterUrl: chainMoviesTable.posterUrl, imdbId: chainMoviesTable.imdbId })
         .from(chainMoviesTable)
         .where(eq(chainMoviesTable.chainId, id))
         .orderBy(asc(chainMoviesTable.position))
-        .limit(1);
-      image = firstMovie?.posterUrl ?? DEFAULT_IMAGE;
+        .limit(5);
+
+      // Try posterUrl stored directly in chain_movies first
+      for (const cm of chainMovies) {
+        if (cm.posterUrl) { image = cm.posterUrl; break; }
+      }
+
+      // Still no image → look up poster in movies table (moviesTable is keyed by TMDB ID)
+      if (!image) {
+        for (const cm of chainMovies) {
+          // imdbId in this codebase is the TMDB numeric ID stored as a string
+          const tmdbId = /^\d+$/.test(cm.imdbId) ? parseInt(cm.imdbId, 10) : NaN;
+          if (isNaN(tmdbId)) continue;
+          const [mv] = await db
+            .select({ posterUrl: moviesTable.posterUrl })
+            .from(moviesTable)
+            .where(eq(moviesTable.tmdbId, tmdbId))
+            .limit(1);
+          if (mv?.posterUrl) { image = mv.posterUrl; break; }
+        }
+      }
+
+      image = image || DEFAULT_IMAGE;
     }
 
     res.set(OG_HEADERS).send(renderOgHtml({ title, description, image, redirectTo, browserRedirectTo: `${redirectTo}?_r=1` }));

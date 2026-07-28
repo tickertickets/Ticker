@@ -164,6 +164,8 @@ type MovieCore = {
   genreIds: number[];
   releaseDate: string | null;
   franchiseIds: number[];
+  /** วันฉายไทย (YYYY-MM-DD) จาก moviesTable — ใช้ตรวจสอบ isUnreleased ฝั่ง frontend */
+  thReleaseDate?: string | null;
 };
 
 function setMovieCore(tmdbId: number, core: MovieCore): void {
@@ -389,6 +391,31 @@ async function ensureMovieCores(
       if (core.releaseDate !== undefined) m["releaseDate"] = core.releaseDate;
       if (core.franchiseIds !== undefined) m["franchiseIds"] = core.franchiseIds;
     }
+  }
+
+  // 5) Enrich thReleaseDate (วันฉายไทย) from moviesTable in a single batch query.
+  //    TMDB list/discover endpoints never return country-specific release dates,
+  //    so we read them from the DB cache that tickets.service populates on demand.
+  //    This lets the frontend show the correct "isUnreleased" state for movies
+  //    that have already launched globally but not yet in Thai cinemas.
+  try {
+    const tmdbIds = movies
+      .map((m) => m["tmdbId"])
+      .filter((id): id is number => typeof id === "number");
+    if (tmdbIds.length > 0) {
+      const thRows = await db
+        .select({ tmdbId: moviesTable.tmdbId, thReleaseDate: moviesTable.thReleaseDate })
+        .from(moviesTable)
+        .where(inArray(moviesTable.tmdbId, tmdbIds));
+      const thMap = new Map(thRows.map((r) => [r.tmdbId, r.thReleaseDate]));
+      for (const m of movies) {
+        if (typeof m["tmdbId"] !== "number") continue;
+        const thRd = thMap.get(m["tmdbId"] as number);
+        if (thRd !== undefined) m["thReleaseDate"] = thRd;
+      }
+    }
+  } catch {
+    // Non-fatal: thReleaseDate enrichment failure falls back to client-side releaseDate check.
   }
 }
 
@@ -773,6 +800,10 @@ router.get(
 
       if (poolState.allMovies.length > 0) {
         await setCached(poolCacheKey, poolState);
+        // บันทึก last-good pool สำหรับใช้เป็น fallback สุดท้าย (7 วัน)
+        // หมายเหตุ: lastGoodKey ถูกอ่านที่บรรทัด ~741 แต่ก่อนหน้านี้ไม่เคยถูกเขียน
+        // ทำให้วันที่ TMDB ล่มหรือ rate-limit ไม่มี fallback → mood โชว์ว่างเปล่า
+        await setCached(lastGoodKey, poolState);
       }
 
       const start = (page - 1) * PAGE_SIZE;

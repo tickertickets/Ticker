@@ -21,6 +21,8 @@ interface TicketMovieItem {
   title: string;
   year?: string | null;
   releaseDate?: string | null;
+  /** วันฉายไทย (YYYY-MM-DD) — ใช้ก่อน releaseDate ในการตรวจสอบว่าหนังออกฉายแล้วหรือยัง */
+  thReleaseDate?: string | null;
   posterUrl?: string | null;
   tmdbRating?: string | null;
   voteCount?: number;
@@ -64,8 +66,12 @@ function TicketMovieRow({ movie, onSelect, ariaLabel }: { movie: TicketMovieItem
   const { visual, tier, effects } = getTicketRankVisual(movie, detail);
 
   // Determine if the movie has not yet been released (date-level precision)
+  // ใช้ thReleaseDate (วันฉายไทย) ก่อนเสมอ ถ้าไม่มีถึงใช้ releaseDate (วันฉายสากล)
+  // เพื่อกัน edge case เช่น Spider-Man ฉาย US แล้วแต่ยังไม่ฉายไทย
   const isUnreleased = (() => {
-    const rd = movie.releaseDate ?? detail?.releaseDate ?? null;
+    const thRd = movie.thReleaseDate ?? detail?.thReleaseDate ?? null;
+    const globalRd = movie.releaseDate ?? detail?.releaseDate ?? null;
+    const rd = thRd || globalRd;
     if (!rd) return false;
     const today = new Date();
     const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;

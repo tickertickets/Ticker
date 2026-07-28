@@ -123,7 +123,16 @@ export async function calculateRankTier(
 
     if (cached) {
       const age = Date.now() - new Date(cached.fetchedAt).getTime();
-      if (age < MOVIE_CACHE_TTL_MS) {
+      // ข้ามแคชถ้า thReleaseDate เป็น null และหนังออกฉายภายใน 180 วันที่ผ่านมา:
+      // หนังกลุ่มนี้อาจถูก cache ก่อนที่ TMDB จะมีวันฉายไทย → บังคับ re-fetch
+      // เพื่อให้ release guard ใช้วันฉายไทยที่ถูกต้อง แทนที่จะ fallback ไปวันฉายสากล
+      const thReleaseDate = (cached as any).thReleaseDate as string | null;
+      const isRecentMovie = cached.releaseDate
+        ? Date.now() - new Date(cached.releaseDate).getTime() < 180 * 24 * 60 * 60 * 1000
+        : false;
+      const needsFreshThDate = thReleaseDate === null && isRecentMovie;
+
+      if (age < MOVIE_CACHE_TTL_MS && !needsFreshThDate) {
         const rating = parseFloat(cached.voteAverage ?? "0");
         const votes = cached.voteCount ?? 0;
         const popularity = parseFloat(cached.popularity ?? "0");
@@ -140,7 +149,7 @@ export async function calculateRankTier(
           snapshot: {
             tmdbRating: rating, voteCount: votes, year: releaseYear, popularity, genreIds, franchiseIds,
             releaseDate: cached.releaseDate ?? null,
-            thReleaseDate: (cached as any).thReleaseDate ?? null,
+            thReleaseDate,
           },
         };
       }
