@@ -1,5 +1,6 @@
 User-agent: *
 Allow: /
 
-# Sitemap proxied through Vercel CDN (domain-independent — update when domain changes)
+# !! เมื่อเปลี่ยน domain ต้องอัปเดต URL ด้านล่างนี้ด้วย (robots.txt ต้องใช้ absolute URL เท่านั้น)
+# Sitemap ชี้ไปยัง dynamic sitemap ที่ generate จาก DB จริง (tickets + chains)
 Sitemap: https://ticker-tickets.vercel.app/api/sitemap.xml

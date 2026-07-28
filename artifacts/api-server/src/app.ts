@@ -337,6 +337,8 @@ const globalLimiter = rateLimit({
   skip: (req) => req.path === "/healthz",
 });
 
+const APP_URL = process.env["APP_URL"] ?? "https://ticker-tickets.vercel.app";
+
 app.get("/robots.txt", (_req, res) => {
   res.setHeader("Content-Type", "text/plain; charset=utf-8");
   res.setHeader("Cache-Control", "public, max-age=86400, s-maxage=86400");
@@ -351,7 +353,7 @@ Disallow: /chat
 Disallow: /notifications
 Disallow: /bookmarks
 
-Sitemap: https://ticker-tickets.vercel.app/sitemap.xml
+Sitemap: ${APP_URL}/api/sitemap.xml
 `);
 });
 
@@ -373,7 +375,7 @@ app.get("/sitemap.xml", async (_req, res) => {
     );
     chainUrls = rows.map(r => {
       const lastmod = r.updated_at ? new Date(r.updated_at).toISOString().slice(0, 10) : today;
-      return `  <url>\n    <loc>${BASE}/chain/${r.id}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>0.7</priority>\n  </url>`;
+      return `  <url>\n    <loc>${BASE}/chains/${r.id}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>0.7</priority>\n  </url>`;
     }).join("\n");
   } catch {
     // non-fatal — static pages still served

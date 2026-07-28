@@ -463,13 +463,16 @@ async function ensureMovieCores(
         if (thRd !== undefined) m["thReleaseDate"] = thRd;
       }
 
-      // For movies NOT in moviesTable (thReleaseDate=undefined) whose releaseDate is
-      // within ±90 days (they could have regional delays), fetch thReleaseDate from TMDB
-      // synchronously so this request already reflects the correct Thai lock state.
+      // For movies NOT in moviesTable (thReleaseDate=undefined) — OR in moviesTable but
+      // thReleaseDate=null (Thai release data wasn't available at insert time) — whose
+      // releaseDate is within ±90 days, fetch thReleaseDate from TMDB so the client
+      // "isUnreleased" lock reflects the correct Thai date, not just the global one.
       const today = Date.now();
       const WINDOW_MS = 90 * 24 * 60 * 60 * 1000;
       const needsFetch = movieCandidates.filter((m) => {
-        if (thMap.has(m["tmdbId"] as number)) return false; // already in moviesTable
+        const existingTh = thMap.get(m["tmdbId"] as number);
+        // Skip only when already in moviesTable WITH a confirmed non-null thReleaseDate
+        if (existingTh !== undefined && existingTh !== null) return false;
         const rd = m["releaseDate"] as string | null;
         if (!rd) return false;
         const diff = Math.abs(today - new Date(rd).getTime());
