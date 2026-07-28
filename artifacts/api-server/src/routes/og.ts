@@ -74,6 +74,7 @@ router.get("/ticket/:id", async (req, res) => {
         movieTitle: ticketsTable.movieTitle,
         movieYear: ticketsTable.movieYear,
         posterUrl: ticketsTable.posterUrl,
+        cardBackdropUrl: ticketsTable.cardBackdropUrl,
         caption: ticketsTable.caption,
       })
       .from(ticketsTable)
@@ -89,7 +90,8 @@ router.get("/ticket/:id", async (req, res) => {
     if (ticket.movieYear) titleParts.push(`(${ticket.movieYear})`);
     const title = `${titleParts.join(" ")} — ${SITE_NAME}`;
     const description = ticket.caption?.trim() || `ดู ${ticket.movieTitle} บน Ticker`;
-    const image = ticket.posterUrl || DEFAULT_IMAGE;
+    // ถ้าตั๋วเป็น poster mode ให้ใช้ cardBackdropUrl (ภาพที่ผู้ใช้เลือก) ก่อน posterUrl
+    const image = (ticket.cardBackdropUrl as string | null) || ticket.posterUrl || DEFAULT_IMAGE;
 
     res.set(OG_HEADERS).send(renderOgHtml({ title, description, image, redirectTo }));
   } catch {

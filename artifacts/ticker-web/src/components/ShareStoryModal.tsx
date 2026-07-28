@@ -153,9 +153,9 @@ export function ShareStoryModal({ ticket, onClose, onOpenChat }: ShareStoryModal
   }, [ticket.id, ticket.movieTitle, lang, onClose, t.errSaveCardFailed]);
 
   const handleCopyLink = useCallback(async () => {
-    // ใช้ Vercel app URL — Vercel Edge Middleware จะ intercept crawler requests
-    // (Instagram, LINE, Discord ฯลฯ) และ inject OG tags จาก API โดยอัตโนมัติ
-    const link = `${window.location.origin}/ticket/${ticket.id}`;
+    // ใช้ /api/og/ticket/:id ตรงๆ — Render API serve OG HTML พร้อม meta tags ที่ถูกต้อง
+    // แล้ว redirect กลับ SPA เอง ทำให้ Instagram, LINE, Discord ฯลฯ อ่าน OG tags ได้
+    const link = `${window.location.origin}/api/og/ticket/${ticket.id}`;
     try {
       await navigator.clipboard.writeText(link);
     } catch {

@@ -36,7 +36,7 @@ import {
   NotFoundError,
   ValidationError,
 } from "../lib/errors";
-import { tmdbFetch, posterUrl, TMDB_IMG_WIDE, isoDate } from "../lib/tmdb-client";
+import { tmdbFetch, posterUrl, TMDB_IMG, TMDB_IMG_WIDE, isoDate } from "../lib/tmdb-client";
 import { queryAwardsByImdbId } from "../lib/wikipedia";
 import { getAniListRelations } from "../lib/anilist";
 import {

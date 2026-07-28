@@ -525,9 +525,9 @@ export function ChainShareModal({ chain, onClose }: { chain: ChainItem; onClose:
   }, [chatPickerOpen]);
 
   const handleCopyLink = useCallback(async () => {
-    // ใช้ Vercel app URL — Vercel Edge Middleware จะ intercept crawler requests
-    // (Instagram, LINE, Discord ฯลฯ) และ inject OG tags จาก API โดยอัตโนมัติ
-    const link = `${window.location.origin}/chains/${chain.id}`;
+    // ใช้ /api/og/chain/:id ตรงๆ — Render API serve OG HTML พร้อม meta tags ที่ถูกต้อง
+    // (ชื่อ Chain + description + ภาพ) แล้ว redirect กลับ SPA เอง
+    const link = `${window.location.origin}/api/og/chain/${chain.id}`;
     try {
       await navigator.clipboard.writeText(link);
     } catch {
