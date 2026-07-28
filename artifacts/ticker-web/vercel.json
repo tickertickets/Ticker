@@ -8,19 +8,19 @@
     {
       "source": "/chains/:id",
       "missing": [{ "type": "query", "key": "_r" }],
-      "has": [{ "type": "header", "key": "user-agent", "value": "(?i)(bot|crawl|spider|facebookexternalhit|facebot|twitterbot|slackbot|discordbot|telegrambot|linkedinbot|whatsapp|line\\/|applebot|googlebot|bingbot|yandexbot|baiduspider|duckduckbot|iframely|embedly|vkshare|skypeuripreview|nuzzel|outbrain|pinterest|flipboard|tumblr|quora|opengraphio|headlesschrome|prerender)" }],
+      "has": [{ "type": "header", "key": "user-agent", "value": "(?i)(bot|crawl|spider|facebookexternalhit|facebot|twitterbot|slackbot|discordbot|telegrambot|linkedinbot|whatsapp\\/|applebot|googlebot|bingbot|yandexbot|baiduspider|duckduckbot|iframely|embedly|vkshare|skypeuripreview|nuzzel|outbrain|pinterest|flipboard|tumblr|quora|opengraphio|headlesschrome|prerender)" }],
       "destination": "https://ticker-api-server.onrender.com/api/og/chain/:id"
     },
     {
       "source": "/ticket/:id",
       "missing": [{ "type": "query", "key": "_r" }],
-      "has": [{ "type": "header", "key": "user-agent", "value": "(?i)(bot|crawl|spider|facebookexternalhit|facebot|twitterbot|slackbot|discordbot|telegrambot|linkedinbot|whatsapp|line\\/|applebot|googlebot|bingbot|yandexbot|baiduspider|duckduckbot|iframely|embedly|vkshare|skypeuripreview|nuzzel|outbrain|pinterest|flipboard|tumblr|quora|opengraphio|headlesschrome|prerender)" }],
+      "has": [{ "type": "header", "key": "user-agent", "value": "(?i)(bot|crawl|spider|facebookexternalhit|facebot|twitterbot|slackbot|discordbot|telegrambot|linkedinbot|whatsapp\\/|applebot|googlebot|bingbot|yandexbot|baiduspider|duckduckbot|iframely|embedly|vkshare|skypeuripreview|nuzzel|outbrain|pinterest|flipboard|tumblr|quora|opengraphio|headlesschrome|prerender)" }],
       "destination": "https://ticker-api-server.onrender.com/api/og/ticket/:id"
     },
     {
       "source": "/profile/:username",
       "missing": [{ "type": "query", "key": "_r" }],
-      "has": [{ "type": "header", "key": "user-agent", "value": "(?i)(bot|crawl|spider|facebookexternalhit|facebot|twitterbot|slackbot|discordbot|telegrambot|linkedinbot|whatsapp|line\\/|applebot|googlebot|bingbot|yandexbot|baiduspider|duckduckbot|iframely|embedly|vkshare|skypeuripreview|nuzzel|outbrain|pinterest|flipboard|tumblr|quora|opengraphio|headlesschrome|prerender)" }],
+      "has": [{ "type": "header", "key": "user-agent", "value": "(?i)(bot|crawl|spider|facebookexternalhit|facebot|twitterbot|slackbot|discordbot|telegrambot|linkedinbot|whatsapp\\/|applebot|googlebot|bingbot|yandexbot|baiduspider|duckduckbot|iframely|embedly|vkshare|skypeuripreview|nuzzel|outbrain|pinterest|flipboard|tumblr|quora|opengraphio|headlesschrome|prerender)" }],
       "destination": "https://ticker-api-server.onrender.com/api/og/user/:username"
     },
     {

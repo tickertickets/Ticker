@@ -57,7 +57,7 @@ function renderOgHtml({
 <meta name="twitter:description" content="${esc(description)}" />
 <meta name="twitter:image" content="${esc(image)}" />
 <link rel="canonical" href="${esc(redirectTo)}" />
-<meta http-equiv="refresh" content="0;url=${esc(redir)}" />
+<meta http-equiv="refresh" content="1;url=${esc(redir)}" />
 <style>body{font-family:sans-serif;max-width:680px;margin:40px auto;padding:0 16px;color:#111}h1{font-size:1.5rem;margin-bottom:.5rem}p{color:#444;margin:.5rem 0}ul{padding-left:1.2rem;color:#333}a.cta{display:inline-block;margin-top:1rem;background:#111;color:#fff;padding:.6rem 1.2rem;border-radius:8px;text-decoration:none}</style>
 </head>
 <body>
