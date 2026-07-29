@@ -10,7 +10,6 @@ import { cn } from "@/lib/utils";
 import { Star, Lock, CalendarDays, MapPin } from "lucide-react";
 import type { Ticket } from "@workspace/api-client-react";
 import { useLang, displayYear, displayDate } from "@/lib/i18n";
-import { localizeTicketGenre } from "@/lib/tmdb-genres";
 import { useImageLoaded } from "./PosterImage";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -218,6 +217,7 @@ export function PosterCardFront({
   borderColorHex,
   compact,
   className,
+  profileViewMode,
 }: {
   ticket: Ticket;
   style?: React.CSSProperties;
@@ -225,6 +225,7 @@ export function PosterCardFront({
   borderColorHex?: string;
   compact?: boolean;
   className?: string;
+  profileViewMode?: 'minimal' | 'details';
 }) {
   const t           = (ticket as unknown) as Record<string, unknown>;
   const backdropUrl = imageSrcOverride !== undefined ? imageSrcOverride : (t["cardBackdropUrl"] as string | null | undefined);
@@ -290,10 +291,17 @@ export function PosterCardFront({
         </div>
       </div>
 
-      <div className="flex-shrink-0 flex flex-col" style={{ padding: compact ? "4px 6px 18px" : "5px 8px 24px" }}>
+      <div
+        className="flex-shrink-0 flex flex-col"
+        style={{
+          padding: compact
+            ? `4px 6px ${profileViewMode ? 6 : 18}px`
+            : `5px 8px ${profileViewMode ? 6 : 24}px`,
+        }}
+      >
         <div
           style={{
-            fontSize: compact ? 9 : 11.5,
+            fontSize: profileViewMode === 'details' ? 15 : (compact ? 9 : 11.5),
             fontWeight: 900,
             textTransform: "uppercase",
             color: POSTER_DARK,
@@ -307,10 +315,10 @@ export function PosterCardFront({
         >
           {ticket.movieTitle}
         </div>
-        {ticket.movieYear && (
+        {ticket.movieYear && profileViewMode !== 'minimal' && (
           <div
             style={{
-              fontSize: compact ? 6.5 : 8,
+              fontSize: profileViewMode === 'details' ? 14 : (compact ? 6.5 : 8),
               fontWeight: 700,
               color: POSTER_DARK,
               opacity: 0.58,
@@ -322,7 +330,7 @@ export function PosterCardFront({
           </div>
         )}
       </div>
-      {ticket.user?.username && (
+      {!profileViewMode && ticket.user?.username && (
         <p style={{ ...(compact ? CARD_USERNAME_STYLE_COMPACT : CARD_USERNAME_STYLE), color: POSTER_DARK, opacity: 0.38 }}>
           @{ticket.user.username}
         </p>
@@ -336,9 +344,11 @@ export function PosterCardFront({
 export function ClassicCardFront({
   ticket,
   imageSrc,
+  profileViewMode,
 }: {
   ticket: Ticket;
   imageSrc: string | null;
+  profileViewMode?: 'minimal' | 'details';
 }) {
   const t = (ticket as unknown) as Record<string, unknown>;
   const ratingType    = (t["ratingType"] as string | undefined) ?? "star";
@@ -347,7 +357,6 @@ export function ClassicCardFront({
   const partySeat     = t["partySeatNumber"] as number | null | undefined;
   const ratingStyle   = getRatingCardStyle(ticket.rating, ratingType);
   const { lang }      = useLang();
-  const genreLabel    = localizeTicketGenre(ticket, lang);
   const imageLoaded   = useImageLoaded(imageSrc);
 
   return (
@@ -401,41 +410,30 @@ export function ClassicCardFront({
         <div className="absolute top-0 inset-x-0 h-0.5 z-10" style={{ background: specialColorCfg.color }} />
       )}
 
-      <div className="absolute inset-x-0 bottom-0 px-2 pb-6">
-        {genreLabel && (
+      {profileViewMode !== 'minimal' && (
+        <div className="absolute inset-x-0 bottom-0 px-2" style={{ paddingBottom: profileViewMode === 'details' ? 8 : 24 }}>
           <p
-            className="text-[7px] uppercase tracking-widest font-semibold"
+            className="font-display font-bold mt-px"
             style={{
-              color: ticket.rating && ticket.rating >= 4 ? "#f59e0b" : "rgba(255,255,255,0.55)",
+              fontSize: profileViewMode === 'details' ? 15 : 13,
+              color: "#ffffff",
               overflow: "hidden",
-              whiteSpace: "nowrap",
-              textOverflow: "ellipsis",
+              display: "-webkit-box",
+              WebkitLineClamp: 1,
+              WebkitBoxOrient: "vertical",
+              lineHeight: 1.35,
             }}
           >
-            {genreLabel}
+            {ticket.movieTitle}
           </p>
-        )}
-        <p
-          className="font-display font-bold mt-px"
-          style={{
-            fontSize: 13,
-            color: "#ffffff",
-            overflow: "hidden",
-            display: "-webkit-box",
-            WebkitLineClamp: 1,
-            WebkitBoxOrient: "vertical",
-            lineHeight: 1.35,
-          }}
-        >
-          {ticket.movieTitle}
-        </p>
-        {ticket.movieYear && (
-          <p style={{ fontSize: 10, color: "rgba(255,255,255,0.55)", marginTop: 2 }}>
-            {displayYear(ticket.movieYear, lang)}
-          </p>
-        )}
-      </div>
-      {ticket.user?.username && (
+          {ticket.movieYear && (
+            <p style={{ fontSize: profileViewMode === 'details' ? 14 : 10, color: "rgba(255,255,255,0.55)", marginTop: 2 }}>
+              {displayYear(ticket.movieYear, lang)}
+            </p>
+          )}
+        </div>
+      )}
+      {!profileViewMode && ticket.user?.username && (
         <p style={{ ...CARD_USERNAME_STYLE, color: "rgba(255,255,255,0.5)" }}>
           @{ticket.user.username}
         </p>

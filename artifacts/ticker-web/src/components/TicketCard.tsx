@@ -52,6 +52,7 @@ import { useToast } from "@/hooks/use-toast";
 interface TicketCardProps {
   ticket: Ticket;
   compact?: boolean;
+  profileViewMode?: 'minimal' | 'details';
   onLongPress?: (ticket: Ticket) => void;
   viewHref?: string;
   noMenu?: boolean;
@@ -535,7 +536,7 @@ function useLongPress(callback: () => void, ms = 500) {
 // ═══════════════════════════════════════════════════════════════
 //  TCG CARD — compact (profile grid)
 // ═══════════════════════════════════════════════════════════════
-function CompactCard({ ticket, onLongPress, viewHref, onDoubleTap }: { ticket: Ticket; onLongPress?: (t: Ticket) => void; viewHref?: string; onDoubleTap?: () => void }) {
+function CompactCard({ ticket, onLongPress, viewHref, onDoubleTap, profileViewMode }: { ticket: Ticket; onLongPress?: (t: Ticket) => void; viewHref?: string; onDoubleTap?: () => void; profileViewMode?: 'minimal' | 'details' }) {
   const { t, lang } = useLang();
   const [flipped, setFlipped] = useState(false);
   const [flipSign, setFlipSign] = useState<1 | -1>(1);
@@ -648,9 +649,10 @@ function CompactCard({ ticket, onLongPress, viewHref, onDoubleTap }: { ticket: T
               <PosterCardFront
                 ticket={ticket}
                 borderColorHex={compactRatingStyle.borderColorHex}
+                profileViewMode={profileViewMode}
               />
             ) : (
-              <ClassicCardFront ticket={ticket} imageSrc={compactImageSrc} />
+              <ClassicCardFront ticket={ticket} imageSrc={compactImageSrc} profileViewMode={profileViewMode} />
             )}
           </div>
         </div>
@@ -2231,7 +2233,7 @@ export function FeedPostSkeleton() {
   );
 }
 
-export const TicketCard = memo(function TicketCard({ ticket, compact = false, onLongPress, viewHref, noMenu = false, onNotInterested }: TicketCardProps) {
+export const TicketCard = memo(function TicketCard({ ticket, compact = false, profileViewMode, onLongPress, viewHref, noMenu = false, onNotInterested }: TicketCardProps) {
   const [contextTicket, setContextTicket] = useState<Ticket | null>(null);
 
   const handleLongPress = noMenu ? undefined : (t: Ticket) => {
@@ -2242,7 +2244,7 @@ export const TicketCard = memo(function TicketCard({ ticket, compact = false, on
   return (
     <>
       {compact
-        ? <CompactCard ticket={ticket} onLongPress={handleLongPress} viewHref={viewHref} />
+        ? <CompactCard ticket={ticket} onLongPress={handleLongPress} viewHref={viewHref} profileViewMode={profileViewMode} />
         : <FeedCard ticket={ticket} onLongPress={handleLongPress} onNotInterested={onNotInterested} />
       }
       {!noMenu && contextTicket && (

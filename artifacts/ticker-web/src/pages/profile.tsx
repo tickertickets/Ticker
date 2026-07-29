@@ -530,7 +530,7 @@ function EditProfileSheet({
 
 // ── Sortable ticket item for drag-to-reorder ───────────────────────────────
 
-function SortableTicketItem({ ticket, isReorderMode }: { ticket: Ticket; isReorderMode: boolean }) {
+function SortableTicketItem({ ticket, isReorderMode, profileViewMode }: { ticket: Ticket; isReorderMode: boolean; profileViewMode?: 'minimal' | 'details' }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: String(ticket.id) });
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -543,7 +543,7 @@ function SortableTicketItem({ ticket, isReorderMode }: { ticket: Ticket; isReord
   };
   return (
     <div ref={setNodeRef} style={style} {...attributes}>
-      <TicketCard ticket={ticket} compact />
+      <TicketCard ticket={ticket} compact profileViewMode={profileViewMode} />
       {isReorderMode && (
         <div
           {...listeners}
@@ -760,6 +760,7 @@ function FilmsGrid({ tickets, isOwn, username, isReorderMode = false, onToggleRe
   const { toast } = useToast();
   const qcFilms = useQueryClient();
   const [orderedTickets, setOrderedTickets] = useState<Ticket[]>(tickets);
+  const [showDetails, setShowDetails] = useState(false);
   const hasManuallyReordered = useRef(false);
   const prevTicketIdsRef = useRef<Set<string>>(new Set(tickets.map(t => String(t.id))));
   useEffect(() => {
@@ -840,19 +841,41 @@ function FilmsGrid({ tickets, isOwn, username, isReorderMode = false, onToggleRe
 
   if (!isOwn) {
     return (
-      <div className="flex flex-wrap justify-center gap-2.5 px-3 pt-2 pb-2.5">
-        {orderedTickets.map(ticket => (
-          <div key={String(ticket.id)} style={{ width: "calc(33.333% - 7px)" }}>
-            <TicketCard ticket={ticket} compact />
-          </div>
-        ))}
-      </div>
+      <>
+        <div className="flex justify-end px-3 pt-2 pb-0.5">
+          <button
+            onClick={() => setShowDetails(d => !d)}
+            className={cn(
+              "text-[11px] font-semibold px-3 py-1 rounded-xl transition-colors",
+              showDetails ? "bg-foreground text-background" : "bg-secondary text-muted-foreground"
+            )}
+          >
+            {lang === "th" ? "รายละเอียด" : "Details"}
+          </button>
+        </div>
+        <div className="flex flex-wrap justify-center gap-2.5 px-3 pt-2 pb-2.5">
+          {orderedTickets.map(ticket => (
+            <div key={String(ticket.id)} style={{ width: "calc(33.333% - 7px)" }}>
+              <TicketCard ticket={ticket} compact profileViewMode={showDetails ? 'details' : 'minimal'} />
+            </div>
+          ))}
+        </div>
+      </>
     );
   }
 
   return (
     <>
-      <div className="flex justify-end px-3 pt-2 pb-0.5">
+      <div className="flex justify-end items-center gap-2 px-3 pt-2 pb-0.5">
+        <button
+          onClick={() => setShowDetails(d => !d)}
+          className={cn(
+            "text-[11px] font-semibold px-3 py-1 rounded-xl transition-colors",
+            showDetails ? "bg-foreground text-background" : "bg-secondary text-muted-foreground"
+          )}
+        >
+          {lang === "th" ? "รายละเอียด" : "Details"}
+        </button>
         <button
           onClick={() => onToggleReorderMode?.()}
           className={cn(
@@ -867,7 +890,7 @@ function FilmsGrid({ tickets, isOwn, username, isReorderMode = false, onToggleRe
         <SortableContext items={orderedTickets.map(t => String(t.id))} strategy={rectSortingStrategy}>
           <div className="flex flex-wrap justify-center gap-2.5 px-3 pt-2 pb-2.5">
             {orderedTickets.map(ticket => (
-              <SortableTicketItem key={String(ticket.id)} ticket={ticket} isReorderMode={isReorderMode} />
+              <SortableTicketItem key={String(ticket.id)} ticket={ticket} isReorderMode={isReorderMode} profileViewMode={showDetails ? 'details' : 'minimal'} />
             ))}
           </div>
         </SortableContext>
