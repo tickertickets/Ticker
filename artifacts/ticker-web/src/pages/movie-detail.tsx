@@ -1373,7 +1373,7 @@ export default function MovieDetail() {
       </div>
 
       {/* ── Movie details ── */}
-      <div className="px-5 pt-1 space-y-2">
+      <div className="px-5 pt-3 space-y-3">
         {(genres.length > 0 || (movie as any)?.certification) && (
           <div className="flex flex-wrap gap-2">
             {(movie as any)?.certification && (

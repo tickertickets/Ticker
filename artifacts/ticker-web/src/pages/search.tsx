@@ -880,18 +880,17 @@ export default function Search({ isActive = true }: { isActive?: boolean } = {})
             style={{
               maxHeight: showDiceTab ? "90px" : "0px",
               overflow: "hidden",
-              transition: "max-height 320ms cubic-bezier(0.65, 0, 0.35, 1)",
+              transition: "max-height 300ms cubic-bezier(0.4, 0, 0.2, 1)",
             }}
           >
             <div
-              className="h-[90px] w-full flex items-center justify-center overflow-hidden"
+              className="w-full flex items-center justify-center py-4"
             >
               <div
                 className="flex items-center gap-6"
                 style={{
                   opacity: showDiceTab ? 1 : 0,
-                  transform: showDiceTab ? "translateY(0)" : "translateY(-16px)",
-                  transition: "opacity 260ms ease, transform 320ms cubic-bezier(0.65, 0, 0.35, 1)",
+                  transition: "opacity 220ms ease",
                 }}
               >
                 <button

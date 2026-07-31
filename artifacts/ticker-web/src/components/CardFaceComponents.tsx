@@ -301,7 +301,7 @@ export function PosterCardFront({
       >
         <div
           style={{
-            fontSize: profileViewMode === 'details' ? 15 : (compact ? 9 : 11.5),
+            fontSize: profileViewMode ? 15 : (compact ? 9 : 11.5),
             fontWeight: 900,
             textTransform: "uppercase",
             color: POSTER_DARK,

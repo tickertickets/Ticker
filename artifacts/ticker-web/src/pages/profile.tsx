@@ -842,7 +842,7 @@ function FilmsGrid({ tickets, isOwn, username, isReorderMode = false, onToggleRe
   if (!isOwn) {
     return (
       <>
-        <div className="flex justify-end px-3 pt-2 pb-0.5">
+        <div className="flex justify-end px-3 pt-1.5 pb-0.5">
           <button
             onClick={() => setShowDetails(d => !d)}
             className={cn(
@@ -853,7 +853,7 @@ function FilmsGrid({ tickets, isOwn, username, isReorderMode = false, onToggleRe
             {lang === "th" ? "รายละเอียด" : "Details"}
           </button>
         </div>
-        <div className="flex flex-wrap justify-center gap-2.5 px-3 pt-2 pb-2.5">
+        <div className="flex flex-wrap justify-center gap-2.5 px-3 pt-1 pb-2.5">
           {orderedTickets.map(ticket => (
             <div key={String(ticket.id)} style={{ width: "calc(33.333% - 7px)" }}>
               <TicketCard ticket={ticket} compact profileViewMode={showDetails ? 'details' : 'minimal'} />
@@ -866,7 +866,7 @@ function FilmsGrid({ tickets, isOwn, username, isReorderMode = false, onToggleRe
 
   return (
     <>
-      <div className="flex justify-end items-center gap-2 px-3 pt-2 pb-0.5">
+      <div className="flex justify-end items-center gap-2 px-3 pt-1.5 pb-0.5">
         <button
           onClick={() => setShowDetails(d => !d)}
           className={cn(
@@ -888,7 +888,7 @@ function FilmsGrid({ tickets, isOwn, username, isReorderMode = false, onToggleRe
       </div>
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTicketDragEnd} modifiers={[restrictToParentElement]}>
         <SortableContext items={orderedTickets.map(t => String(t.id))} strategy={rectSortingStrategy}>
-          <div className="flex flex-wrap justify-center gap-2.5 px-3 pt-2 pb-2.5">
+          <div className="flex flex-wrap justify-center gap-2.5 px-3 pt-1 pb-2.5">
             {orderedTickets.map(ticket => (
               <SortableTicketItem key={String(ticket.id)} ticket={ticket} isReorderMode={isReorderMode} profileViewMode={showDetails ? 'details' : 'minimal'} />
             ))}
@@ -2671,7 +2671,7 @@ export default function Profile() {
       ) : (
         <>
           {/* Tabs — centered pills. For other users, hide Chains pill if they have no chains at all. */}
-          <div className="px-4 pb-2">
+          <div className="px-4 pb-1">
             <div className="flex justify-center gap-2">
               <button onClick={() => handleTabChange("films")} className={`filter-pill flex items-center gap-1.5 ${activeTab === "films" ? "active" : ""}`}>
                 <TicketIcon className="w-3 h-3" /> Tickets
@@ -2686,7 +2686,7 @@ export default function Profile() {
 
           {/* Chain sub-tabs — show both for self; for others only show pills with content */}
           {activeTab === "chain" && showChainSubTabRow && (
-            <div ref={chainSubTabPillRef} className="overflow-x-auto scrollbar-hide px-4 pt-1 pb-2">
+            <div ref={chainSubTabPillRef} className="overflow-x-auto scrollbar-hide px-4 pt-0.5 pb-1">
               <div className="flex items-center justify-center gap-2 min-w-max mx-auto">
                 {showCreatedPill && (
                   <button onClick={() => handleSubTabChange("created")} className={cn("text-sm font-semibold px-3 py-1.5 rounded-xl transition-colors", chainSubTab === "created" ? "bg-foreground text-background" : "bg-secondary text-foreground/60")}>
@@ -2737,7 +2737,7 @@ export default function Profile() {
                   {/* Album pill row — text-align:center + inline-flex ensures pills are
                       always horizontally centred regardless of count or name length,
                       while overflow-x-auto still allows scrolling when there are many. */}
-                  <div ref={albumPillRowRef} className="overflow-x-auto scrollbar-hide text-center pt-1 pb-2">
+                  <div ref={albumPillRowRef} className="overflow-x-auto scrollbar-hide text-center pt-0.5 pb-1">
                     <div className="inline-flex items-center gap-2 px-4">
                       {/* Main/หลัก pill — never reorderable, long-press to rename */}
                                       <AlbumPillBtn
