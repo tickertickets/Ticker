@@ -82,7 +82,8 @@ export default function EditTicket() {
   const [cardOffsetX, setCardOffsetX] = useState<number>(() => Number((src as any)?.cardBackdropOffsetX ?? 50));
   const [cardOffsetY, setCardOffsetY] = useState<number>(() => Number((src as any)?.cardBackdropOffsetY ?? 50));
   // Party mode state (seeded from ticket data)
-  const [partyMode, setPartyMode] = useState(() => Boolean((src as any)?.partyMode));
+  // NOTE: API never returns partyMode; derive it from partyGroupId presence instead.
+  const [partyMode, setPartyMode] = useState(() => Boolean((src as any)?.partyGroupId));
   const [partySize, setPartySize] = useState(() => Number((src as any)?.partySize) || 2);
   const [partySeatNumber, setPartySeatNumber] = useState(() => Number((src as any)?.partySeatNumber) || 1);
   const [partyInvitees, setPartyInvitees] = useState<UserSearchResult[]>([]); // only newly-added in this edit session
@@ -167,7 +168,8 @@ export default function EditTicket() {
       setWatchLocation((tk["location"] as string) ?? "");
       setIsSpoiler(Boolean(tk["isSpoiler"]));
       // Party fields — seed on first load; partyInvitees stays empty (user adds new ones only)
-      setPartyMode(Boolean(tk["partyMode"]));
+      // API never returns partyMode; derive from partyGroupId presence instead.
+      setPartyMode(Boolean(tk["partyGroupId"]));
       setPartySize(Number(tk["partySize"]) || 2);
       setPartySeatNumber(Number(tk["partySeatNumber"]) || 1);
       setCardTheme(((tk["cardTheme"] as string) ?? "classic") as "classic" | "poster");
