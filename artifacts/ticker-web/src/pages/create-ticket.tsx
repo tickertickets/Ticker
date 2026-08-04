@@ -724,6 +724,7 @@ export default function CreateTicket() {
 
   const handleSubmit = async () => {
     if (!selectedMovieId || !movieDetails) return;
+    if (createTicket.isPending) return;
     setSubmitError("");
     if (rating === 0) {
       setSubmitError(t.errNoRating);
@@ -1878,9 +1879,10 @@ export default function CreateTicket() {
             <div className="flex flex-col gap-2">
               <button
                 onClick={() => { setShowCommunityWarning(false); handleSubmit(); }}
-                className="w-full h-12 rounded-2xl bg-foreground text-background font-bold text-sm"
+                disabled={createTicket.isPending}
+                className="w-full h-12 rounded-2xl bg-foreground text-background font-bold text-sm disabled:opacity-50"
               >
-                {t.communityRulesConfirm}
+                {createTicket.isPending ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : t.communityRulesConfirm}
               </button>
               <button
                 onClick={() => setShowCommunityWarning(false)}
