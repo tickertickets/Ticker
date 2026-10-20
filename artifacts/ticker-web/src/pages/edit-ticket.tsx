@@ -185,6 +185,19 @@ export default function EditTicket() {
   const ticketOwnerId = (ticket as any)?.userId as string | undefined;
   const isOwner = !!user && !!ticketOwnerId && ticketOwnerId === user.id;
   const partyGroupIdVal = (ticket as any)?.partyGroupId as string | undefined;
+  const { data: partyOriginData } = useQuery<{ originTicketId: string | null }>({
+    queryKey: ["/api/tickets", ticketId, "party-origin"],
+    queryFn: async () => {
+      const res = await fetch(`/api/tickets/${ticketId}/party-origin`, { credentials: "include" });
+      if (!res.ok) throw new Error("Unable to load party origin");
+      return res.json();
+    },
+    enabled: !!partyGroupIdVal && isOwner,
+  });
+  // Treat the card as a member ticket until the origin lookup resolves. The
+  // API independently enforces this rule, so a delayed response cannot allow
+  // a member's edit to overwrite the party's shared fields.
+  const isPartyMember = !!partyGroupIdVal && isOwner && partyOriginData?.originTicketId !== ticketId;
 
   // Fetch existing party invites (owner only, when partyMode is on and group exists)
   const { data: existingInvitesData } = useQuery<{ invites: ExistingInvitee[] }>({
@@ -340,18 +353,25 @@ export default function EditTicket() {
           caption, captionAlign, memoryNote,
           rating: rating > 0 ? rating : null,
           ratingType: isDyingStar ? "blackhole" : "star",
-          watchedAt: watchDate || "",
-          location: watchLocation,
+          watchedAt: isPartyMember ? undefined : watchDate || "",
+          location: isPartyMember ? undefined : watchLocation,
           isSpoiler, hideRating,
           episodeLabel: isTvShow ? (selectedEpisodeLabel ?? null) : undefined,
           // Poster theme fields (server ignores these for reels)
-          cardTheme, cardBackdropUrl: cardTheme === "poster" ? selectedBackdropUrl : null, cardBackdropOffsetX: cardOffsetX, cardBackdropOffsetY: cardOffsetY,
+          ...(isPartyMember ? {} : {
+            cardTheme,
+            cardBackdropUrl: cardTheme === "poster" ? selectedBackdropUrl : null,
+            cardBackdropOffsetX: cardOffsetX,
+            cardBackdropOffsetY: cardOffsetY,
+          }),
           // Party fields
-          partyMode,
-          partySize: partyMode ? partySize : undefined,
-          partySeatNumber: partyMode ? partySeatNumber : undefined,
-          partyInviteeIds: partyMode && partyInvitees.length > 0 ? partyInvitees.map(u => u.id) : undefined,
-          removedInviteIds: removedInviteIds.size > 0 ? [...removedInviteIds] : undefined,
+          ...(isPartyMember ? {} : {
+            partyMode,
+            partySize: partyMode ? partySize : undefined,
+            partySeatNumber: partyMode ? partySeatNumber : undefined,
+            partyInviteeIds: partyMode && partyInvitees.length > 0 ? partyInvitees.map(u => u.id) : undefined,
+            removedInviteIds: removedInviteIds.size > 0 ? [...removedInviteIds] : undefined,
+          }),
         }),
       });
       if (!res.ok) {
@@ -466,10 +486,10 @@ export default function EditTicket() {
                     <div
                       className="relative overflow-hidden w-full"
                       style={{ aspectRatio: "1 / 1", outline: "0.5px solid rgba(0,0,0,0.2)", cursor: "grab", touchAction: "none" }}
-                      onPointerDown={onPanPointerDown}
-                      onPointerMove={onPanPointerMove}
-                      onPointerUp={onPanPointerUp}
-                      onPointerCancel={onPanPointerUp}
+                      onPointerDown={isPartyMember ? undefined : onPanPointerDown}
+                      onPointerMove={isPartyMember ? undefined : onPanPointerMove}
+                      onPointerUp={isPartyMember ? undefined : onPanPointerUp}
+                      onPointerCancel={isPartyMember ? undefined : onPanPointerUp}
                       onContextMenu={(e) => e.preventDefault()}
                       onClick={(e) => { if (panMovedRef.current) { e.stopPropagation(); panMovedRef.current = false; } }}
                     >
@@ -568,7 +588,11 @@ export default function EditTicket() {
         {/* ── Card Design ── */}
         {!isReel && (
           <div>
-            <p className="text-xs font-black tracking-widest text-foreground mb-2">{t.themeLabel}</p>
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <p className="text-xs font-black tracking-widest text-foreground">{t.themeLabel}</p>
+              {isPartyMember && <span className="text-[10px] text-muted-foreground flex items-center gap-1"><Lock className="w-3 h-3" />{lang === "th" ? "ยึดตามตั๋วต้นทาง" : "Set by the original ticket"}</span>}
+            </div>
+            <div className={cn(isPartyMember && "pointer-events-none opacity-60")}>
             <div className="flex rounded-xl overflow-hidden border border-border">
               <button
                 onClick={() => { setCardTheme("classic"); setSelectedBackdropUrl(null); setPreviewFlipped(false); }}
@@ -656,6 +680,7 @@ export default function EditTicket() {
                 {selectedBackdropUrl && <p className="text-[10px] text-muted-foreground text-center">{t.dragToAdjust}</p>}
               </div>
             )}
+            </div>
           </div>
         )}
 
@@ -840,19 +865,21 @@ export default function EditTicket() {
         {/* Details */}
         <div>
           <p className="text-xs font-black tracking-widest text-foreground mb-2">{t.detailsLabel}</p>
+          {isPartyMember && <p className="text-[10px] text-muted-foreground mb-2">{lang === "th" ? "วันที่และสถานที่ต้องตรงกับตั๋วต้นทาง และแก้ไขในโพสต์นี้ไม่ได้" : "Date and place follow the original ticket and cannot be changed here."}</p>}
           <div className="grid grid-cols-2 gap-2">
             <div
               role="button"
               tabIndex={0}
-              onClick={openDatePicker}
-              onKeyDown={(e) => e.key === "Enter" && openDatePicker()}
-              className="flex items-center gap-2 bg-secondary rounded-2xl px-3 h-12 w-full cursor-pointer select-none"
+              onClick={isPartyMember ? undefined : openDatePicker}
+              onKeyDown={(e) => !isPartyMember && e.key === "Enter" && openDatePicker()}
+              aria-disabled={isPartyMember}
+              className={cn("flex items-center gap-2 bg-secondary rounded-2xl px-3 h-12 w-full select-none", isPartyMember ? "cursor-not-allowed opacity-60" : "cursor-pointer")}
             >
               <Calendar className="w-4 h-4 text-muted-foreground shrink-0" />
               <span className={cn("flex-1 text-sm", watchDate ? "text-foreground" : "text-muted-foreground")}>
                 {watchDate ? new Date(watchDate + "T00:00:00").toLocaleDateString(t.dateLocale, { day: "numeric", month: "long", year: "numeric" }) : t.dateLabelPlaceholder}
               </span>
-              {watchDate && (
+              {watchDate && !isPartyMember && (
                 <button type="button" onClick={(e) => { e.stopPropagation(); setWatchDate(""); }}
                   className="text-muted-foreground hover:text-foreground transition-colors p-0.5">
                   <X className="w-3.5 h-3.5" />
@@ -862,7 +889,7 @@ export default function EditTicket() {
             <div className="flex items-center gap-2 bg-secondary rounded-2xl px-3 h-12">
               <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />
               <input className="flex-1 min-w-0 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
-                placeholder={t.locationPlaceholder} value={watchLocation} onChange={(e) => setWatchLocation(e.target.value)} />
+                placeholder={t.locationPlaceholder} value={watchLocation} disabled={isPartyMember} onChange={(e) => setWatchLocation(e.target.value)} />
             </div>
           </div>
         </div>

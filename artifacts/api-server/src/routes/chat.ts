@@ -139,14 +139,10 @@ router.get("/conversations", async (req, res) => {
     .orderBy(desc(conversationsTable.updatedAt));
 
   const built = await Promise.all(conversations.map(c => buildConversation(c, currentUserId)));
-  // Hide conversations the user has soft-left (no visible messages and the
-  // thread already had history) — they reappear once the other party sends
-  // something new (which lifts updatedAt past joinedAt).
-  const visible = built.filter((c) => {
-    if (c.lastMessage) return true;
-    // No visible messages: only show if the thread is brand new (updatedAt close to createdAt).
-    return c.updatedAt && c.createdAt && Math.abs(new Date(c.updatedAt).getTime() - new Date(c.createdAt).getTime()) < 2000;
-  });
+  // Show only threads with messages visible to this user. This makes a
+  // deleted/declined thread stay out of their inbox after reload; it reappears
+  // if the other person sends a new message after joinedAt.
+  const visible = built.filter((c) => c.lastMessage !== null);
   res.json({ conversations: visible });
 });
 
@@ -166,7 +162,6 @@ router.get("/conversations/:conversationId", async (req, res) => {
       eq(conversationParticipantsTable.userId, currentUserId),
     )).limit(1);
   if (!isParticipant.length) { res.status(403).json({ error: "forbidden" }); return; }
-
   const built = await buildConversation(conv, currentUserId);
   res.json(built);
 });
@@ -196,7 +191,6 @@ router.get("/conversations/:conversationId/messages", async (req, res) => {
     .where(and(eq(conversationParticipantsTable.conversationId, conversationId), eq(conversationParticipantsTable.userId, currentUserId)))
     .limit(1);
   if (!participant) { res.status(403).json({ error: "forbidden" }); return; }
-
   // Only show messages that arrived after this user's joinedAt — this lets a
   // "leave" effectively start a fresh chat once the other party messages again.
   const joinedAt = participant.joinedAt;
@@ -273,6 +267,9 @@ router.post("/conversations/:conversationId/messages", async (req, res) => {
     .where(and(eq(conversationParticipantsTable.conversationId, conversationId), eq(conversationParticipantsTable.userId, currentUserId)))
     .limit(1);
   if (!participant) { res.status(403).json({ error: "forbidden" }); return; }
+  const allParticipants = await db.select().from(conversationParticipantsTable)
+    .where(eq(conversationParticipantsTable.conversationId, conversationId));
+  if (allParticipants.length < 2) { res.status(404).json({ error: "not_found" }); return; }
 
   const id = nanoid();
   await db.insert(chatMessagesTable).values({
@@ -289,8 +286,6 @@ router.post("/conversations/:conversationId/messages", async (req, res) => {
     .where(eq(conversationsTable.id, conversationId));
 
   // Increment unread for other participants
-  const allParticipants = await db.select().from(conversationParticipantsTable)
-    .where(eq(conversationParticipantsTable.conversationId, conversationId));
   for (const p of allParticipants) {
     if (p.userId === currentUserId) continue;
     await db.update(conversationParticipantsTable)
@@ -409,7 +404,7 @@ router.delete("/messages/:messageId", async (req, res) => {
   res.json({ success: true });
 });
 
-// ── DELETE /chat/conversations/:conversationId — leave conversation ─
+// ── DELETE /chat/conversations/:conversationId — hide from current user's inbox ─
 router.delete("/conversations/:conversationId", async (req, res) => {
   const currentUserId = req.session?.userId;
   if (!currentUserId) { res.status(401).json({ error: "unauthorized" }); return; }
@@ -422,15 +417,13 @@ router.delete("/conversations/:conversationId", async (req, res) => {
     )).limit(1);
   if (!participant) { res.status(403).json({ error: "forbidden" }); return; }
 
-  // Soft-leave: keep the participant row but bump joinedAt to "now" so the
-  // user no longer sees old messages. The conversation hides from their list
-  // until the other party sends a new message (which will exceed joinedAt).
-  await db.update(conversationParticipantsTable)
-    .set({ joinedAt: new Date(), unreadCount: 0 })
-    .where(and(
-      eq(conversationParticipantsTable.conversationId, conversationId),
-      eq(conversationParticipantsTable.userId, currentUserId),
-    ));
+  // Keep the conversation for the other participant, but hide all existing
+  // history from this user's inbox until a genuinely newer message arrives.
+  const hiddenFrom = new Date(Date.now() + 1);
+  await db.update(conversationParticipantsTable).set({ joinedAt: hiddenFrom, unreadCount: 0 }).where(and(
+    eq(conversationParticipantsTable.conversationId, conversationId),
+    eq(conversationParticipantsTable.userId, currentUserId),
+  ));
   emitChatChanged([currentUserId]);
   res.json({ success: true });
 });
@@ -474,8 +467,23 @@ router.delete("/conversations/:conversationId/decline-request", async (req, res)
     .limit(1);
   if (!participant) { res.status(403).json({ error: "forbidden" }); return; }
 
-  // Delete the entire conversation (cascade removes participants + messages)
-  await db.delete(conversationsTable).where(eq(conversationsTable.id, conversationId));
+  const firstMsg = await db.select({ senderId: chatMessagesTable.senderId }).from(chatMessagesTable)
+    .where(eq(chatMessagesTable.conversationId, conversationId))
+    .orderBy(chatMessagesTable.createdAt)
+    .limit(1);
+  if (!firstMsg[0] || firstMsg[0].senderId === currentUserId) {
+    res.status(403).json({ error: "forbidden" });
+    return;
+  }
+
+  // Keep the requester's history, but hide the declined request from the
+  // receiver until a new message arrives.
+  const hiddenFrom = new Date(Date.now() + 1);
+  await db.update(conversationParticipantsTable).set({ joinedAt: hiddenFrom, unreadCount: 0 }).where(and(
+    eq(conversationParticipantsTable.conversationId, conversationId),
+    eq(conversationParticipantsTable.userId, currentUserId),
+  ));
+  emitChatChanged([currentUserId]);
   res.json({ success: true });
 });
 

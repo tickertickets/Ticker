@@ -107,6 +107,7 @@ function FollowListSheet({
   const [users, setUsers] = useState<FollowUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [, navigate] = useLocation();
+  const queryClient = useQueryClient();
   const [removingId, setRemovingId] = useState<string | null>(null);
 
   const isLocked = isPrivate && !isFollowing && !isOwn;
@@ -184,21 +185,26 @@ function FollowListSheet({
                       <p className="text-xs text-muted-foreground truncate">@{u.username}</p>
                     </div>
                   </button>
-                  {/* Remove-follower button — own followers list only */}
-                  {isOwn && type === "followers" && (
+                  {/* Remove a follower or unfollow directly from the list */}
+                  {isOwn && (type === "followers" || type === "following") && (
                     <button
                       disabled={removingId === u.username}
-                      title={lang === "th" ? "นำออกจาก Followers" : "Remove follower"}
+                      title={type === "followers"
+                        ? (lang === "th" ? "นำออกจาก Followers" : "Remove follower")
+                        : (lang === "th" ? "เลิกติดตาม" : "Unfollow")}
                       className="w-9 h-9 rounded-xl border border-border bg-background flex items-center justify-center flex-shrink-0 active:bg-secondary transition-colors disabled:opacity-40"
                       onClick={async (e) => {
                         e.stopPropagation();
                         setRemovingId(u.username);
                         try {
-                          await fetch(`/api/users/${encodeURIComponent(u.username)}/remove-follower`, {
+                          const action = type === "followers" ? "remove-follower" : "follow";
+                          const res = await fetch(`/api/users/${encodeURIComponent(u.username)}/${action}`, {
                             method: "DELETE", credentials: "include",
                           });
+                          if (!res.ok) throw new Error("Unable to update follow relationship");
                           setUsers(prev => prev.filter(x => x.id !== u.id));
-                        } catch { /* noop */ } finally {
+                          await queryClient.invalidateQueries({ queryKey: ["profile-data", username] });
+                        } catch { /* keep the row visible when the request fails */ } finally {
                           setRemovingId(null);
                         }
                       }}
@@ -2125,18 +2131,6 @@ export default function Profile() {
   const [bellSubscribed, setBellSubscribed] = useState(false);
   const [bellLoading, setBellLoading] = useState(false);
 
-  // showBell: only show for other users (not own profile, not guests)
-  const showBell = !!me && !isOwn;
-
-  // Load initial bell subscription state from API
-  useEffect(() => {
-    if (!showBell || !username) return;
-    fetch(`/api/users/${username}/notify-subscription`, { credentials: "include" })
-      .then(r => r.ok ? r.json() : { subscribed: false })
-      .then(data => { setBellSubscribed(!!data.subscribed); })
-      .catch(() => {});
-  }, [showBell, username]);
-
   const handleBellToggle = async () => {
     if (!me || bellLoading) return;
     setBellLoading(true);
@@ -2177,6 +2171,35 @@ export default function Profile() {
   const profile  = profileData;
   const tickets  = ticketsData?.tickets ?? [];
   const profileUserId = ((profile as unknown) as Record<string, unknown>)?.["id"] as string | undefined;
+  const showBell = !!me && !isOwn && !!profile?.isFollowing;
+
+  useEffect(() => {
+    if (!me || isOwn || !profile || !username) return;
+    if (!profile.isFollowing) {
+      setBellSubscribed(false);
+      fetch(`/api/users/${username}/notify-subscription`, { method: "DELETE", credentials: "include" }).catch(() => {});
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/users/${username}/notify-subscription`, { credentials: "include" })
+      .then(r => r.ok ? r.json() : { subscribed: false })
+      .then(data => { if (!cancelled) setBellSubscribed(!!data.subscribed); })
+      .catch(() => { if (!cancelled) setBellSubscribed(false); });
+    return () => { cancelled = true; };
+  }, [me?.id, isOwn, profile?.isFollowing, username]);
+
+  useEffect(() => {
+    if (!me || isOwn || !profile || !username) return;
+    if (!profile.isFollowing) {
+      setBellSubscribed(false);
+      fetch(`/api/users/${username}/notify-subscription`, { method: "DELETE", credentials: "include" }).catch(() => {});
+      return;
+    }
+    fetch(`/api/users/${username}/notify-subscription`, { credentials: "include" })
+      .then(r => r.ok ? r.json() : { subscribed: false })
+      .then(data => setBellSubscribed(!!data.subscribed))
+      .catch(() => setBellSubscribed(false));
+  }, [me?.id, isOwn, profile?.isFollowing, username]);
 
   // doRefreshProfile: shared refresh logic for both pull-to-refresh and nav-tap.
   // Declared here (after profileUserId) to avoid TDZ ReferenceError in deps.
@@ -2510,7 +2533,9 @@ export default function Profile() {
         {!isOwn && !!me && (
           <button
             className="absolute w-9 h-9 flex items-center justify-center right-4 active:opacity-70"
-            style={{ top: "calc(var(--sai-top) + 16px + 36px + 8px)" }}
+            style={{ top: showBell
+              ? "calc(var(--sai-top) + 16px + 36px + 8px)"
+              : "calc(var(--sai-top) + 16px)" }}
             onClick={async () => {
               const url = `${window.location.origin}/@${profile.username}`;
               try { await navigator.clipboard.writeText(url); }
@@ -2542,7 +2567,9 @@ export default function Profile() {
           <button
             onClick={() => setReportUserOpen(true)}
             className="absolute w-9 h-9 flex items-center justify-center right-4"
-            style={{ top: "calc(var(--sai-top) + 16px + 36px + 8px + 36px + 8px)" }}
+            style={{ top: showBell
+              ? "calc(var(--sai-top) + 16px + 36px + 8px + 36px + 8px)"
+              : "calc(var(--sai-top) + 16px + 36px + 8px)" }}
           >
             <Flag className="w-6 h-6 text-white/70" />
           </button>

@@ -163,6 +163,16 @@ router.patch("/:id/hide", async (req, res) => {
   if (album.userId !== currentUserId) { res.status(403).json({ error: "forbidden" }); return; }
   const nextHidden = !album.isHidden;
   await db.update(albumsTable).set({ isHidden: nextHidden, updatedAt: new Date() }).where(eq(albumsTable.id, id));
+  if (nextHidden) {
+    const entries = await db.select({ ticketId: albumTicketsTable.ticketId })
+      .from(albumTicketsTable)
+      .where(eq(albumTicketsTable.albumId, id));
+    if (entries.length > 0) {
+      await db.update(ticketsTable)
+        .set({ isPrivate: true, updatedAt: new Date() })
+        .where(inArray(ticketsTable.id, entries.map(entry => entry.ticketId)));
+    }
+  }
   res.json({ success: true, isHidden: nextHidden });
 });
 
@@ -298,7 +308,7 @@ router.post("/:id/tickets", async (req, res) => {
   if (!album) { res.status(404).json({ error: "not_found" }); return; }
   if (album.userId !== currentUserId) { res.status(403).json({ error: "forbidden" }); return; }
 
-  const [ticket] = await db.select({ id: ticketsTable.id, userId: ticketsTable.userId })
+  const [ticket] = await db.select({ id: ticketsTable.id, userId: ticketsTable.userId, isPrivate: ticketsTable.isPrivate })
     .from(ticketsTable)
     .where(and(eq(ticketsTable.id, ticketId), isNull(ticketsTable.deletedAt)))
     .limit(1);
@@ -310,6 +320,10 @@ router.post("/:id/tickets", async (req, res) => {
     .limit(1);
   if (existing) {
     if (existing.albumId === id) {
+      if (album.isHidden && !ticket.isPrivate) {
+        await db.update(ticketsTable).set({ isPrivate: true, updatedAt: new Date() })
+          .where(eq(ticketsTable.id, ticketId));
+      }
       res.json({ ok: true }); return;
     }
     await db.delete(albumTicketsTable)
@@ -317,6 +331,10 @@ router.post("/:id/tickets", async (req, res) => {
   }
 
   await db.insert(albumTicketsTable).values({ albumId: id, ticketId });
+  if (album.isHidden && !ticket.isPrivate) {
+    await db.update(ticketsTable).set({ isPrivate: true, updatedAt: new Date() })
+      .where(eq(ticketsTable.id, ticketId));
+  }
   res.status(201).json({ ok: true });
 });
 

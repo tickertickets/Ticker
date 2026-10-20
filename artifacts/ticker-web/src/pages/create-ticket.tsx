@@ -242,6 +242,13 @@ export default function CreateTicket() {
   const [query, setQuery] = useState("");
   const [debouncedQuery] = useDebounceValue(query, 400);
   const [selectedMovieId, setSelectedMovieId] = useState<string | null>(null);
+  useEffect(() => {
+    const movieIdFromUrl = new URLSearchParams(window.location.search).get("movieId");
+    if (!movieIdFromUrl) return;
+    setSelectedMovieId(movieIdFromUrl);
+    setSelectedLang(lang);
+    setStep(2);
+  }, []); // A movie profile can open this page directly to its review form.
   // Snapshot of title/year/poster captured at selection time (from search
   // results, trending, or draft). Always wins over the refetched details so
   // the language the user picked the movie in is preserved.

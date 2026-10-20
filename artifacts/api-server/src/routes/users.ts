@@ -736,6 +736,18 @@ router.get("/:username/notify-subscription", async (req, res) => {
   const [target] = await db.select({ id: usersTable.id }).from(usersTable)
     .where(ilike(usersTable.username, username)).limit(1);
   if (!target) { res.json({ subscribed: false }); return; }
+  const [follow] = await db.select({ followerId: followsTable.followerId })
+    .from(followsTable)
+    .where(and(eq(followsTable.followerId, currentUserId), eq(followsTable.followingId, target.id)))
+    .limit(1);
+  if (!follow) {
+    await db.delete(notifSubscriptionsTable).where(and(
+      eq(notifSubscriptionsTable.subscriberId, currentUserId),
+      eq(notifSubscriptionsTable.targetUserId, target.id),
+    ));
+    res.json({ subscribed: false });
+    return;
+  }
   const [row] = await db.select({ subscriberId: notifSubscriptionsTable.subscriberId })
     .from(notifSubscriptionsTable)
     .where(and(
@@ -751,18 +763,15 @@ router.post("/:username/notify-subscription", async (req, res) => {
   const currentUserId = req.session?.userId;
   if (!currentUserId) { res.status(401).json({ error: "unauthorized" }); return; }
   const { username } = req.params;
-  const [target] = await db.select({ id: usersTable.id, isPrivate: usersTable.isPrivate })
+  const [target] = await db.select({ id: usersTable.id })
     .from(usersTable).where(ilike(usersTable.username, username)).limit(1);
   if (!target) { res.status(404).json({ error: "not_found" }); return; }
   if (target.id === currentUserId) { res.status(400).json({ error: "cannot_subscribe_self" }); return; }
-  // For private accounts, only allow if already following
-  if (target.isPrivate) {
-    const [follow] = await db.select({ followerId: followsTable.followerId })
-      .from(followsTable)
-      .where(and(eq(followsTable.followerId, currentUserId), eq(followsTable.followingId, target.id)))
-      .limit(1);
-    if (!follow) { res.status(403).json({ error: "not_following_private" }); return; }
-  }
+  const [follow] = await db.select({ followerId: followsTable.followerId })
+    .from(followsTable)
+    .where(and(eq(followsTable.followerId, currentUserId), eq(followsTable.followingId, target.id)))
+    .limit(1);
+  if (!follow) { res.status(403).json({ error: "not_following" }); return; }
   await db.insert(notifSubscriptionsTable)
     .values({ subscriberId: currentUserId, targetUserId: target.id })
     .onConflictDoNothing();

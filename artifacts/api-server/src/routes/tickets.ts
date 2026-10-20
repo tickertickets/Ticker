@@ -1163,6 +1163,34 @@ router.get(
   }),
 );
 
+// ── GET /tickets/:ticketId/party-origin — origin ticket for an accepted party member ──
+router.get(
+  "/:ticketId/party-origin",
+  asyncHandler(async (req, res) => {
+    const currentUserId = req.session?.userId;
+    if (!currentUserId) throw new UnauthorizedError();
+    const ticketId = String(req.params["ticketId"]);
+    const [ticket] = await db.select().from(ticketsTable)
+      .where(and(eq(ticketsTable.id, ticketId), isNull(ticketsTable.deletedAt)))
+      .limit(1);
+    if (!ticket) throw new NotFoundError("Ticket");
+    if (ticket.userId !== currentUserId) throw new ForbiddenError();
+    if (!ticket.partyGroupId) {
+      res.json({ originTicketId: null });
+      return;
+    }
+    const [acceptedInvite] = await db.select({ inviterTicketId: partyInvitesTable.inviterTicketId })
+      .from(partyInvitesTable)
+      .where(and(
+        eq(partyInvitesTable.partyGroupId, ticket.partyGroupId),
+        eq(partyInvitesTable.inviteeUserId, currentUserId),
+        eq(partyInvitesTable.status, "accepted"),
+      ))
+      .limit(1);
+    res.json({ originTicketId: acceptedInvite?.inviterTicketId ?? ticket.id });
+  }),
+);
+
 // ── GET /tickets/:ticketId ────────────────────────────────────────────────────
 router.get(
   "/:ticketId",
@@ -1286,9 +1314,22 @@ router.patch(
     const isReel = ticket.imdbId === "reel";
     const { caption, captionAlign, memoryNote, rating, ratingType, watchedAt, location, isSpoiler, hideRating, partyMode, partySize, partySeatNumber, partyInviteeIds, removedInviteIds, cardTheme, cardBackdropUrl, cardBackdropOffsetX, cardBackdropOffsetY, episodeLabel } = req.body;
 
+    let isPartyMember = false;
+    if (ticket.partyGroupId) {
+      const [acceptedInvite] = await db.select({ inviterTicketId: partyInvitesTable.inviterTicketId })
+        .from(partyInvitesTable)
+        .where(and(
+          eq(partyInvitesTable.partyGroupId, ticket.partyGroupId),
+          eq(partyInvitesTable.inviteeUserId, currentUserId),
+          eq(partyInvitesTable.status, "accepted"),
+        ))
+        .limit(1);
+      isPartyMember = !!acceptedInvite && acceptedInvite.inviterTicketId !== ticket.id;
+    }
+
     // Party field validation and update preparation
     let partyUpdate: Record<string, unknown> = {};
-    if (typeof partyMode === "boolean") {
+    if (!isPartyMember && typeof partyMode === "boolean") {
       if (partyMode) {
         const validatedPartySize = Math.floor(Number(partySize));
         const validatedSeat = Math.floor(Number(partySeatNumber));
@@ -1311,26 +1352,63 @@ router.patch(
         memoryNote: typeof memoryNote === "string" ? memoryNote.trim() || null : ticket.memoryNote,
         rating: rating === null ? null : (typeof rating === "number" && rating >= 1 && rating <= 5 ? String(rating) : ticket.rating),
         ratingType: ratingType === "blackhole" || ratingType === "star" ? ratingType : ticket.ratingType,
-        watchedAt: typeof watchedAt === "string" && watchedAt ? watchedAt : watchedAt === "" ? null : ticket.watchedAt,
-        location: typeof location === "string" ? location.trim() || null : ticket.location,
+        watchedAt: isPartyMember
+          ? ticket.watchedAt
+          : typeof watchedAt === "string" && watchedAt ? watchedAt : watchedAt === "" ? null : ticket.watchedAt,
+        location: isPartyMember
+          ? ticket.location
+          : typeof location === "string" ? location.trim() || null : ticket.location,
         isSpoiler: typeof isSpoiler === "boolean" ? isSpoiler : ticket.isSpoiler,
         hideRating: typeof hideRating === "boolean" ? hideRating : ticket.hideRating,
         episodeLabel: typeof episodeLabel === "string" ? (episodeLabel.trim().slice(0, 200) || null) : episodeLabel === null ? null : ticket.episodeLabel,
         // Poster theme fields (only editable when not a reel)
-        ...(!isReel && ["classic", "poster"].includes(cardTheme) ? {
+        ...(!isPartyMember && !isReel && ["classic", "poster"].includes(cardTheme) ? {
           cardTheme,
           cardBackdropUrl: cardTheme === "poster" ? (typeof cardBackdropUrl === "string" ? cardBackdropUrl : ticket.cardBackdropUrl) : null,
           cardBackdropOffsetX: cardTheme === "poster" && typeof cardBackdropOffsetX === "number" ? cardBackdropOffsetX : ticket.cardBackdropOffsetX,
           cardBackdropOffsetY: cardTheme === "poster" && typeof cardBackdropOffsetY === "number" ? cardBackdropOffsetY : ticket.cardBackdropOffsetY,
         } : {}),
         ...partyUpdate,
+        updatedAt: new Date(),
       })
       .where(eq(ticketsTable.id, ticketId));
+
+    // The origin ticket owns the shared party design and viewing details.
+    // Keep all accepted members in sync whenever the origin owner edits them.
+    if (ticket.partyGroupId && !isPartyMember) {
+      const sourceWatchedAt = typeof watchedAt === "string" && watchedAt
+        ? watchedAt
+        : watchedAt === "" ? null : ticket.watchedAt;
+      const sourceLocation = typeof location === "string" ? location.trim() || null : ticket.location;
+      const validTheme = !isReel && ["classic", "poster"].includes(cardTheme)
+        ? cardTheme
+        : ticket.cardTheme;
+      const sourceBackdropUrl = validTheme === "poster"
+        ? (typeof cardBackdropUrl === "string" ? cardBackdropUrl : ticket.cardBackdropUrl)
+        : null;
+      const sourceOffsetX = validTheme === "poster" && typeof cardBackdropOffsetX === "number"
+        ? cardBackdropOffsetX : ticket.cardBackdropOffsetX;
+      const sourceOffsetY = validTheme === "poster" && typeof cardBackdropOffsetY === "number"
+        ? cardBackdropOffsetY : ticket.cardBackdropOffsetY;
+      await db.update(ticketsTable).set({
+        watchedAt: sourceWatchedAt,
+        location: sourceLocation,
+        cardTheme: validTheme,
+        cardBackdropUrl: sourceBackdropUrl,
+        cardBackdropOffsetX: sourceOffsetX,
+        cardBackdropOffsetY: sourceOffsetY,
+        updatedAt: new Date(),
+      }).where(and(
+        eq(ticketsTable.partyGroupId, ticket.partyGroupId),
+        ne(ticketsTable.id, ticket.id),
+        isNull(ticketsTable.deletedAt),
+      ));
+    }
 
     // Cancel pending invites the owner removed — do this FIRST so the resend
     // pass below never re-notifies someone who was just removed in this
     // same save.
-    if (Array.isArray(removedInviteIds) && removedInviteIds.length > 0) {
+    if (!isPartyMember && Array.isArray(removedInviteIds) && removedInviteIds.length > 0) {
       const resolvedGroupId = (partyUpdate["partyGroupId"] as string | undefined) ?? ticket.partyGroupId;
       if (resolvedGroupId) {
         try {
@@ -1354,7 +1432,7 @@ router.patch(
     // the invite row: if they trashed an earlier notification the invite row
     // survives untouched and they'd otherwise never hear about it again.
     // Accepted or declined invitees are never re-notified.
-    if (partyMode === true) {
+    if (!isPartyMember && partyMode === true) {
       const resolvedGroupId = (partyUpdate["partyGroupId"] as string | undefined) ?? ticket.partyGroupId;
       if (resolvedGroupId) {
         const [inviter] = await db.select().from(usersTable).where(eq(usersTable.id, currentUserId)).limit(1);

@@ -31,8 +31,11 @@ interface PartyInviteInfo {
     cardTheme?: string | null;
     cardBackdropUrl?: string | null;
     cardBackdropOffsetX?: number | null;
+    cardBackdropOffsetY?: number | null;
     genre?: string | null;
     ratingType?: string | null;
+    watchedAt?: string | null;
+    location?: string | null;
   } | null;
   inviter: { id: string; username: string; displayName?: string | null; avatarUrl?: string | null } | null;
   takenSeats: number[];
@@ -49,6 +52,7 @@ function PartyAcceptModal({
 }) {
   const [seatNumber, setSeatNumber] = useState<number | null>(null);
   const [rating, setRating] = useState<number | null>(null);
+  const [memoryNote, setMemoryNote] = useState("");
   const [hoverRating, setHoverRating] = useState<number | null>(null);
   const [isDyingStar, setIsDyingStar] = useState(false);
   const [hideRating, setHideRating] = useState(false);
@@ -70,7 +74,7 @@ function PartyAcceptModal({
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ seatNumber, rating, ratingType: isDyingStar ? "blackhole" : "star", hideRating }),
+        body: JSON.stringify({ seatNumber, memoryNote, rating, ratingType: isDyingStar ? "blackhole" : "star", hideRating }),
       });
       const body = await res.json();
       if (!res.ok) throw body;
@@ -81,6 +85,8 @@ function PartyAcceptModal({
       if (err.error === "seat_taken") setError(t.errSeatTaken);
       else if (err.error === "duplicate_movie") setError(t.errDuplicateMovie);
       else if (err.error === "expired") setError(t.partyExpiredDesc);
+      else if (err.error === "memory_required") setError(t.errNoMemory);
+      else if (err.error === "memory_too_short") setError(t.errMemoryTooShort);
       else setError(t.errGeneric);
     },
   });
@@ -98,6 +104,7 @@ function PartyAcceptModal({
 
   const handleAccept = () => {
     if (!seatNumber) { setError(t.errChooseSeat); return; }
+    if (memoryNote.trim().length < 5) { setError(memoryNote.trim() ? t.errMemoryTooShort : t.errNoMemory); return; }
     setError("");
     accept.mutate();
   };
@@ -243,6 +250,21 @@ function PartyAcceptModal({
               <p className="text-[10px] text-muted-foreground mt-1.5">{t.seatTakenHint}</p>
             </div>
 
+            <div>
+              <label htmlFor="party-memory" className="text-sm font-bold text-foreground mb-2 block">
+                {t.memoryLabel} <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                id="party-memory"
+                required
+                maxLength={100}
+                value={memoryNote}
+                onChange={e => setMemoryNote(e.target.value)}
+                placeholder={t.memoryPlaceholder}
+                className="w-full h-[72px] bg-secondary rounded-2xl px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground resize-none outline-none"
+              />
+            </div>
+
             {/* Rating */}
             <div>
               <p className="text-sm font-bold text-foreground mb-2">{t.yourRating}</p>
@@ -328,12 +350,12 @@ function PartyAcceptModal({
               </button>
               <button
                 onClick={handleAccept}
-                disabled={accept.isPending || decline.isPending || !seatNumber || alreadyAccepted || accept.isSuccess}
+                disabled={accept.isPending || decline.isPending || !seatNumber || memoryNote.trim().length < 5 || alreadyAccepted || accept.isSuccess}
                 className={cn(
                   "flex-1 h-12 rounded-2xl font-bold text-sm transition-all",
                   (alreadyAccepted || accept.isSuccess)
                     ? "bg-border text-muted-foreground cursor-not-allowed"
-                    : seatNumber && rating
+                  : seatNumber && memoryNote.trim().length >= 5
                     ? "bg-foreground text-background"
                     : "bg-border text-muted-foreground cursor-not-allowed"
                 )}

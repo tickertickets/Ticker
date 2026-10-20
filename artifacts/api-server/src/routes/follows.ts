@@ -3,7 +3,7 @@ import { emitFollowChanged } from "../lib/socket";
 import { Router, type IRouter } from "express";
 import rateLimit from "express-rate-limit";
 import { db } from "@workspace/db";
-import { usersTable, followsTable, notificationsTable, followRequestsTable, userBlocksTable } from "@workspace/db/schema";
+import { usersTable, followsTable, notificationsTable, followRequestsTable, userBlocksTable, notifSubscriptionsTable } from "@workspace/db/schema";
 import { eq, and, or, count } from "drizzle-orm";
 import { nanoid } from "nanoid";
 
@@ -87,6 +87,10 @@ router.delete("/:username/follow", followRateLimit, async (req, res) => {
   if (!target) { res.status(404).json({ error: "not_found" }); return; }
   await db.delete(followsTable).where(and(eq(followsTable.followerId, currentUserId), eq(followsTable.followingId, target.id)));
   await db.delete(followRequestsTable).where(and(eq(followRequestsTable.fromUserId, currentUserId), eq(followRequestsTable.toUserId, target.id)));
+  await db.delete(notifSubscriptionsTable).where(and(
+    eq(notifSubscriptionsTable.subscriberId, currentUserId),
+    eq(notifSubscriptionsTable.targetUserId, target.id),
+  ));
   emitFollowChanged({ followerId: currentUserId, followingId: target.id });
   const [fc] = await db.select({ count: count() }).from(followsTable).where(eq(followsTable.followingId, target.id));
   res.json({ following: false, followerCount: Number(fc?.count ?? 0), requestStatus: null });
@@ -148,6 +152,10 @@ router.delete("/:username/remove-follower", followRateLimit, async (req, res) =>
 
   await db.delete(followsTable).where(and(eq(followsTable.followerId, target.id), eq(followsTable.followingId, currentUserId)));
   await db.delete(followRequestsTable).where(and(eq(followRequestsTable.fromUserId, target.id), eq(followRequestsTable.toUserId, currentUserId)));
+  await db.delete(notifSubscriptionsTable).where(and(
+    eq(notifSubscriptionsTable.subscriberId, target.id),
+    eq(notifSubscriptionsTable.targetUserId, currentUserId),
+  ));
   emitFollowChanged({ followerId: target.id, followingId: currentUserId });
   res.json({ success: true });
 });

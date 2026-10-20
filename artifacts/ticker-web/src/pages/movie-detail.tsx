@@ -1778,7 +1778,19 @@ export default function MovieDetail() {
       <div className="mx-5 my-4 border-t border-border" />
 
       <div className="px-5">
-        <h3 className="font-display font-bold text-base text-foreground mb-4">{t.tickerCommunity}</h3>
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <h3 className="font-display font-bold text-base text-foreground">{t.tickerCommunity}</h3>
+          {user && (
+            <button
+              type="button"
+              onClick={() => navigate(`/create-ticket?movieId=${encodeURIComponent(movieId)}`)}
+              className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-foreground text-background text-xs font-bold active:opacity-80"
+            >
+              <Star className="w-3.5 h-3.5" />
+              {lang === "th" ? "เขียนรีวิว" : "Write a review"}
+            </button>
+          )}
+        </div>
 
         {/* Ratings summary — shown as soon as there's at least one rating; avg under 100 raters, total sum at 100+ */}
         {ratingsData && (ratingsData.total ?? 0) > 0 && (

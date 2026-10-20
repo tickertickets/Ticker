@@ -99,8 +99,11 @@ router.get("/invite/:inviteId", async (req, res) => {
       cardTheme: inviterTicket.cardTheme,
       cardBackdropUrl: inviterTicket.cardBackdropUrl,
       cardBackdropOffsetX: inviterTicket.cardBackdropOffsetX,
+      cardBackdropOffsetY: inviterTicket.cardBackdropOffsetY,
       genre: inviterTicket.genre,
       ratingType: inviterTicket.ratingType,
+      watchedAt: inviterTicket.watchedAt,
+      location: inviterTicket.location,
     } : null,
     inviter: inviterUser ? {
       id: inviterUser.id,
@@ -121,7 +124,7 @@ router.post("/invite/:inviteId/accept", async (req, res) => {
   }
 
   const { inviteId } = req.params;
-  const { seatNumber, memoryNote, watchedAt, location, rating, ratingType, isPrivate, hideWatchedAt, hideLocation, hideRating } = req.body;
+  const { seatNumber, memoryNote, rating, ratingType, isPrivate, hideRating } = req.body;
 
   if (!seatNumber || Number(seatNumber) < 1) {
     res.status(400).json({ error: "bad_request", message: "seatNumber is required" });
@@ -135,6 +138,15 @@ router.post("/invite/:inviteId/accept", async (req, res) => {
   }
 
   const resolvedRatingType = ratingType === "blackhole" ? "blackhole" : "star";
+  const cleanNote = typeof memoryNote === "string" ? sanitize(memoryNote.trim()) : "";
+  if (!cleanNote) {
+    res.status(400).json({ error: "memory_required", message: "กรุณาเขียนความทรงจำก่อนโพสต์" });
+    return;
+  }
+  if (cleanNote.length < 5) {
+    res.status(400).json({ error: "memory_too_short", message: "ความทรงจำสั้นเกินไป" });
+    return;
+  }
 
   const [invite] = await db.select().from(partyInvitesTable)
     .where(eq(partyInvitesTable.id, inviteId))
@@ -208,12 +220,9 @@ router.post("/invite/:inviteId/accept", async (req, res) => {
 
   // Create the ticket for this user
   const newTicketId = nanoid();
-  const cleanNote = memoryNote ? sanitize(String(memoryNote).trim()) : null;
-  const cleanLocation = location ? sanitize(String(location).trim()) : null;
-
-  // Mirror the original poster's card 1-for-1 — same look, same metadata.
-  // The friend only personalises: their seat, their rating, and (optionally)
-  // their own memoryNote / watchedAt / location / privacy toggles.
+  // Mirror the source ticket's design and shared viewing details. Members
+  // supply their own memory and rating, while date/location/design stay tied
+  // to the original party ticket.
   await db.insert(ticketsTable).values({
     id: newTicketId,
     userId: currentUserId,
@@ -225,11 +234,11 @@ router.post("/invite/:inviteId/accept", async (req, res) => {
     template: inviterTicket.template,
     // Personal fields — friend enters their own values
     memoryNote: cleanNote,
-    watchedAt: watchedAt || null,
-    location: cleanLocation,
+    watchedAt: inviterTicket.watchedAt,
+    location: inviterTicket.location,
     isPrivate: isPrivate ?? false,
-    hideWatchedAt: hideWatchedAt ?? false,
-    hideLocation: hideLocation ?? false,
+    hideWatchedAt: inviterTicket.hideWatchedAt,
+    hideLocation: inviterTicket.hideLocation,
     rating: ratingNum != null ? String(ratingNum) : null,
     ratingType: resolvedRatingType,
     hideRating: typeof hideRating === "boolean" ? hideRating : false,
@@ -249,6 +258,7 @@ router.post("/invite/:inviteId/accept", async (req, res) => {
     cardTheme: inviterTicket.cardTheme,
     cardBackdropUrl: inviterTicket.cardBackdropUrl,
     cardBackdropOffsetX: inviterTicket.cardBackdropOffsetX,
+    cardBackdropOffsetY: inviterTicket.cardBackdropOffsetY,
     cardRuntime: inviterTicket.cardRuntime,
     cardDirector: inviterTicket.cardDirector,
     cardProducer: inviterTicket.cardProducer,

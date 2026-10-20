@@ -11,7 +11,7 @@ import {
   Ticket, Link2, Newspaper, EyeOff, Eye, Clock,
 } from "lucide-react";
 import { useHiddenItems } from "@/hooks/use-hidden-items";
-import { Link, useSearch } from "wouter";
+import { Link, useSearch, useLocation } from "wouter";
 import { VerifiedBadge, isVerified } from "@/components/VerifiedBadge";
 import { BadgeIcon } from "@/components/BadgeIcon";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -81,6 +81,7 @@ export function saveUserSearchHistory(q: string) {
 
 function UsersFeed() {
   const { lang } = useLang();
+  const [, navigate] = useLocation();
   const { data } = useQuery<{ users: any[] }>({
     queryKey: ["users-featured"],
     queryFn: () =>
@@ -111,7 +112,12 @@ function UsersFeed() {
             {history.slice(0, 6).map(q => (
               <div key={q} className="flex items-center gap-2 py-1">
                 <Clock className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                <span className="flex-1 text-sm text-foreground">{q}</span>
+                <button
+                  onClick={() => navigate(`/following?tab=users&q=${encodeURIComponent(q)}`)}
+                  className="flex-1 text-left text-sm text-foreground active:opacity-60"
+                >
+                  {q}
+                </button>
                 <button
                   onClick={() => removeHistory(q)}
                   className="p-1 text-muted-foreground active:opacity-60 transition-opacity"
@@ -532,6 +538,8 @@ export default function Home({ isActive = true }: { isActive?: boolean }) {
   useEffect(() => {
     const params = new URLSearchParams(search);
     const tabParam = params.get("tab") as ExploreTab;
+    const queryParam = params.get("q");
+    if (queryParam !== null) setSearchQuery(queryParam);
     if (VALID_TABS.includes(tabParam)) {
       setHeaderHidden(false);
       setTab(tabParam);
