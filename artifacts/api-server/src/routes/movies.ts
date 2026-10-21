@@ -2295,7 +2295,7 @@ router.get(
       trailerName: trailer?.name ?? null,
     };
     setCached(trailerCacheKey, trailerResult).catch(() => {});
-    res.json(trailerResult);
+    return res.json(trailerResult);
   }),
 );
 
