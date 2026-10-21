@@ -537,12 +537,18 @@ export default function TicketDetail() {
                 {displayDate(ticket.watchedAt, lang, { month: "short", day: "numeric", year: "numeric" })}
               </span>
             )}
-            {(ticket as any).createdAt && (
-              <span className="flex items-center gap-1 px-3 py-1 bg-secondary rounded-full text-xs font-medium text-muted-foreground">
-                <span className="text-[10px] font-bold opacity-60">{lang === "th" ? "โพสต์" : "Posted"}</span>
-                {displayDate((ticket as any).createdAt, lang, { month: "short", day: "numeric", year: "numeric" })}
-              </span>
-            )}
+            {(ticket as any).createdAt && (() => {
+              const createdAt = (ticket as any).createdAt as string | Date;
+              const updatedAt = (ticket as any).updatedAt as string | Date | undefined;
+              const isEdited = !!updatedAt && new Date(updatedAt).getTime() > new Date(createdAt).getTime();
+              return (
+                <span className="flex items-center gap-1 px-3 py-1 bg-secondary rounded-full text-xs font-medium text-muted-foreground">
+                  <span className="text-[10px] font-bold opacity-60">{isEdited ? (lang === "th" ? "แก้ไข" : "Edited") : (lang === "th" ? "โพสต์" : "Posted")}</span>
+                  {displayDate(isEdited ? updatedAt : createdAt, lang, { month: "short", day: "numeric", year: "numeric" })}
+                  {isEdited && <Pencil className="w-2.5 h-2.5" aria-label={lang === "th" ? "แก้ไขแล้ว" : "Edited"} />}
+                </span>
+              );
+            })()}
             {ticket.location && (
               <span className="flex items-center gap-1 px-3 py-1 bg-secondary rounded-full text-xs font-medium text-muted-foreground">
                 <MapPin className="w-3 h-3" />

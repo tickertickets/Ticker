@@ -1228,11 +1228,20 @@ export const ChainCard = memo(function ChainCard({ chain, onNotInterested }: { c
         </div>
 
         {/* Post timestamp */}
-        {chain.createdAt && (
-          <p className="mt-2 text-[11px] text-muted-foreground/60 leading-none text-center">
-            {timeAgo(chain.createdAt, lang)}
-          </p>
-        )}
+        {chain.createdAt && (() => {
+          const updatedAt = chain.updatedAt;
+          const isEdited = !!updatedAt && new Date(updatedAt).getTime() > new Date(chain.createdAt).getTime();
+          return (
+            <p className="mt-2 text-[11px] text-muted-foreground/60 leading-none text-center flex items-center justify-center gap-1">
+              {timeAgo(isEdited ? updatedAt : chain.createdAt, lang)}
+              {isEdited && (
+                <span title={lang === "th" ? "แก้ไขแล้ว" : "Edited"}>
+                  <Pencil className="w-2.5 h-2.5" aria-hidden="true" />
+                </span>
+              )}
+            </p>
+          );
+        })()}
 
         {commentCount > 0 && (
           <div className="mt-3">

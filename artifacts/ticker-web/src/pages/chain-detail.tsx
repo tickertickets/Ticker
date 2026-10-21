@@ -664,15 +664,20 @@ export default function ChainDetail() {
         )}
 
         {/* Chain creation date */}
-        {chain.createdAt && (
-          <div className="!mt-3 flex items-center gap-1.5">
-            <CalendarDays className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-            <span className="text-xs text-muted-foreground">
-              {lang === "th" ? "สร้างเมื่อ" : "Created"}{" "}
-              {displayDate(chain.createdAt, lang, { month: "short", day: "numeric", year: "numeric" })}
-            </span>
-          </div>
-        )}
+        {chain.createdAt && (() => {
+          const updatedAt = (chain as any).updatedAt as string | Date | undefined;
+          const isEdited = !!updatedAt && new Date(updatedAt).getTime() > new Date(chain.createdAt).getTime();
+          return (
+            <div className="!mt-3 flex items-center gap-1.5">
+              <CalendarDays className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+              <span className="text-xs text-muted-foreground">
+                {isEdited ? (lang === "th" ? "แก้ไขเมื่อ" : "Edited") : (lang === "th" ? "สร้างเมื่อ" : "Created")}{" "}
+                {displayDate(isEdited ? updatedAt : chain.createdAt, lang, { month: "short", day: "numeric", year: "numeric" })}
+              </span>
+              {isEdited && <Pencil className="w-3 h-3 text-muted-foreground" aria-label={lang === "th" ? "แก้ไขแล้ว" : "Edited"} />}
+            </div>
+          );
+        })()}
 
         {/* ── Movie horizontal preview ── */}
         <div className="flex gap-2.5 overflow-x-auto pb-1 scrollbar-none !mt-5" style={{ WebkitOverflowScrolling: "touch", contain: "content" }}>

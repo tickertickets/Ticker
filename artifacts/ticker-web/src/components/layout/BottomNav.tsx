@@ -275,7 +275,7 @@ export function BottomNav() {
     setDragPreview(null);
     if (droppedOnMovie && movieId) {
       setCreateOpen(false);
-      navigate(`/create-ticket?movieId=${encodeURIComponent(movieId)}`);
+      navigate(`/ticket/new?movieId=${encodeURIComponent(movieId)}`);
     }
     window.setTimeout(() => { suppressClickRef.current = false; }, 0);
   };

@@ -1856,50 +1856,60 @@ export default function CreateTicket() {
 
       {/* ── Community Rules Warning ── */}
       {showCommunityWarning && createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-end" onClick={() => setShowCommunityWarning(false)}>
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+        <>
+          <div className="fixed inset-0 z-[9998] bg-black/50 backdrop-blur-sm" onClick={() => setShowCommunityWarning(false)} />
           <div
-            className="relative w-full bg-background rounded-t-3xl border-t border-border px-5 pt-5"
-            style={{ boxShadow: "0 -4px 32px rgba(0,0,0,0.18)", paddingBottom: "max(1.5rem, var(--sai-bottom) + 1rem)" }}
+            className="fixed bottom-0 z-[9999] flex flex-col overflow-hidden bg-background rounded-t-3xl border-t border-border"
+            style={{
+              left: "50%",
+              transform: "translateX(-50%)",
+              width: "min(100vw, 430px)",
+              maxHeight: "92dvh",
+              paddingBottom: "max(var(--sai-bottom), 20px)",
+              boxShadow: "0 -4px 32px rgba(0,0,0,0.22)",
+            }}
             onClick={e => e.stopPropagation()}
           >
-            <div className="flex justify-center mb-4">
+            <div className="flex justify-center pt-3 pb-1 shrink-0">
               <div className="w-10 h-1 rounded-full bg-border" />
             </div>
-            <p className="text-base font-bold text-foreground mb-2 text-center">{t.communityRulesTitle}</p>
-            <p className="text-xs text-muted-foreground mb-4 text-center leading-relaxed">{t.communityRulesSubtitle}</p>
-            <div className="max-h-[40vh] overflow-y-auto bg-secondary rounded-2xl px-4 py-3 mb-4">
+            <div className="px-5 pt-3 pb-4 shrink-0">
+              <h2 className="font-display font-bold text-base text-foreground mb-2 text-center">{t.communityRulesTitle}</h2>
+              <p className="text-xs text-muted-foreground text-center leading-relaxed">{t.communityRulesSubtitle}</p>
+            </div>
+            <div className="mx-5 mb-4 max-h-[40dvh] overflow-y-auto overscroll-contain bg-secondary rounded-2xl px-4 py-3">
               {t.communityRulesBody.split("\n").map((line, i) => (
                 <p key={i} className={`text-sm text-foreground/80 leading-snug text-left${i > 0 && line === "" ? " mt-3" : i > 0 ? " mt-1.5" : ""}`}>{line || "\u00A0"}</p>
               ))}
               <p className="text-xs text-muted-foreground mt-4 leading-relaxed">{t.communityRulesFootnote}</p>
+              <p className="text-[11px] text-muted-foreground mt-3 leading-relaxed">
+                {lang === "th"
+                  ? "ความคิดเห็น การรีวิว และการให้คะแนนเป็นของผู้ใช้แต่ละคน Ticker ขอไม่รับผิดชอบต่อเนื้อหาที่ผู้ใช้สร้างขึ้น"
+                  : "All reviews, ratings, and opinions are solely those of the users. Ticker is not responsible for user-generated content."}
+              </p>
+              <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-3 leading-relaxed bg-amber-50 dark:bg-amber-950/30 rounded-xl p-3">
+                {lang === "th"
+                  ? "⚠️ ภาพประกอบบนตั๋วที่คุณเลือกอาจอยู่ภายใต้ลิขสิทธิ์ของบุคคลที่สาม Ticker ไม่ได้เป็นเจ้าของหรืออ้างสิทธิ์ในภาพดังกล่าว และไม่รับผิดชอบต่อการเลือกใช้ภาพของผู้ใช้ หากเจ้าของสิทธิ์ยื่นคำร้อง DMCA Takedown ที่มีมูล ภาพในตั๋วของคุณอาจถูกนำออกโดยไม่แจ้งล่วงหน้า การกด \"สร้างตั๋ว\" ถือว่าคุณรับทราบและยอมรับเงื่อนไขนี้"
+                  : "⚠️ The cover image you select may be protected by third-party copyright. Ticker does not own or claim any rights to such images and is not responsible for users' image choices. If a rights holder submits a valid DMCA Takedown Notice, your post's cover image may be removed without prior notice. By tapping \"Post,\" you acknowledge and accept this condition."}
+              </p>
             </div>
-            <p className="text-[11px] text-muted-foreground text-center leading-relaxed mb-3 px-1">
-              {lang === "th"
-                ? "ความคิดเห็น การรีวิว และการให้คะแนนเป็นของผู้ใช้แต่ละคน Ticker ขอไม่รับผิดชอบต่อเนื้อหาที่ผู้ใช้สร้างขึ้น"
-                : "All reviews, ratings, and opinions are solely those of the users. Ticker is not responsible for user-generated content."}
-            </p>
-            <p className="text-[11px] text-amber-600 dark:text-amber-400 text-center leading-relaxed mb-3 px-1 bg-amber-50 dark:bg-amber-950/30 rounded-xl py-2">
-              {lang === "th"
-                ? "⚠️ ภาพประกอบบนตั๋วที่คุณเลือกอาจอยู่ภายใต้ลิขสิทธิ์ของบุคคลที่สาม Ticker ไม่ได้เป็นเจ้าของหรืออ้างสิทธิ์ในภาพดังกล่าว และไม่รับผิดชอบต่อการเลือกใช้ภาพของผู้ใช้ หากเจ้าของสิทธิ์ยื่นคำร้อง DMCA Takedown ที่มีมูล ภาพในตั๋วของคุณอาจถูกนำออกโดยไม่แจ้งล่วงหน้า การกด \"สร้างตั๋ว\" ถือว่าคุณรับทราบและยอมรับเงื่อนไขนี้"
-                : "⚠️ The cover image you select may be protected by third-party copyright. Ticker does not own or claim any rights to such images and is not responsible for users' image choices. If a rights holder submits a valid DMCA Takedown Notice, your post's cover image may be removed without prior notice. By tapping \"Post,\" you acknowledge and accept this condition."}</p>
-            <div className="flex flex-col gap-2">
-              <button
-                onClick={() => { setShowCommunityWarning(false); handleSubmit(); }}
-                disabled={createTicket.isPending}
-                className="w-full h-12 rounded-2xl bg-foreground text-background font-bold text-sm disabled:opacity-50"
-              >
-                {createTicket.isPending ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : t.communityRulesConfirm}
-              </button>
+            <div className="flex gap-2 px-5 shrink-0">
               <button
                 onClick={() => setShowCommunityWarning(false)}
-                className="w-full h-12 rounded-2xl text-muted-foreground font-semibold text-sm"
+                className="flex-1 h-12 rounded-2xl border border-border text-foreground text-sm font-bold"
               >
                 {t.communityRulesCancel}
               </button>
+              <button
+                onClick={() => { setShowCommunityWarning(false); handleSubmit(); }}
+                disabled={createTicket.isPending}
+                className="flex-1 h-12 rounded-2xl bg-foreground text-background font-bold text-sm disabled:opacity-50"
+              >
+                {createTicket.isPending ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : t.communityRulesConfirm}
+              </button>
             </div>
           </div>
-        </div>,
+        </>,
         document.body
       )}
 

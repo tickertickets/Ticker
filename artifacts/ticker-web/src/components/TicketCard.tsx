@@ -1664,11 +1664,20 @@ function FeedCard({ ticket, onLongPress, onNotInterested }: { ticket: Ticket; on
       })()}
 
       {/* Post timestamp — Instagram style: relative (< 24 h) then absolute date */}
-      {ticket.createdAt && (
-        <p className="px-4 mt-2 text-[11px] text-muted-foreground/60 leading-none">
-          {timeAgo(ticket.createdAt, lang)}
-        </p>
-      )}
+      {ticket.createdAt && (() => {
+        const updatedAt = (ticket as any).updatedAt as string | Date | null | undefined;
+        const isEdited = !!updatedAt && new Date(updatedAt).getTime() > new Date(ticket.createdAt).getTime();
+        return (
+          <p className="px-4 mt-2 text-[11px] text-muted-foreground/60 leading-none flex items-center gap-1">
+            {timeAgo(isEdited ? updatedAt : ticket.createdAt, lang)}
+            {isEdited && (
+              <span title={lang === "th" ? "แก้ไขแล้ว" : "Edited"}>
+                <Pencil className="w-2.5 h-2.5" aria-hidden="true" />
+              </span>
+            )}
+          </p>
+        );
+      })()}
 
       {/* Comment cycling bubble — hidden for spoiler posts to avoid revealing spoiler content */}
       {(ticket.commentCount ?? 0) > 0 && !((ticket as unknown) as Record<string, unknown>)["isSpoiler"] && (
