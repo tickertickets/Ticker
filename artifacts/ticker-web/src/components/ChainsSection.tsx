@@ -78,6 +78,7 @@ export type ChainItem = {
   user?: { id?: string; username?: string | null; displayName?: string | null; avatarUrl?: string | null } | null;
   createdAt?: string;
   updatedAt?: string;
+  editedAt?: string;
   foundMovieIds?: string[] | null;
   foundMovieCount?: number | null;
 };
@@ -1229,11 +1230,11 @@ export const ChainCard = memo(function ChainCard({ chain, onNotInterested }: { c
 
         {/* Post timestamp */}
         {chain.createdAt && (() => {
-          const updatedAt = chain.updatedAt;
-          const isEdited = !!updatedAt && new Date(updatedAt).getTime() > new Date(chain.createdAt).getTime();
+          const editedAt = chain.editedAt;
+          const isEdited = !!editedAt;
           return (
             <p className="mt-2 text-[11px] text-muted-foreground/60 leading-none text-center flex items-center justify-center gap-1">
-              {timeAgo(isEdited ? updatedAt : chain.createdAt, lang)}
+              {timeAgo(isEdited ? editedAt : chain.createdAt, lang)}
               {isEdited && (
                 <span title={lang === "th" ? "แก้ไขแล้ว" : "Edited"}>
                   <Pencil className="w-2.5 h-2.5" aria-hidden="true" />

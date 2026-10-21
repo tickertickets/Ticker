@@ -557,6 +557,7 @@ export async function buildTicketBatch(
       episodeLabel: ticket.episodeLabel,
       createdAt: ticket.createdAt,
       updatedAt: ticket.updatedAt,
+      editedAt: ticket.editedAt,
       // Live rank inputs from the movies DB cache — same data source as the
       // movie-detail page, so card ranks always match the detail view exactly.
       movieLiveSnapshot,
@@ -841,6 +842,7 @@ export async function buildTicket(
     archivedAt: ticket.archivedAt,
     createdAt: ticket.createdAt,
     updatedAt: ticket.updatedAt,
+    editedAt: ticket.editedAt,
     movieLiveSnapshot,
   };
 }

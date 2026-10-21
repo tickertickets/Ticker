@@ -539,12 +539,12 @@ export default function TicketDetail() {
             )}
             {(ticket as any).createdAt && (() => {
               const createdAt = (ticket as any).createdAt as string | Date;
-              const updatedAt = (ticket as any).updatedAt as string | Date | undefined;
-              const isEdited = !!updatedAt && new Date(updatedAt).getTime() > new Date(createdAt).getTime();
+              const editedAt = (ticket as any).editedAt as string | Date | undefined;
+              const isEdited = !!editedAt;
               return (
                 <span className="flex items-center gap-1 px-3 py-1 bg-secondary rounded-full text-xs font-medium text-muted-foreground">
                   <span className="text-[10px] font-bold opacity-60">{isEdited ? (lang === "th" ? "แก้ไข" : "Edited") : (lang === "th" ? "โพสต์" : "Posted")}</span>
-                  {displayDate(isEdited ? updatedAt : createdAt, lang, { month: "short", day: "numeric", year: "numeric" })}
+                  {displayDate(isEdited ? editedAt : createdAt, lang, { month: "short", day: "numeric", year: "numeric" })}
                   {isEdited && <Pencil className="w-2.5 h-2.5" aria-label={lang === "th" ? "แก้ไขแล้ว" : "Edited"} />}
                 </span>
               );

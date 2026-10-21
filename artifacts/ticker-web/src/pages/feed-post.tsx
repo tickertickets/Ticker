@@ -56,6 +56,7 @@ export default function FeedPost() {
     user: chainRaw.user ?? null,
     createdAt: chainRaw.createdAt,
     updatedAt: chainRaw.updatedAt,
+    editedAt: chainRaw.editedAt,
     foundMovieIds: chainRaw.foundMovieIds ?? null,
     foundMovieCount: chainRaw.foundMovieCount ?? null,
   } : null;

@@ -17,6 +17,7 @@ import { scrollStore } from "@/lib/scroll-store";
 import { useEnsureMovieCores } from "@/lib/use-movie-cores";
 import { useAuth } from "@/hooks/use-auth";
 import { getChainDraftKey } from "@/lib/query-client";
+import { CommunityGuidelinesSheet } from "@/components/CommunityGuidelinesSheet";
 
 // ── Draft storage ─────────────────────────────────────────────────
 
@@ -164,6 +165,7 @@ function SortableMovieItem({ movie, idx, dragLabel }: { movie: ChainMovie; idx: 
 export default function CreateChain() {
   const { t, lang } = useLang();
   const scrollRef = usePageScroll("create-chain");
+  const movieSearchPanelRef = useRef<HTMLDivElement>(null);
   const [, setLocation] = useLocation();
   const qc = useQueryClient();
   const { user } = useAuth();
@@ -206,6 +208,23 @@ export default function CreateChain() {
   );
   const [drafts, setDrafts] = useState<ChainDraft[]>(() => readChainDrafts(getChainDraftKey(user?.id)));
   const [showDraftDialog, setShowDraftDialog] = useState(false);
+
+  useEffect(() => {
+    if (!showSearch) return;
+    const frame = window.requestAnimationFrame(() => {
+      const scroller = scrollRef.current;
+      const panel = movieSearchPanelRef.current;
+      if (!scroller || !panel) return;
+      const stickyHeader = scroller.querySelector<HTMLElement>("[data-chain-create-header]");
+      const headerHeight = stickyHeader?.getBoundingClientRect().height ?? 0;
+      const panelTop = panel.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
+      scroller.scrollTo({
+        top: Math.max(0, panelTop - headerHeight + 8),
+        behavior: "smooth",
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [showSearch, scrollRef]);
 
   // Lock body scroll when draft dialog is open
   useEffect(() => {
@@ -491,7 +510,7 @@ export default function CreateChain() {
     <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto overscroll-y-none">
 
       {/* ── Header ── */}
-      <div className="sticky top-0 z-30 bg-background border-b border-border">
+      <div data-chain-create-header className="sticky top-0 z-30 bg-background border-b border-border">
         <div className="flex items-center gap-3 px-4 pt-4 pb-3">
           <button
             onClick={handleBack}
@@ -670,7 +689,7 @@ export default function CreateChain() {
 
           {/* Search panel */}
           {showSearch && (
-            <div className="mb-3 bg-secondary rounded-2xl overflow-hidden border border-border">
+            <div ref={movieSearchPanelRef} className="mb-3 bg-secondary rounded-2xl overflow-hidden border border-border">
               <div className="p-3 border-b border-border">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none z-10" />
@@ -874,50 +893,13 @@ export default function CreateChain() {
       </div>
 
       {/* ── Community Guidelines modal (before submit) ── */}
-      {showCommunityWarning && createPortal(
-        <>
-          <div className="fixed inset-0 z-[9998] bg-black/50 backdrop-blur-sm" onClick={() => setShowCommunityWarning(false)} />
-          <div
-            className="fixed bottom-0 z-[9999] bg-background rounded-t-3xl border-t border-border"
-            style={{ left: "50%", transform: "translateX(-50%)", width: "min(100%, 430px)", paddingBottom: "max(var(--sai-bottom), 20px)" }}
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex justify-center pt-3 pb-1">
-              <div className="w-10 h-1 rounded-full bg-border" />
-            </div>
-            <div className="px-5 pt-3 pb-5">
-              <h2 className="font-display font-bold text-base text-foreground mb-2 text-center">{t.communityRulesTitle}</h2>
-              <p className="text-xs text-muted-foreground mb-3 text-center leading-relaxed">{t.communityRulesSubtitle}</p>
-              <div className="max-h-[40vh] overflow-y-auto bg-secondary rounded-2xl px-4 py-3 mb-4">
-                {t.communityRulesBody.split("\n").map((line, i) => (
-                  <p key={i} className={`text-sm text-foreground/80 leading-snug text-left${i > 0 && line === "" ? " mt-3" : i > 0 ? " mt-1.5" : ""}`}>{line || "\u00A0"}</p>
-                ))}
-                <p className="text-xs text-muted-foreground mt-4 leading-relaxed">{t.communityRulesFootnote}</p>
-              </div>
-              <p className="text-[11px] text-muted-foreground text-center leading-relaxed mb-3 px-1">
-                {lang === "th"
-                  ? "ความคิดเห็น การรีวิว และการให้คะแนนเป็นของผู้ใช้แต่ละคน Ticker ขอไม่รับผิดชอบต่อเนื้อหาที่ผู้ใช้สร้างขึ้น"
-                  : "All reviews, ratings, and opinions are solely those of the users. Ticker is not responsible for user-generated content."}
-              </p>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setShowCommunityWarning(false)}
-                  className="flex-1 h-12 rounded-2xl border border-border text-foreground text-sm font-bold"
-                >
-                  {t.communityRulesCancel}
-                </button>
-                <button
-                  onClick={() => { setShowCommunityWarning(false); handleSubmit(); }}
-                  disabled={submitting}
-                  className="flex-1 h-12 rounded-2xl bg-foreground text-background text-sm font-bold disabled:opacity-50"
-                >
-                  {submitting ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : t.communityRulesConfirmSave}
-                </button>
-              </div>
-            </div>
-          </div>
-        </>,
-        document.body
+      {showCommunityWarning && (
+        <CommunityGuidelinesSheet
+          onClose={() => setShowCommunityWarning(false)}
+          onConfirm={handleSubmit}
+          isSubmitting={submitting}
+          confirmLabel={t.communityRulesConfirmSave}
+        />
       )}
 
       {/* ── "บันทึกดราฟ?" exit bottom-sheet ── */}
