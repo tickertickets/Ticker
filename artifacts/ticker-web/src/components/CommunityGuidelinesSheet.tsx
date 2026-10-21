@@ -30,7 +30,7 @@ export function CommunityGuidelinesSheet({
           left: "50%",
           transform: "translateX(-50%)",
           width: "min(100vw, 430px)",
-          maxHeight: "92dvh",
+          height: "min(92dvh, 760px)",
           paddingBottom: "max(var(--sai-bottom), 20px)",
           boxShadow: "0 -4px 32px rgba(0,0,0,0.22)",
         }}
@@ -49,7 +49,7 @@ export function CommunityGuidelinesSheet({
           </p>
         </div>
 
-        <div className="mx-5 mb-4 max-h-[40dvh] overflow-y-auto overscroll-contain bg-secondary rounded-2xl px-4 py-3">
+        <div className="mx-5 mb-4 min-h-0 flex-1 overflow-y-auto overscroll-contain bg-secondary rounded-2xl px-4 py-3">
           <div>
             {lines.map((line, index) => {
               const trimmed = line.trim();
@@ -58,9 +58,13 @@ export function CommunityGuidelinesSheet({
               }
 
               if (/^\d+\.\s/.test(trimmed)) {
+                const number = trimmed.match(/^(\d+)\./)?.[1] ?? "";
+                const heading = lang === "th"
+                  ? ["สปอยล์", "มารยาท", "คุณภาพเนื้อหา", "ลิขสิทธิ์", "การบังคับใช้"][Number(number) - 1]
+                  : ["Spoiler policy", "Respect", "Content quality", "Copyright", "Enforcement"][Number(number) - 1];
                 return (
-                  <p key={index} className="mt-2 text-center text-sm font-bold leading-snug text-foreground">
-                    {trimmed}
+                  <p key={index} className="mt-2 px-2 text-center text-sm font-bold leading-snug text-foreground">
+                    {number}. {heading}
                   </p>
                 );
               }

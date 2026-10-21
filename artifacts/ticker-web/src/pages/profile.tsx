@@ -2523,7 +2523,7 @@ export default function Profile() {
                   toast({ title: t.copiedLabel, duration: 1500 });
                 }}
               >
-                <Share2 className="w-6 h-6 text-white/70" />
+                <Share2 className="w-6 h-6 text-white" />
               </button>
             ) : null}
           </div>
@@ -2547,7 +2547,7 @@ export default function Profile() {
               toast({ title: t.copiedLabel, duration: 1500 });
             }}
           >
-            <Share2 className="w-6 h-6 text-white/70" />
+            <Share2 className="w-6 h-6 text-white" />
           </button>
         )}
 

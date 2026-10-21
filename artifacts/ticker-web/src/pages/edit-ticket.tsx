@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { useLang, displayYear } from "@/lib/i18n";
 import { useAuth } from "@/hooks/use-auth";
 import { RatingBadge, CARD_USERNAME_STYLE, getRatingCardStyle } from "@/components/CardFaceComponents";
+import { CommunityGuidelinesSheet } from "@/components/CommunityGuidelinesSheet";
 
 interface UserSearchResult {
   id: string;
@@ -1135,41 +1136,13 @@ export default function EditTicket() {
         </div>,
         document.body
       )}
-      {showCommunityWarning && createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-end" onClick={() => setShowCommunityWarning(false)}>
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-          <div
-            className="relative w-full bg-background rounded-t-3xl border-t border-border px-5 pt-5"
-            style={{ boxShadow: "0 -4px 32px rgba(0,0,0,0.18)", paddingBottom: "max(1.5rem, var(--sai-bottom) + 1rem)" }}
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex justify-center mb-4">
-              <div className="w-10 h-1 rounded-full bg-border" />
-            </div>
-            <p className="text-base font-bold text-foreground mb-3 text-center">{t.communityRulesTitle}</p>
-            <p className="text-sm text-muted-foreground mb-5 text-center whitespace-pre-line">{t.communityRulesBody}</p>
-            <p className="text-[11px] text-muted-foreground text-center leading-relaxed mb-3 px-1">
-              {lang === "th"
-                ? "ความคิดเห็น การรีวิว และการให้คะแนนเป็นของผู้ใช้แต่ละคน Ticker ขอไม่รับผิดชอบต่อเนื้อหาที่ผู้ใช้สร้างขึ้น"
-                : "All reviews, ratings, and opinions are solely those of the users. Ticker is not responsible for user-generated content."}
-            </p>
-            <div className="flex flex-col gap-2">
-              <button
-                onClick={() => { setShowCommunityWarning(false); handleSave(); }}
-                className="w-full h-12 rounded-2xl bg-foreground text-background font-bold text-sm"
-              >
-                {t.communityRulesConfirmSave}
-              </button>
-              <button
-                onClick={() => setShowCommunityWarning(false)}
-                className="w-full h-12 rounded-2xl text-muted-foreground font-semibold text-sm"
-              >
-                {t.communityRulesCancel}
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
+      {showCommunityWarning && (
+        <CommunityGuidelinesSheet
+          onClose={() => setShowCommunityWarning(false)}
+          onConfirm={handleSave}
+          isSubmitting={saving}
+          confirmLabel={t.communityRulesConfirmSave}
+        />
       )}
       </div>{/* end scroll */}
     </div>

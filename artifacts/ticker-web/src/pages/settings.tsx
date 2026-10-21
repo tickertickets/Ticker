@@ -421,7 +421,7 @@ function BadgeSection({
   // swiped to (so a popcorn ON → ticket-tab swipe doesn't yank back).
   const initialJumped = useRef(false);
   const [showXpHint, setShowXpHint] = useState(false);
-  const touchStartX = useRef<number | null>(null);
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
   const xpCurrent = badge?.xpCurrent ?? 0;
   const xpRequired = badge?.xpRequired ?? 100;
   const progress = badge?.progress ?? 0;
@@ -464,14 +464,17 @@ function BadgeSection({
   const MAX_DOT = 5; // 0..4 = Lv1..Lv5, 5 = Popcorn
 
   const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartX.current = e.touches[0].clientX;
+    const touch = e.touches[0];
+    touchStart.current = { x: touch.clientX, y: touch.clientY };
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
-    if (touchStartX.current === null) return;
-    const dx = e.changedTouches[0].clientX - touchStartX.current;
-    touchStartX.current = null;
-    if (Math.abs(dx) < SWIPE_THRESHOLD) return;
+    if (touchStart.current === null) return;
+    const touch = e.changedTouches[0];
+    const dx = touch.clientX - touchStart.current.x;
+    const dy = touch.clientY - touchStart.current.y;
+    touchStart.current = null;
+    if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
     setActiveDot(prev => Math.max(0, Math.min(MAX_DOT, prev + (dx < 0 ? 1 : -1))));
   };
 
@@ -629,7 +632,7 @@ function BadgeSection({
                       </div>
 
                       {/* XP sources */}
-                      <div className="grid grid-cols-3 gap-1.5">
+                      {!atMaxLevel && <div className="grid grid-cols-3 gap-1.5">
                         <div className="rounded-lg p-1.5 text-center" style={{ background: "rgba(59,130,246,0.12)" }}>
                           <TrendingUp className="w-3 h-3 mx-auto mb-0.5 text-blue-400" />
                           <p className="text-[10px] font-bold text-blue-400">{postXP}</p>
@@ -638,14 +641,14 @@ function BadgeSection({
                         <div className="rounded-lg p-1.5 text-center" style={{ background: "rgba(168,85,247,0.12)" }}>
                           <Users className="w-3 h-3 mx-auto mb-0.5 text-purple-400" />
                           <p className="text-[10px] font-bold text-purple-400">{tagXP}</p>
-                          <p className="text-[9px] text-muted-foreground">Tag</p>
+                          <p className="text-[9px] text-muted-foreground">{t.xpTags}</p>
                         </div>
                         <div className="rounded-lg p-1.5 text-center" style={{ background: "rgba(245,158,11,0.12)" }}>
                           <Star className="w-3 h-3 mx-auto mb-0.5 text-amber-400" />
                           <p className="text-[10px] font-bold text-amber-400">{partyXP}</p>
                           <p className="text-[9px] text-muted-foreground">{t.xpParty}</p>
                         </div>
-                      </div>
+                      </div>}
 
                       {/* Evolve / XP needed */}
                       {!atMaxLevel && (
