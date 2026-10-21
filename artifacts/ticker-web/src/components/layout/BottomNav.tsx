@@ -167,7 +167,12 @@ export function BottomNav() {
   const { user } = useAuth();
   const { lang } = useLang();
   const [createOpen, setCreateOpen] = useState(false);
-  const [dragPreview, setDragPreview] = useState<{ x: number; y: number; overProfile: boolean } | null>(null);
+  const [dragPreview, setDragPreview] = useState<{
+    x: number;
+    y: number;
+    overProfile: boolean;
+    frame: { left: number; top: number; width: number; height: number };
+  } | null>(null);
   const holdTimerRef = useRef<number | null>(null);
   const gestureRef = useRef<{ pointerId: number; x: number; y: number; moved: boolean } | null>(null);
   const draggingRef = useRef(false);
@@ -193,6 +198,25 @@ export function BottomNav() {
     }
   };
 
+  const getDragFrame = () => {
+    const app = document.querySelector<HTMLElement>("[data-app-drag-bounds]");
+    const rect = app?.getBoundingClientRect();
+    if (rect && rect.width > 0 && rect.height > 0) {
+      return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+    }
+    return { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+  };
+
+  const constrainDragPoint = (x: number, y: number, frame: { left: number; top: number; width: number; height: number }) => {
+    // Keep the entire 56px drag affordance inside the app shell, including
+    // when the pointer moves into the letterboxed area around the 430px app.
+    const inset = 32;
+    return {
+      x: Math.min(Math.max(x, frame.left + inset), frame.left + frame.width - inset),
+      y: Math.min(Math.max(y, frame.top + inset), frame.top + frame.height - inset),
+    };
+  };
+
   const handlePlusPointerDown = (event: PointerEvent<HTMLButtonElement>) => {
     if (!movieId) return;
     clearHoldTimer();
@@ -208,7 +232,9 @@ export function BottomNav() {
     holdTimerRef.current = window.setTimeout(() => {
       if (!gestureRef.current || gestureRef.current.moved) return;
       draggingRef.current = true;
-      setDragPreview({ x: startX, y: startY, overProfile: false });
+      const frame = getDragFrame();
+      const point = constrainDragPoint(startX, startY, frame);
+      setDragPreview({ ...point, frame, overProfile: false });
     }, 450);
   };
 
@@ -223,10 +249,12 @@ export function BottomNav() {
       return;
     }
     event.preventDefault();
-    const target = document.elementFromPoint(event.clientX, event.clientY);
+    const frame = getDragFrame();
+    const point = constrainDragPoint(event.clientX, event.clientY, frame);
+    const target = document.elementFromPoint(point.x, point.y);
     setDragPreview({
-      x: event.clientX,
-      y: event.clientY,
+      ...point,
+      frame,
       overProfile: !!target?.closest("[data-movie-profile-dropzone]"),
     });
   };
@@ -240,7 +268,9 @@ export function BottomNav() {
     if (!draggingRef.current) return;
     draggingRef.current = false;
     suppressClickRef.current = true;
-    const target = document.elementFromPoint(event.clientX, event.clientY);
+    const frame = getDragFrame();
+    const point = constrainDragPoint(event.clientX, event.clientY, frame);
+    const target = document.elementFromPoint(point.x, point.y);
     const droppedOnMovie = !!target?.closest("[data-movie-profile-dropzone]");
     setDragPreview(null);
     if (droppedOnMovie && movieId) {
@@ -347,7 +377,17 @@ export function BottomNav() {
             )}>
               <Plus className="w-6 h-6" strokeWidth={2.5} />
             </div>
-            <span className="mt-2 whitespace-nowrap rounded-full bg-black/80 px-3 py-1 text-xs font-semibold text-white">
+          </div>
+          <div
+            className="fixed pointer-events-none px-4"
+            style={{
+              left: dragPreview.frame.left + dragPreview.frame.width / 2,
+              top: dragPreview.frame.top + 12,
+              width: Math.max(0, dragPreview.frame.width - 32),
+              transform: "translateX(-50%)",
+            }}
+          >
+            <span className="block rounded-full bg-black/80 px-3 py-1 text-center text-xs font-semibold text-white">
               {lang === "th" ? "ปล่อยบนหน้าโปรไฟล์หนังเพื่อรีวิว" : "Release on the movie profile to review"}
             </span>
           </div>
