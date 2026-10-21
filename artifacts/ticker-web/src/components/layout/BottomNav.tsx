@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { Link, useLocation } from "wouter";
 import { Compass, Search, Plus, Home, User, Ticket, Link2 } from "lucide-react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { useLang } from "@/lib/i18n";
@@ -162,11 +163,99 @@ function CreateMenu({ onClose }: { onClose: () => void }) {
 }
 
 export function BottomNav() {
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
   const { user } = useAuth();
+  const { lang } = useLang();
   const [createOpen, setCreateOpen] = useState(false);
+  const [dragPreview, setDragPreview] = useState<{ x: number; y: number; overProfile: boolean } | null>(null);
+  const holdTimerRef = useRef<number | null>(null);
+  const gestureRef = useRef<{ pointerId: number; x: number; y: number; moved: boolean } | null>(null);
+  const draggingRef = useRef(false);
+  const suppressClickRef = useRef(false);
+
+  const movieMatch = location.split("?")[0]?.match(/^\/movie\/(.+)\/?$/);
+  let movieId: string | null = null;
+  if (movieMatch?.[1]) {
+    try { movieId = decodeURIComponent(movieMatch[1].replace(/\/$/, "")); }
+    catch { movieId = movieMatch[1].replace(/\/$/, ""); }
+  }
+
+  useEffect(() => () => {
+    if (holdTimerRef.current !== null) window.clearTimeout(holdTimerRef.current);
+  }, []);
 
   if (!user) return <GuestBottomNav />;
+
+  const clearHoldTimer = () => {
+    if (holdTimerRef.current !== null) {
+      window.clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+  };
+
+  const handlePlusPointerDown = (event: PointerEvent<HTMLButtonElement>) => {
+    if (!movieId) return;
+    clearHoldTimer();
+    gestureRef.current = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      moved: false,
+    };
+    try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* capture is optional */ }
+    const startX = event.clientX;
+    const startY = event.clientY;
+    holdTimerRef.current = window.setTimeout(() => {
+      if (!gestureRef.current || gestureRef.current.moved) return;
+      draggingRef.current = true;
+      setDragPreview({ x: startX, y: startY, overProfile: false });
+    }, 450);
+  };
+
+  const handlePlusPointerMove = (event: PointerEvent<HTMLButtonElement>) => {
+    const gesture = gestureRef.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+    if (!draggingRef.current) {
+      if (Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) > 10) {
+        gesture.moved = true;
+        clearHoldTimer();
+      }
+      return;
+    }
+    event.preventDefault();
+    const target = document.elementFromPoint(event.clientX, event.clientY);
+    setDragPreview({
+      x: event.clientX,
+      y: event.clientY,
+      overProfile: !!target?.closest("[data-movie-profile-dropzone]"),
+    });
+  };
+
+  const handlePlusPointerUp = (event: PointerEvent<HTMLButtonElement>) => {
+    clearHoldTimer();
+    const gesture = gestureRef.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+    gestureRef.current = null;
+
+    if (!draggingRef.current) return;
+    draggingRef.current = false;
+    suppressClickRef.current = true;
+    const target = document.elementFromPoint(event.clientX, event.clientY);
+    const droppedOnMovie = !!target?.closest("[data-movie-profile-dropzone]");
+    setDragPreview(null);
+    if (droppedOnMovie && movieId) {
+      setCreateOpen(false);
+      navigate(`/create-ticket?movieId=${encodeURIComponent(movieId)}`);
+    }
+    window.setTimeout(() => { suppressClickRef.current = false; }, 0);
+  };
+
+  const handlePlusPointerCancel = () => {
+    clearHoldTimer();
+    gestureRef.current = null;
+    draggingRef.current = false;
+    setDragPreview(null);
+  };
 
   const navItems = [
     { href: "/", icon: Home },
@@ -189,7 +278,19 @@ export function BottomNav() {
               return (
                 <button
                   key="create"
-                  onClick={() => setCreateOpen(v => !v)}
+                  onClick={(event) => {
+                    if (suppressClickRef.current) {
+                      event.preventDefault();
+                      suppressClickRef.current = false;
+                      return;
+                    }
+                    setCreateOpen(v => !v);
+                  }}
+                  onPointerDown={handlePlusPointerDown}
+                  onPointerMove={handlePlusPointerMove}
+                  onPointerUp={handlePlusPointerUp}
+                  onPointerCancel={handlePlusPointerCancel}
+                  style={{ touchAction: movieId ? "none" : "auto" }}
                   className="outline-none flex-1 flex justify-center"
                 >
                   <div className={cn(
@@ -232,6 +333,27 @@ export function BottomNav() {
           })}
         </div>
       </nav>
+      {dragPreview && createPortal(
+        <div className="fixed inset-0 z-[200] pointer-events-none" aria-live="polite">
+          <div
+            className="fixed flex flex-col items-center"
+            style={{ left: dragPreview.x, top: dragPreview.y, transform: "translate(-50%, -50%)" }}
+          >
+            <div className={cn(
+              "w-14 h-14 rounded-2xl flex items-center justify-center shadow-xl ring-4 transition-colors",
+              dragPreview.overProfile
+                ? "bg-foreground text-background ring-foreground/20"
+                : "bg-zinc-700 text-white ring-white/20"
+            )}>
+              <Plus className="w-6 h-6" strokeWidth={2.5} />
+            </div>
+            <span className="mt-2 whitespace-nowrap rounded-full bg-black/80 px-3 py-1 text-xs font-semibold text-white">
+              {lang === "th" ? "ปล่อยบนหน้าโปรไฟล์หนังเพื่อรีวิว" : "Release on the movie profile to review"}
+            </span>
+          </div>
+        </div>,
+        document.body
+      )}
     </>
   );
 }

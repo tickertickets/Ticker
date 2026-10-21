@@ -1131,14 +1131,14 @@ export default function MovieDetail() {
     //    the FORCE-TOP useLayoutEffect runs — it can reset scrollTop=0 synchronously
     //    before the first visible frame instead of falling back to setTimeout retries.
     if (movieLoading || moviePending) return (
-      <div key={movieId} ref={scrollRef} className="h-full overflow-y-auto overscroll-y-none" style={{ overflowAnchor: "none" }}>
+      <div key={movieId} ref={scrollRef} data-movie-profile-dropzone="true" className="h-full overflow-y-auto overscroll-y-none" style={{ overflowAnchor: "none" }}>
         <div className="h-full flex items-center justify-center bg-background">
           <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
         </div>
       </div>
     );
     return (
-      <div key={movieId} ref={scrollRef} className="h-full overflow-y-auto overscroll-y-none" style={{ overflowAnchor: "none" }}>
+      <div key={movieId} ref={scrollRef} data-movie-profile-dropzone="true" className="h-full overflow-y-auto overscroll-y-none" style={{ overflowAnchor: "none" }}>
         <div className="bg-background flex flex-col items-center justify-center py-32 gap-4 px-6 text-center">
           <Film className="w-10 h-10 text-muted-foreground" />
           <p className="font-display font-bold text-foreground">ไม่พบหนังนี้</p>
@@ -1164,7 +1164,7 @@ export default function MovieDetail() {
   const navSrclang = srclang;
 
   return (
-    <div key={movieId} ref={scrollRef} className="h-full overflow-y-auto overscroll-y-none" style={{ overflowAnchor: "none" }}>
+    <div key={movieId} ref={scrollRef} data-movie-profile-dropzone="true" className="h-full overflow-y-auto overscroll-y-none" style={{ overflowAnchor: "none" }}>
 
       {/* ── Hero poster — full 2:3 ratio ── */}
       <div className="relative w-full overflow-hidden" style={{ aspectRatio: "2/3" }}>
@@ -1778,19 +1778,7 @@ export default function MovieDetail() {
       <div className="mx-5 my-4 border-t border-border" />
 
       <div className="px-5">
-        <div className="flex items-center justify-between gap-3 mb-4">
-          <h3 className="font-display font-bold text-base text-foreground">{t.tickerCommunity}</h3>
-          {user && (
-            <button
-              type="button"
-              onClick={() => navigate(`/create-ticket?movieId=${encodeURIComponent(movieId)}`)}
-              className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-foreground text-background text-xs font-bold active:opacity-80"
-            >
-              <Star className="w-3.5 h-3.5" />
-              {lang === "th" ? "เขียนรีวิว" : "Write a review"}
-            </button>
-          )}
-        </div>
+        <h3 className="font-display font-bold text-base text-foreground mb-4">{t.tickerCommunity}</h3>
 
         {/* Ratings summary — shown as soon as there's at least one rating; avg under 100 raters, total sum at 100+ */}
         {ratingsData && (ratingsData.total ?? 0) > 0 && (
