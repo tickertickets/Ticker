@@ -229,6 +229,14 @@ const MUSIC_MOODS = [
   { id: "workout", labelTH: "ออกกำลังกาย", labelEN: "Workout", query: "workout" },
   { id: "nostalgia", labelTH: "ย้อนวันวาน", labelEN: "Throwback", query: "classic hits" },
 ];
+const MUSIC_MOOD_ICONS: Record<string, LucideIcon> = {
+  ticker: TrendingUp,
+  happy: Smile,
+  chill: Moon,
+  heartbreak: HeartCrack,
+  workout: Zap,
+  nostalgia: Globe,
+};
 
 // ── API helpers ──────────────────────────────────────────────────────────────
 
@@ -553,7 +561,7 @@ export default function Search({ isActive = true }: { isActive?: boolean } = {})
   const [query, setQuery]                   = useState<string>(() => {
     try { return new URLSearchParams(window.location.search).get("q") ?? ""; } catch { return ""; }
   });
-  const [debouncedQuery]                    = useDebounceValue(query, 400);
+  const [debouncedQuery]                    = useDebounceValue(query, 500);
   const [activeCategory, setActiveCategory] = useState<string>(() => {
     // Check URL ?cat= param first (used by push notifications)
     try {
@@ -566,13 +574,9 @@ export default function Search({ isActive = true }: { isActive?: boolean } = {})
     return "trending";
   });
   const [visitedCategories, setVisitedCategories] = useState<Set<string>>(() => new Set([activeCategory]));
-  const [showDiceTab, setShowDiceTab]             = useState(false);
   const catSwipeRef      = useRef<{ x: number; y: number } | null>(null);
-  const diceTabCollapseRef = useRef(false);
-  // Reset collapse flag on category change (do not auto-open)
-  useEffect(() => { diceTabCollapseRef.current = false; }, [activeCategory]);
-  // headerWrapRef  — whole header (collapsible + pills) slides up as one unit
-  // collapsibleRef — title + dice tab + search bar (measured for scroll threshold)
+  // headerWrapRef  — whole header (title + search + pills) slides up as one unit
+  // collapsibleRef — title + search bar (measured for scroll threshold)
   const headerWrapRef    = useRef<HTMLDivElement>(null);
   const collapsibleRef   = useRef<HTMLDivElement>(null);
   const pillsRowRef      = useRef<HTMLDivElement>(null);
@@ -599,7 +603,7 @@ export default function Search({ isActive = true }: { isActive?: boolean } = {})
     return () => ro.disconnect();
   }, []);
 
-  // Measure collapsible section height (title + dice tab + search bar).
+  // Measure collapsible section height (title + search bar).
   // This drives how far both the collapsible slides up AND how far the
   // pills row chases it, so they meet cleanly at the top of the viewport.
   useEffect(() => {
@@ -635,12 +639,8 @@ export default function Search({ isActive = true }: { isActive?: boolean } = {})
       setHeaderHidden(false);
       scrollUpDeltaRef.current = 0;
     } else if (delta > 0) {
-      // Scrolling down — hide header, collapse dice tab on first scroll past 60px
+      // Scrolling down — hide the full header.
       if (y > headerH) setHeaderHidden(true);
-      if (y > 60 && !diceTabCollapseRef.current) {
-        diceTabCollapseRef.current = true;
-        setShowDiceTab(false);
-      }
       scrollUpDeltaRef.current = 0;
     } else if (delta < 0) {
       // Scrolling up — accumulate; only show bar once threshold is reached
@@ -712,7 +712,7 @@ export default function Search({ isActive = true }: { isActive?: boolean } = {})
     : MUSIC_MOODS.map(cat => ({
         id: cat.id,
         label: lang === "th" ? cat.labelTH : cat.labelEN,
-        icon: Music2,
+        icon: MUSIC_MOOD_ICONS[cat.id] ?? Music2,
       }));
   const activeMusicMood = MUSIC_MOODS.find(mood => mood.id === musicMood) ?? MUSIC_MOODS[0]!;
   const musicQuery = debouncedQuery.trim() || activeMusicMood.query;
@@ -725,7 +725,7 @@ export default function Search({ isActive = true }: { isActive?: boolean } = {})
       return response.json();
     },
     enabled: musicSearchEnabled,
-    staleTime: 6 * 60 * 60 * 1000,
+    staleTime: 24 * 60 * 60 * 1000,
   });
   const { data: tickerTrendingData, isLoading: tickerTrendingLoading } = useQuery<{ results: MusicItem[] }>({
     queryKey: ["music-trending", lang],
@@ -874,76 +874,53 @@ export default function Search({ isActive = true }: { isActive?: boolean } = {})
         }}
       >
 
-        {/* ── Collapsible section: title + community bar + dice tab + search bar ── */}
+        {/* ── Collapsible section: title + community bar + search bar ── */}
         <div ref={collapsibleRef}>
           {/* Title */}
-          <div className="flex items-center px-4 pb-3">
-            <div className="w-9 h-9" />
-            <button
-              onClick={() => setShowDiceTab(prev => !prev)}
-              className="font-display font-bold text-xl tracking-tight text-foreground flex-1 text-center active:opacity-60 transition-opacity select-none"
-            >
-              Ticker
-            </button>
-            <div className="w-9 h-9" />
+          <div className="flex items-center justify-between px-4 pb-3">
+            <h1 className="font-display text-xl font-bold tracking-tight text-foreground">Ticker</h1>
+            <div className="flex items-center gap-1.5" role="group" aria-label={lang === "th" ? "เลือกหมวดค้นหา" : "Choose search category"}>
+              <button
+                type="button"
+                onClick={() => {
+                  setMediaMode("movie");
+                  localStorage.setItem("ticker-discovery-mode", "movie");
+                  setActiveCategory("trending");
+                  setHeaderHidden(false);
+                }}
+                aria-label={lang === "th" ? "ค้นหาหนัง" : "Search movies"}
+                aria-pressed={mediaMode === "movie"}
+                title={lang === "th" ? "หนัง" : "Movies"}
+                className={cn(
+                  "flex h-9 w-9 items-center justify-center rounded-xl border transition-colors",
+                  mediaMode === "movie" ? "border-foreground bg-foreground text-background" : "border-border bg-secondary text-muted-foreground",
+                )}
+              >
+                <Film className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMediaMode("music");
+                  localStorage.setItem("ticker-discovery-mode", "music");
+                  setMusicMood("ticker");
+                  setHeaderHidden(false);
+                }}
+                aria-label={lang === "th" ? "ค้นหาเพลง" : "Search music"}
+                aria-pressed={mediaMode === "music"}
+                title={lang === "th" ? "เพลง" : "Music"}
+                className={cn(
+                  "flex h-9 w-9 items-center justify-center rounded-xl border transition-colors",
+                  mediaMode === "music" ? "border-foreground bg-foreground text-background" : "border-border bg-secondary text-muted-foreground",
+                )}
+              >
+                <Music2 className="h-4 w-4" />
+              </button>
+            </div>
           </div>
 
           {/* Keep movie community ranking intact; music trends are queried from Ticker activity. */}
           {mediaMode === "movie" && <SearchTickerExtremes />}
-
-          {/* Dice slide-out tab — smooth banner reveal.
-              Uses max-height (not grid-template-rows) for compat with older
-              Android Chrome / WebView where 0fr→1fr does not animate. */}
-          <div
-            style={{
-              maxHeight: showDiceTab ? "90px" : "0px",
-              overflow: "hidden",
-              transition: "max-height 300ms cubic-bezier(0.4, 0, 0.2, 1)",
-            }}
-          >
-            <div
-              className="w-full flex items-center justify-center py-4"
-            >
-              <div
-                className="flex w-full items-center justify-center gap-2 px-4"
-                style={{
-                  opacity: showDiceTab ? 1 : 0,
-                  transition: "opacity 220ms ease",
-                }}
-              >
-                <button
-                  onClick={() => {
-                    setMediaMode("movie");
-                    localStorage.setItem("ticker-discovery-mode", "movie");
-                    setActiveCategory("trending");
-                    setHeaderHidden(false);
-                  }}
-                  className={cn(
-                    "flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl border text-sm font-bold transition-colors",
-                    mediaMode === "movie" ? "border-foreground bg-foreground text-background" : "border-border bg-secondary text-foreground",
-                  )}
-                >
-                  <Film className="h-4 w-4" />
-                  {lang === "th" ? "หนัง" : "Movies"}
-                </button>
-                <button
-                  onClick={() => {
-                    setMediaMode("music");
-                    localStorage.setItem("ticker-discovery-mode", "music");
-                    setMusicMood("ticker");
-                    setHeaderHidden(false);
-                  }}
-                  className={cn(
-                    "flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl border text-sm font-bold transition-colors",
-                    mediaMode === "music" ? "border-foreground bg-foreground text-background" : "border-border bg-secondary text-foreground",
-                  )}
-                >
-                  <Music2 className="h-4 w-4" />
-                  {lang === "th" ? "เพลง" : "Music"}
-                </button>
-              </div>
-            </div>
-          </div>
 
           {/* Search bar */}
           <div className="px-4 pb-3">

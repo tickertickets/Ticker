@@ -732,11 +732,12 @@ class RootErrorBoundary extends Component<
 // ── Root ───────────────────────────────────────────────────────────────────
 function App() {
   const [splashDone, setSplashDone] = useState(false);
+  const completeSplash = useCallback(() => setSplashDone(true), []);
 
   return (
-    <>
-      {!splashDone && <SplashScreen onDone={() => setSplashDone(true)} />}
-      <RootErrorBoundary>
+    <RootErrorBoundary>
+      <>
+      {!splashDone && <SplashScreen onDone={completeSplash} />}
         <QueryClientProvider client={queryClient}>
           <LangProvider>
             <TooltipProvider>
@@ -749,8 +750,8 @@ function App() {
             </TooltipProvider>
           </LangProvider>
         </QueryClientProvider>
-      </RootErrorBoundary>
-    </>
+      </>
+    </RootErrorBoundary>
   );
 }
 

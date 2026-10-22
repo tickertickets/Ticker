@@ -17,9 +17,33 @@ export interface MusicCatalogProvider {
   lookup(providerId: string, entity: MusicEntity, country: string): Promise<MusicCatalogItem | null>;
 }
 
-const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const DETAIL_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const inFlight = new Map<string, Promise<unknown>>();
+const providerRequestStarts: number[] = [];
+let providerRequestsWaiting = 0;
+
+async function waitForProviderSlot() {
+  if (providerRequestsWaiting >= 500) {
+    throw new Error("Music catalog is busy; please retry shortly.");
+  }
+  providerRequestsWaiting += 1;
+  try {
+    while (true) {
+      const now = Date.now();
+      while (providerRequestStarts.length && now - providerRequestStarts[0]! >= 1_000) {
+        providerRequestStarts.shift();
+      }
+      if (providerRequestStarts.length < 20) {
+        providerRequestStarts.push(now);
+        return;
+      }
+      await new Promise(resolve => setTimeout(resolve, Math.max(10, 1_000 - (now - providerRequestStarts[0]!))));
+    }
+  } finally {
+    providerRequestsWaiting -= 1;
+  }
+}
 
 function iTunesEntity(entity: MusicProviderEntity) {
   if (entity === "artist") return "musicArtist";
@@ -88,6 +112,7 @@ async function singleFlight<T>(key: string, task: () => Promise<T>): Promise<T> 
 }
 
 async function requestITunes(url: URL): Promise<Record<string, unknown>[]> {
+  await waitForProviderSlot();
   const response = await fetch(url, {
     headers: { Accept: "application/json", "User-Agent": "Ticker-Music/1.0" },
     signal: AbortSignal.timeout(8_000),
@@ -121,7 +146,9 @@ class ITunesCatalog implements MusicCatalogProvider {
           .flat()
           .slice(0, limit)
         : (batches[0] ?? []).slice(0, limit);
-      await rememberCatalogItems(results);
+      void rememberCatalogItems(results).catch(error => {
+        console.error("[music-catalog] Could not persist fetched items:", error);
+      });
       await cache(key, results);
       return results;
     });

@@ -81,12 +81,12 @@ async function ensureBadgeXpLogTable(): Promise<void> {
     // are legacy values from before a rename — kept for old rows, never
     // written by current code; see comment in schema/badges.ts).
     await pool.query(`
-      DO $ BEGIN
+      DO $$ BEGIN
         CREATE TYPE "badge_xp_action" AS ENUM (
           'post_ticket', 'post_chain', 'tag_friend', 'party_accept'
         );
       EXCEPTION WHEN duplicate_object THEN NULL;
-      END $;
+      END $$;
     `);
     await pool.query(`ALTER TYPE "badge_xp_action" ADD VALUE IF NOT EXISTS 'tag_ticket';`);
     await pool.query(`ALTER TYPE "badge_xp_action" ADD VALUE IF NOT EXISTS 'party_complete';`);
@@ -132,12 +132,12 @@ async function ensureUserBadgeTable(): Promise<void> {
     // Ensure badge_xp_action enum exists, then has the values badge.service.ts
     // actually writes today (tag_ticket / party_complete) — see comment above.
     await pool.query(`
-      DO $ BEGIN
+      DO $$ BEGIN
         CREATE TYPE "badge_xp_action" AS ENUM (
           'post_ticket', 'post_chain', 'tag_friend', 'party_accept'
         );
       EXCEPTION WHEN duplicate_object THEN NULL;
-      END $;
+      END $$;
     `);
     await pool.query(`ALTER TYPE "badge_xp_action" ADD VALUE IF NOT EXISTS 'tag_ticket';`);
     await pool.query(`ALTER TYPE "badge_xp_action" ADD VALUE IF NOT EXISTS 'party_complete';`);

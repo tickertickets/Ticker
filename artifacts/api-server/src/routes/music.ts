@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { and, asc, desc, eq, gte, inArray, isNull } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db } from "@workspace/db";
@@ -20,7 +20,10 @@ import { getMusicItem, musicCatalogProvider } from "../services/music-catalog.se
 const router: IRouter = Router();
 const musicSearchLimiter = rateLimit({
   windowMs: 60_000,
-  max: 40,
+  max: 30,
+  keyGenerator: req => req.session?.userId
+    ? `user:music-search:${req.session.userId}`
+    : `ip:music-search:${ipKeyGenerator(req.ip ?? req.socket.remoteAddress ?? "unknown")}`,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "too_many_requests", message: "Please wait before searching again." },
@@ -30,7 +33,9 @@ const musicWriteLimiter = rateLimit({
   max: 12,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: req => req.session?.userId ?? req.ip ?? "unknown",
+  keyGenerator: req => req.session?.userId
+    ? `user:music-write:${req.session.userId}`
+    : `ip:music-write:${ipKeyGenerator(req.ip ?? req.socket.remoteAddress ?? "unknown")}`,
   message: { error: "too_many_requests", message: "Please wait before posting again." },
 });
 
