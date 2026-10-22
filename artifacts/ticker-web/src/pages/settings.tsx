@@ -205,7 +205,7 @@ function TrashItem({ ticket, onRestore, onPurge }: {
   onPurge: () => void;
 }) {
   const days = daysRemaining(ticket.deletedAt);
-  const { t } = useLang();
+  const { t, lang } = useLang();
 
   return (
     <div className="flex items-center gap-3 bg-secondary rounded-2xl p-3 border border-border">
@@ -371,7 +371,7 @@ function BadgeSection({
   togglingPageBadge: boolean;
   onRegisterAdvance?: (fn: (newLevel: number) => void) => void;
 }) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const level = badge?.level ?? 0;
   const claimed = badge?.claimed ?? false;
 
@@ -427,6 +427,7 @@ function BadgeSection({
   const progress = badge?.progress ?? 0;
   const canEvolve = badge?.canEvolve ?? false;
   const atMaxLevel = badge?.atMaxLevel ?? false;
+  const reachedMaxLevel = atMaxLevel || (claimed && level >= 5);
   const badgeHidden = badgeHiddenRaw;
 
   const postXP = badge?.xpFromPosts ?? 0;
@@ -474,7 +475,7 @@ function BadgeSection({
     const dx = touch.clientX - touchStart.current.x;
     const dy = touch.clientY - touchStart.current.y;
     touchStart.current = null;
-    if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
+    if (Math.abs(dx) < 68 || Math.abs(dx) < Math.abs(dy) * 1.8) return;
     setActiveDot(prev => Math.max(0, Math.min(MAX_DOT, prev + (dx < 0 ? 1 : -1))));
   };
 
@@ -518,8 +519,10 @@ function BadgeSection({
       {/* ── Carousel ───────────────────────────────────────────── */}
       <div
         className="overflow-hidden pb-3"
+        style={{ touchAction: "pan-y" }}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
+        onTouchCancel={() => { touchStart.current = null; }}
       >
         <div
           className="flex transition-transform duration-300 ease-out"
@@ -617,10 +620,10 @@ function BadgeSection({
                       <div className="space-y-1">
                         <div className="flex justify-between items-center">
                           <span className="text-[10px] font-semibold text-muted-foreground">
-                            {atMaxLevel ? t.maxLevel : t.nextLevel(level + 1)}
+                          {reachedMaxLevel ? t.maxLevel : t.nextLevel(level + 1)}
                           </span>
                           <span className="text-[10px] font-bold" style={{ color: col }}>
-                            {atMaxLevel ? t.maxXp : `${xpCurrent} / ${xpRequired} XP`}
+                            {reachedMaxLevel ? t.maxXp : `${xpCurrent} / ${xpRequired} XP`}
                           </span>
                         </div>
                         <div className="w-full h-2 bg-black/20 dark:bg-white/10 rounded-full overflow-hidden">
@@ -632,7 +635,7 @@ function BadgeSection({
                       </div>
 
                       {/* XP sources */}
-                      {!atMaxLevel && <div className="grid grid-cols-3 gap-1.5">
+                      {!reachedMaxLevel && <div className="grid grid-cols-3 gap-1.5">
                         <div className="rounded-lg p-1.5 text-center" style={{ background: "rgba(59,130,246,0.12)" }}>
                           <TrendingUp className="w-3 h-3 mx-auto mb-0.5 text-blue-400" />
                           <p className="text-[10px] font-bold text-blue-400">{postXP}</p>
@@ -694,7 +697,7 @@ function BadgeSection({
                                     <div className="flex justify-between items-center">
                                       <span className="text-[10px] text-muted-foreground flex items-center gap-1">
                                         <Users className="w-3 h-3 text-purple-400" />
-                                        Tag เพื่อน
+                                        {lang === "th" ? "แท็กเพื่อน" : "Tag friends"}
                                       </span>
                                       <span className="text-[11px] font-extrabold text-purple-400">{t.xpPerTag}</span>
                                     </div>

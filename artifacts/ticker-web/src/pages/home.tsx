@@ -8,7 +8,7 @@ import type { ChainItem } from "@/components/ChainsSection";
 import { UpcomingCard, TabActiveCtx, type UpcomingMovie } from "@/components/UpcomingCard";
 import {
   Loader2, Search as SearchIcon, User, Users, X as XIcon,
-  Ticket, Link2, Newspaper, EyeOff, Eye, Clock,
+  Ticket, Link2, Newspaper, EyeOff, Eye, Clock, Disc3, ListMusic,
 } from "lucide-react";
 import { useHiddenItems } from "@/hooks/use-hidden-items";
 import { Link, useSearch, useLocation } from "wouter";
@@ -21,6 +21,7 @@ import { scrollStore } from "@/lib/scroll-store";
 import { useSocketFeedUpdates } from "@/hooks/use-socket";
 import { useAuth } from "@/hooks/use-auth";
 import { usePullToRefresh } from "@/lib/use-pull-to-refresh";
+import { PlaylistCard, VinylCard } from "@/components/MusicCards";
 
 function useUpcomingFeed() {
   return useQuery<UpcomingMovie[]>({
@@ -35,7 +36,30 @@ function useUpcomingFeed() {
   });
 }
 
-type ExploreTab = "tickets" | "chains" | "news" | "users";
+type ExploreTab = "tickets" | "chains" | "vinyls" | "playlists" | "news" | "users";
+
+function MusicExploreFeed({ kind }: { kind: "vinyl" | "playlist" }) {
+  const { data, isLoading, isError } = useQuery<{ items: Array<any> }>({
+    queryKey: ["music-feed", kind],
+    queryFn: async () => {
+      const response = await fetch(`/api/music/feed?kind=${kind}&limit=40`, { credentials: "include" });
+      if (!response.ok) throw new Error("Music feed request failed");
+      return response.json();
+    },
+    staleTime: 45_000,
+  });
+  if (isLoading) return <div className="flex justify-center py-12"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
+  if (isError) return <p className="px-4 py-10 text-center text-sm text-muted-foreground">Could not load music posts.</p>;
+  const rows = data?.items ?? [];
+  if (!rows.length) return <p className="px-4 py-12 text-center text-sm text-muted-foreground">{kind === "vinyl" ? "ยังไม่มี Vinyl" : "ยังไม่มี Playlist"}</p>;
+  return (
+    <div className="flex flex-col">
+      {rows.map(({ post, user }: any) => kind === "vinyl"
+        ? <VinylCard key={post.id} post={{ ...post, user }} />
+        : <PlaylistCard key={post.id} playlist={{ ...post, user }} />)}
+    </div>
+  );
+}
 
 // ── UserRow ──────────────────────────────────────────────────────────────────
 
@@ -515,6 +539,8 @@ function NewsFeed() {
 const TABS: { id: ExploreTab; label: string; icon: any }[] = [
   { id: "tickets", label: "Tickets",  icon: Ticket    },
   { id: "chains",  label: "Chains",   icon: Link2     },
+  { id: "vinyls",  label: "Vinyl",    icon: Disc3     },
+  { id: "playlists", label: "Playlist", icon: ListMusic },
   { id: "news",    label: "Upcoming", icon: Newspaper },
   { id: "users",   label: "Users",    icon: Users     },
 ];
@@ -523,7 +549,7 @@ export default function Home({ isActive = true }: { isActive?: boolean }) {
   useSocketFeedUpdates();
   const { t } = useLang();
   const search = useSearch();
-  const VALID_TABS: ExploreTab[] = ["tickets", "chains", "news", "users"];
+  const VALID_TABS: ExploreTab[] = ["tickets", "chains", "vinyls", "playlists", "news", "users"];
   const [tab, setTab] = useState<ExploreTab>(() => {
     const params = new URLSearchParams(search);
     const tabParam = params.get("tab") as ExploreTab;
@@ -565,6 +591,8 @@ export default function Home({ isActive = true }: { isActive?: boolean }) {
 
   const ticketsRef = useRef<HTMLDivElement>(null);
   const chainsRef  = useRef<HTMLDivElement>(null);
+  const vinylsRef = useRef<HTMLDivElement>(null);
+  const playlistsRef = useRef<HTMLDivElement>(null);
   const newsRef    = useRef<HTMLDivElement>(null);
   const usersRef   = useRef<HTMLDivElement>(null);
 
@@ -576,6 +604,8 @@ export default function Home({ isActive = true }: { isActive?: boolean }) {
   const refMap: Record<string, React.RefObject<HTMLDivElement | null>> = {
     tickets: ticketsRef,
     chains:  chainsRef,
+    vinyls: vinylsRef,
+    playlists: playlistsRef,
     news:    newsRef,
     users:   usersRef,
   };
@@ -640,7 +670,7 @@ export default function Home({ isActive = true }: { isActive?: boolean }) {
 
   // ── PWA scroll-lock fix: clamp scrollTop when content height shrinks ──────────
   useEffect(() => {
-    const refs = [ticketsRef, chainsRef, newsRef, usersRef];
+    const refs = [ticketsRef, chainsRef, vinylsRef, playlistsRef, newsRef, usersRef];
     const observers: ResizeObserver[] = [];
     refs.forEach(ref => {
       const el = ref.current;
@@ -689,11 +719,13 @@ export default function Home({ isActive = true }: { isActive?: boolean }) {
     if (prevId === undefined) { prevUserIdRef.current = nextId; return; }
     if (prevId === nextId) return;
     prevUserIdRef.current = nextId;
-    [ticketsRef, chainsRef, newsRef, usersRef].forEach(r => {
+    [ticketsRef, chainsRef, vinylsRef, playlistsRef, newsRef, usersRef].forEach(r => {
       if (r.current) r.current.scrollTop = 0;
     });
     scrollStore.set("home-tickets", 0);
     scrollStore.set("home-chains", 0);
+    scrollStore.set("home-vinyls", 0);
+    scrollStore.set("home-playlists", 0);
     scrollStore.set("home-news", 0);
     scrollStore.set("home-users", 0);
     qc.invalidateQueries({ queryKey: ["feed"] });
@@ -919,6 +951,32 @@ export default function Home({ isActive = true }: { isActive?: boolean }) {
         }}
       >
         {searchQuery ? <SearchChainsFeed query={searchQuery} /> : <ChainsSection />}
+      </div>
+
+      {/* ── Vinyl posts ── */}
+      <div
+        ref={vinylsRef}
+        className="absolute inset-0 overflow-y-auto overscroll-y-none"
+        style={{
+          paddingTop: ptrIsPulling ? `calc(${headerH}px + var(--ptr-y, 0px))` : headerH + Math.max(ptrPullY, isRefreshing ? 44 : 0),
+          display: tab === "vinyls" ? "block" : "none",
+          transition: ptrIsPulling ? undefined : "padding-top 260ms cubic-bezier(0.22, 1, 0.36, 1)",
+        }}
+      >
+        <MusicExploreFeed kind="vinyl" />
+      </div>
+
+      {/* ── Music playlists ── */}
+      <div
+        ref={playlistsRef}
+        className="absolute inset-0 overflow-y-auto overscroll-y-none"
+        style={{
+          paddingTop: ptrIsPulling ? `calc(${headerH}px + var(--ptr-y, 0px))` : headerH + Math.max(ptrPullY, isRefreshing ? 44 : 0),
+          display: tab === "playlists" ? "block" : "none",
+          transition: ptrIsPulling ? undefined : "padding-top 260ms cubic-bezier(0.22, 1, 0.36, 1)",
+        }}
+      >
+        <MusicExploreFeed kind="playlist" />
       </div>
 
       {/* ── Upcoming tab ── */}

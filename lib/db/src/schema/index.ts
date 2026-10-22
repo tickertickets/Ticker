@@ -19,3 +19,4 @@ export * from "./wiki";
 export * from "./movieFollows";
 export * from "./characterCache";
 export * from "./notifSubscriptions";
+export * from "./music";

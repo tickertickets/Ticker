@@ -41,6 +41,7 @@ import FeedPost         from "@/pages/feed-post";
 import PersonDetail     from "@/pages/person-detail";
 import CharacterDetail  from "@/pages/character-detail";
 import WikiDetail       from "@/pages/wiki-detail";
+import { CreatePlaylistPage, CreateVinylPage, MusicDetailPage } from "@/pages/music";
 import { TicketLarge, BadgeIconStatic } from "@/components/BadgeIcon";
 import { PushPermissionPrompt } from "@/components/PushPermissionPrompt";
 import { PwaInstallPrompt } from "@/components/PwaInstallPrompt";
@@ -667,6 +668,11 @@ function AppRoutes() {
               <Route path="/chat"              component={ChatList} />
               <Route path="/chain/new"         component={CreateChain} />
               <Route path="/chain/:id/edit"    component={EditChain} />
+              <Route path="/vinyl/new"         component={CreateVinylPage} />
+              <Route path="/playlist/new"      component={CreatePlaylistPage} />
+              <Route path="/music/vinyl/:id"   component={MusicDetailPage} />
+              <Route path="/music/playlist/:id" component={MusicDetailPage} />
+              <Route path="/music/:entity/:id" component={MusicDetailPage} />
               <Route path="/chain/:id"         component={ChainDetail} />
               <Route path="/chains/:id"        component={ChainDetail} />
               <Route path="/person/:personId"  component={PersonDetail} />

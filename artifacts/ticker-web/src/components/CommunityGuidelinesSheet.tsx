@@ -41,7 +41,7 @@ export function CommunityGuidelinesSheet({
         </div>
 
         <div className="px-5 pt-3 pb-4 shrink-0">
-          <h2 className="font-display font-bold text-base text-foreground mb-2 text-center">
+          <h2 className="w-full truncate px-1 font-display font-bold text-base leading-tight text-foreground mb-2 text-center">
             {t.communityRulesTitle}
           </h2>
           <p className="text-xs text-muted-foreground text-center leading-relaxed">
@@ -63,7 +63,7 @@ export function CommunityGuidelinesSheet({
                   ? ["สปอยล์", "มารยาท", "คุณภาพเนื้อหา", "ลิขสิทธิ์", "การบังคับใช้"][Number(number) - 1]
                   : ["Spoiler policy", "Respect", "Content quality", "Copyright", "Enforcement"][Number(number) - 1];
                 return (
-                  <p key={index} className="mt-2 px-2 text-center text-sm font-bold leading-snug text-foreground">
+                  <p key={index} className="mt-2 w-full truncate px-2 text-left text-sm font-bold leading-snug text-foreground">
                     {number}. {heading}
                   </p>
                 );
@@ -73,9 +73,8 @@ export function CommunityGuidelinesSheet({
               if (colonAt > 0 && colonAt < 70) {
                 return (
                   <p key={index} className="mt-1.5 text-left text-sm leading-snug text-foreground/80">
-                    <span className="font-semibold text-primary">{trimmed.slice(0, colonAt + 1)}</span>
-                    {" "}
-                    {trimmed.slice(colonAt + 1)}
+                    <span className="font-semibold text-primary">{trimmed.slice(0, colonAt + 1)}</span>{" "}
+                    <span>{trimmed.slice(colonAt + 1)}</span>
                   </p>
                 );
               }

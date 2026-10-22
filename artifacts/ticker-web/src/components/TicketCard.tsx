@@ -1725,7 +1725,7 @@ function FeedCard({ ticket, onLongPress, onNotInterested }: { ticket: Ticket; on
 
             {/* 📤 Share */}
             <ActionBtn onClick={e => { setPendingLikeHighlight(false); if (requireAuth(e)) return; e.preventDefault(); e.stopPropagation(); setStoryShareOpen(true); }}>
-              <Share2 style={{ width: IC, height: IC }} className="text-muted-foreground/60 group-hover:text-foreground transition-colors" />
+              <Share2 style={{ width: IC, height: IC }} className="text-muted-foreground group-hover:text-foreground transition-colors" />
             </ActionBtn>
           </div>
         );

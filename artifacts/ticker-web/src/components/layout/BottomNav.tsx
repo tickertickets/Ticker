@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { Link, useLocation } from "wouter";
-import { Compass, Search, Plus, Home, User, Ticket, Link2 } from "lucide-react";
+import { Compass, Search, Plus, Home, User, Ticket, Link2, Disc3, ListMusic } from "lucide-react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
@@ -115,7 +115,7 @@ function GuestBottomNav() {
 
 function CreateMenu({ onClose }: { onClose: () => void }) {
   const [, navigate] = useLocation();
-  const { t } = useLang();
+  const { t, lang } = useLang();
   return (
     <>
       <div
@@ -154,6 +154,32 @@ function CreateMenu({ onClose }: { onClose: () => void }) {
           <div className="text-left">
             <p className="font-bold text-sm text-foreground">{t.createChainTitle}</p>
             <p className="text-xs text-muted-foreground">{t.createChainMenuDesc}</p>
+          </div>
+        </button>
+        <div className="mx-4 h-px bg-border" />
+        <button
+          onClick={() => { onClose(); navigate("/vinyl/new"); }}
+          className="w-full flex items-center gap-4 px-4 py-4 transition-all active:scale-[0.97] active:bg-secondary"
+        >
+          <div className="w-12 h-12 rounded-full bg-secondary border border-border flex items-center justify-center flex-shrink-0 shadow-sm">
+            <Disc3 className="w-6 h-6 text-foreground" />
+          </div>
+          <div className="text-left">
+            <p className="font-bold text-sm text-foreground">{lang === "th" ? "โพสต์ Vinyl" : "Post a Vinyl"}</p>
+            <p className="text-xs text-muted-foreground">{lang === "th" ? "บันทึกเพลงที่คุณฟัง" : "Save a song you love"}</p>
+          </div>
+        </button>
+        <div className="mx-4 h-px bg-border" />
+        <button
+          onClick={() => { onClose(); navigate("/playlist/new"); }}
+          className="w-full flex items-center gap-4 px-4 py-4 transition-all active:scale-[0.97] active:bg-secondary"
+        >
+          <div className="w-12 h-12 rounded-2xl bg-secondary border border-border flex items-center justify-center flex-shrink-0 shadow-sm">
+            <ListMusic className="w-6 h-6 text-foreground" />
+          </div>
+          <div className="text-left">
+            <p className="font-bold text-sm text-foreground">{lang === "th" ? "สร้าง Playlist" : "Create a Playlist"}</p>
+            <p className="text-xs text-muted-foreground">{lang === "th" ? "รวมเพลงที่ชอบไว้ด้วยกัน" : "Collect songs together"}</p>
           </div>
         </button>
         <div className="pb-2" />

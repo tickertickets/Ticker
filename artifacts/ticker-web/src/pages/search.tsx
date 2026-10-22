@@ -16,15 +16,13 @@ import { useSearchMovies } from "@workspace/api-client-react";
 import { useDebounceValue } from "usehooks-ts";
 import { useAuth } from "@/hooks/use-auth";
 import {
-  Film, Loader2, Search as SearchIcon, TrendingUp, Crown, Skull,
+  Film, Loader2, Search as SearchIcon, TrendingUp, Crown, Skull, Music2,
   Moon, Smile, Zap, AlertCircle, Clapperboard, X as XIcon,
   Sparkles, Globe, Wand2, Ghost, Sword, HeartCrack, Shield,
   Dice5, Swords, TrendingDown, Link2,
   type LucideIcon,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
-import { RandomMoviePicker } from "@/components/RandomMoviePicker";
-import { MovieVsPicker } from "@/components/MovieVsPicker";
 import { cn } from "@/lib/utils";
 import {
   computeCardTier, computeEffectTags, TIER_VISUAL, type ScoreInput,
@@ -33,6 +31,7 @@ import { useLang, displayYear } from "@/lib/i18n";
 import { MovieBadges } from "@/components/MovieBadges";
 import { useEnsureMovieCores } from "@/lib/use-movie-cores";
 import { useQueryClient } from "@tanstack/react-query";
+import { MusicSearchRow, type MusicItem, type MusicEntity } from "@/components/MusicCards";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -221,6 +220,15 @@ const MOVIE_GRID_IDS = new Set([
   "chaos_red_flags", "anime", "tokusatsu", "disney_dreamworks",
   "k_wave", "midnight_horror", "marvel_dc",
 ]);
+
+const MUSIC_MOODS = [
+  { id: "ticker", labelTH: "ฮิตใน Ticker", labelEN: "Trending on Ticker", query: "" },
+  { id: "happy", labelTH: "สดใส", labelEN: "Feel-good", query: "feel good" },
+  { id: "chill", labelTH: "ผ่อนคลาย", labelEN: "Chill", query: "chill" },
+  { id: "heartbreak", labelTH: "อกหัก", labelEN: "Heartbreak", query: "heartbreak" },
+  { id: "workout", labelTH: "ออกกำลังกาย", labelEN: "Workout", query: "workout" },
+  { id: "nostalgia", labelTH: "ย้อนวันวาน", labelEN: "Throwback", query: "classic hits" },
+];
 
 // ── API helpers ──────────────────────────────────────────────────────────────
 
@@ -535,6 +543,12 @@ export default function Search({ isActive = true }: { isActive?: boolean } = {})
   const qc = useQueryClient();
   const { user } = useAuth();
   const [location, navigate] = useLocation();
+  const [mediaMode, setMediaMode] = useState<"movie" | "music">(() => {
+    try { return localStorage.getItem("ticker-discovery-mode") === "music" ? "music" : "movie"; }
+    catch { return "movie"; }
+  });
+  const [musicMood, setMusicMood] = useState("ticker");
+  const [musicEntity, setMusicEntity] = useState<MusicEntity | "all">("song");
 
   const [query, setQuery]                   = useState<string>(() => {
     try { return new URLSearchParams(window.location.search).get("q") ?? ""; } catch { return ""; }
@@ -552,35 +566,8 @@ export default function Search({ isActive = true }: { isActive?: boolean } = {})
     return "trending";
   });
   const [visitedCategories, setVisitedCategories] = useState<Set<string>>(() => new Set([activeCategory]));
-  const [showRandomPicker, setShowRandomPicker]   = useState(false);
-  const [showVsPicker, setShowVsPicker]           = useState(false);
   const [showDiceTab, setShowDiceTab]             = useState(false);
-  const [fabHighlight, setFabHighlight]           = useState(() => !sessionStorage.getItem("ticker_fab_seen"));
-  const [diceAnimDone, setDiceAnimDone]           = useState(false);
   const catSwipeRef      = useRef<{ x: number; y: number } | null>(null);
-  // Gated on `isActive` — this tab is always mounted (even off-screen, for
-  // instant swiping), so without this check the intro would play invisibly
-  // before the user ever looks at this tab (mirrors feed.tsx's panel intro).
-  useEffect(() => {
-    if (!isActive || !fabHighlight) return;
-    // First visit: slide the Roll/VS bar in slowly → pause → slide back out
-    const tid0 = setTimeout(() => setShowDiceTab(true), 500);
-    const tid1 = setTimeout(() => setShowDiceTab(false), 3800);
-    const tid2 = setTimeout(() => {
-      sessionStorage.setItem("ticker_fab_seen", "1");
-      setFabHighlight(false);
-    }, 4700);
-    return () => { clearTimeout(tid0); clearTimeout(tid1); clearTimeout(tid2); };
-  }, [isActive, fabHighlight]);
-
-  // Delay bounce until after the panel open transition finishes (~390ms —
-  // 340ms max-height + 50ms inner delay), not the old 920ms which left the
-  // icon looking frozen well after the panel had visibly settled.
-  useEffect(() => {
-    if (!showDiceTab) { setDiceAnimDone(false); return; }
-    const tid = setTimeout(() => setDiceAnimDone(true), 420);
-    return () => clearTimeout(tid);
-  }, [showDiceTab]);
   const diceTabCollapseRef = useRef(false);
   // Reset collapse flag on category change (do not auto-open)
   useEffect(() => { diceTabCollapseRef.current = false; }, [activeCategory]);
@@ -709,6 +696,37 @@ export default function Search({ isActive = true }: { isActive?: boolean } = {})
     setHeaderHidden(false);
     sessionStorage.setItem("search_category", catId);
   };
+  const activePillId = mediaMode === "movie" ? activeCategory : musicMood;
+  const visibleCategories = mediaMode === "movie"
+    ? CATEGORIES_T.map(cat => ({ id: cat.id, label: cat.label, icon: cat.icon }))
+    : MUSIC_MOODS.map(cat => ({
+        id: cat.id,
+        label: lang === "th" ? cat.labelTH : cat.labelEN,
+        icon: Music2,
+      }));
+  const activeMusicMood = MUSIC_MOODS.find(mood => mood.id === musicMood) ?? MUSIC_MOODS[0]!;
+  const musicQuery = debouncedQuery.trim() || activeMusicMood.query;
+  const musicSearchEnabled = isActive && mediaMode === "music" && musicQuery.trim().length >= 2;
+  const { data: musicSearchData, isLoading: musicSearchLoading } = useQuery<{ results: MusicItem[] }>({
+    queryKey: ["music-search", musicQuery, musicEntity, lang],
+    queryFn: async () => {
+      const response = await fetch(`/api/music/search?q=${encodeURIComponent(musicQuery)}&entity=${musicEntity}&country=${lang === "th" ? "TH" : "US"}`, { credentials: "include" });
+      if (!response.ok) throw new Error("Music search failed");
+      return response.json();
+    },
+    enabled: musicSearchEnabled,
+    staleTime: 6 * 60 * 60 * 1000,
+  });
+  const { data: tickerTrendingData, isLoading: tickerTrendingLoading } = useQuery<{ results: MusicItem[] }>({
+    queryKey: ["music-trending", lang],
+    queryFn: async () => {
+      const response = await fetch(`/api/music/trending?entity=song&country=${lang === "th" ? "TH" : "US"}`, { credentials: "include" });
+      if (!response.ok) throw new Error("Could not load Ticker music trends");
+      return response.json();
+    },
+    enabled: isActive && mediaMode === "music" && musicMood === "ticker" && debouncedQuery.length < 2,
+    staleTime: 60_000,
+  });
 
   // Center active pill
   const centerPillRanRef = useRef(false);
@@ -718,7 +736,7 @@ export default function Search({ isActive = true }: { isActive?: boolean } = {})
     const apply = (smooth: boolean) => {
       if (cancelled) return;
       const container = pillContainerRef.current;
-      const pill = pillRefs.current.get(activeCategory);
+      const pill = pillRefs.current.get(activePillId);
       if (!container || !pill || pill.offsetWidth === 0) return;
       const target = pill.offsetLeft - (container.clientWidth - pill.offsetWidth) / 2;
       const max = Math.max(0, container.scrollWidth - container.clientWidth);
@@ -737,7 +755,7 @@ export default function Search({ isActive = true }: { isActive?: boolean } = {})
       return () => { cancelled = true; cancelAnimationFrame(raf1); clearTimeout(tid); };
     }
     return () => { cancelled = true; };
-  }, [activeCategory, lang, pillContainerW]);
+  }, [activePillId, lang, pillContainerW]);
 
   // ── Queries ──────────────────────────────────────────────────────────────
 
@@ -870,8 +888,8 @@ export default function Search({ isActive = true }: { isActive?: boolean } = {})
             <div className="w-9 h-9" />
           </div>
 
-          {/* Compact community extremes — highest / lowest Ticker-rated movies */}
-          <SearchTickerExtremes />
+          {/* Keep movie community ranking intact; music trends are queried from Ticker activity. */}
+          {mediaMode === "movie" && <SearchTickerExtremes />}
 
           {/* Dice slide-out tab — smooth banner reveal.
               Uses max-height (not grid-template-rows) for compat with older
@@ -887,7 +905,7 @@ export default function Search({ isActive = true }: { isActive?: boolean } = {})
               className="w-full flex items-center justify-center py-4"
             >
               <div
-                className="flex items-center gap-6"
+                className="flex w-full items-center justify-center gap-2 px-4"
                 style={{
                   opacity: showDiceTab ? 1 : 0,
                   transition: "opacity 220ms ease",
@@ -895,40 +913,33 @@ export default function Search({ isActive = true }: { isActive?: boolean } = {})
               >
                 <button
                   onClick={() => {
-                    setShowRandomPicker(true);
-                    sessionStorage.setItem("ticker_fab_seen", "1");
-                    setFabHighlight(false);
-                    const activeDiv = document.querySelector('[data-cat-active="true"]') as HTMLElement | null;
-                    if (activeDiv) activeDiv.scrollTo({ top: 0, behavior: "smooth" });
+                    setMediaMode("movie");
+                    localStorage.setItem("ticker-discovery-mode", "movie");
+                    setActiveCategory("trending");
+                    setHeaderHidden(false);
                   }}
-                  className="flex flex-col items-center gap-1 min-w-[64px] active:opacity-60 transition-opacity"
+                  className={cn(
+                    "flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl border text-sm font-bold transition-colors",
+                    mediaMode === "movie" ? "border-foreground bg-foreground text-background" : "border-border bg-secondary text-foreground",
+                  )}
                 >
-                  <div className={cn(
-                    "w-10 h-10 rounded-2xl bg-secondary border border-border flex items-center justify-center shadow-sm",
-                    fabHighlight && diceAnimDone && "animate-bounce"
-                  )}>
-                    <Dice5 className="w-5 h-5 text-foreground" />
-                  </div>
-                  <span className="text-[10px] font-semibold text-foreground leading-none text-center">{lang === "th" ? "สุ่มหนัง" : "Roll"}</span>
+                  <Film className="h-4 w-4" />
+                  {lang === "th" ? "หนัง" : "Movies"}
                 </button>
                 <button
                   onClick={() => {
-                    if (!user) { navigate("/login"); return; }
-                    setShowVsPicker(true);
-                    sessionStorage.setItem("ticker_fab_seen", "1");
-                    setFabHighlight(false);
-                    const activeDiv = document.querySelector('[data-cat-active="true"]') as HTMLElement | null;
-                    if (activeDiv) activeDiv.scrollTo({ top: 0, behavior: "smooth" });
+                    setMediaMode("music");
+                    localStorage.setItem("ticker-discovery-mode", "music");
+                    setMusicMood("ticker");
+                    setHeaderHidden(false);
                   }}
-                  className="flex flex-col items-center gap-1 min-w-[64px] active:opacity-60 transition-opacity"
+                  className={cn(
+                    "flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl border text-sm font-bold transition-colors",
+                    mediaMode === "music" ? "border-foreground bg-foreground text-background" : "border-border bg-secondary text-foreground",
+                  )}
                 >
-                  <div className={cn(
-                    "w-10 h-10 rounded-2xl bg-secondary border border-border flex items-center justify-center shadow-sm",
-                    fabHighlight && diceAnimDone && "animate-bounce"
-                  )}>
-                    <Swords className="w-5 h-5 text-foreground" />
-                  </div>
-                  <span className="text-[10px] font-semibold text-foreground leading-none text-center">{lang === "th" ? "คัดเลือก" : "VS"}</span>
+                  <Music2 className="h-4 w-4" />
+                  {lang === "th" ? "เพลง" : "Music"}
                 </button>
               </div>
             </div>
@@ -960,14 +971,17 @@ export default function Search({ isActive = true }: { isActive?: boolean } = {})
         {/* ── Pills row — part of the single sliding header ── */}
         <div ref={pillsRowRef}>
           <div ref={pillContainerRef} className="flex items-center gap-2 pb-3 px-4 overflow-x-auto scrollbar-hide overscroll-x-contain">
-            {CATEGORIES_T.map(cat => {
+            {visibleCategories.map(cat => {
               const Icon = cat.icon;
               return (
                 <button
                   key={cat.id}
                   ref={el => { if (el) pillRefs.current.set(cat.id, el); else pillRefs.current.delete(cat.id); }}
-                  onClick={() => handleCategoryChange(cat.id)}
-                  className={`filter-pill shrink-0 ${activeCategory === cat.id ? "active" : ""} flex items-center gap-1`}
+                  onClick={() => {
+                    if (mediaMode === "movie") handleCategoryChange(cat.id);
+                    else { setMusicMood(cat.id); setHeaderHidden(false); }
+                  }}
+                  className={`filter-pill shrink-0 ${activePillId === cat.id ? "active" : ""} flex items-center gap-1`}
                 >
                   <Icon className="w-3.5 h-3.5" />
                   {cat.label}
@@ -979,14 +993,33 @@ export default function Search({ isActive = true }: { isActive?: boolean } = {})
       </div>
 
       {/* ── Search results overlay (Movies) ── */}
-      {debouncedQuery && (
+      {(debouncedQuery || (mediaMode === "music" && musicMood !== "ticker")) && (
         <div
           ref={searchResultsRef}
           className="absolute inset-0 overflow-y-auto overscroll-y-none z-20"
           style={{ paddingTop: headerH + 16 }}
         >
-          {/* ── Movies ── */}
-          {(
+          {mediaMode === "music" ? (
+            <div className="space-y-3 px-4 pt-2">
+              <div className="flex gap-1 rounded-xl bg-secondary p-1">
+                {(["song", "album", "artist", "all"] as const).map(entity => (
+                  <button key={entity} onClick={() => setMusicEntity(entity)} className={cn(
+                    "flex-1 rounded-lg px-1 py-2 text-[10px] font-bold capitalize",
+                    musicEntity === entity ? "bg-background text-foreground shadow-sm" : "text-muted-foreground",
+                  )}>
+                    {entity === "all" ? (lang === "th" ? "ทั้งหมด" : "All") : entity === "song" ? (lang === "th" ? "เพลง" : "Songs") : entity === "album" ? (lang === "th" ? "อัลบั้ม" : "Albums") : (lang === "th" ? "ศิลปิน" : "Artists")}
+                  </button>
+                ))}
+              </div>
+              {musicSearchLoading && <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>}
+              {!musicSearchLoading && (musicSearchData?.results?.length ?? 0) === 0 && (
+                <div className="py-12 text-center text-sm text-muted-foreground">{lang === "th" ? "ไม่พบเพลงที่ค้นหา" : "No music found"}</div>
+              )}
+              <div className="space-y-2">
+                {(musicSearchData?.results ?? []).map(item => <MusicSearchRow key={`${item.entity}-${item.providerId}`} item={item} />)}
+              </div>
+            </div>
+          ) : (
             <div className="px-4 pt-2">
               {movieSearchLoading && (
                 <div className="flex justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
@@ -1032,7 +1065,7 @@ export default function Search({ isActive = true }: { isActive?: boolean } = {})
       )}
 
       {/* ── Movie grid sections (lazy-mount via CSS display toggle) ── */}
-      {CATEGORIES_T
+      {mediaMode === "movie" && CATEGORIES_T
         .filter(cat => visitedCategories.has(cat.id) && MOVIE_GRID_IDS.has(cat.id))
         .map(cat => (
           <CategoryScrollDiv
@@ -1047,19 +1080,19 @@ export default function Search({ isActive = true }: { isActive?: boolean } = {})
         ))
       }
 
-      {/* ── Random Movie Picker ── */}
-      {showRandomPicker && (
-        <RandomMoviePicker
-          onClose={() => setShowRandomPicker(false)}
-          isGuest={!user}
-        />
-      )}
-
-      {/* ── VS Movie Picker ── */}
-      {showVsPicker && (
-        <MovieVsPicker
-          onClose={() => setShowVsPicker(false)}
-        />
+      {mediaMode === "music" && !debouncedQuery && musicMood === "ticker" && (
+        <CategoryScrollDiv catId="music-trending" active onScrollChange={handleScrollChange} paddingTop={headerH}>
+          <div className="px-4 pt-3 pb-6">
+            <div className="mb-3 flex items-center gap-2">
+              <Music2 className="h-4 w-4 text-primary" />
+              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{lang === "th" ? "เพลงที่กำลังเป็นกระแสใน Ticker" : "Trending in Ticker"}</p>
+            </div>
+            <div className="space-y-2">
+              {(tickerTrendingData?.results ?? []).map(item => <MusicSearchRow key={`${item.entity}-${item.providerId}`} item={item} />)}
+              {!tickerTrendingLoading && !tickerTrendingData?.results?.length && <p className="py-10 text-center text-xs text-muted-foreground">{lang === "th" ? "ยังไม่มีข้อมูลเพลงที่กำลังเป็นกระแส" : "No Ticker music trends yet"}</p>}
+            </div>
+          </div>
+        </CategoryScrollDiv>
       )}
 
     </div>

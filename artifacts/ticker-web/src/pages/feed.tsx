@@ -121,6 +121,7 @@ export default function Feed({ isActive = true }: { isActive?: boolean } = {}) {
     seenIdsRef.current = new Set();
     window.dispatchEvent(new CustomEvent("feed-cards-reset"));
     const el = scrollRef.current;
+    scrollStore.set("feed", 0);
     if (el) {
       try { el.scrollTo({ top: 0, behavior: "auto" }); }
       catch { el.scrollTop = 0; }
@@ -137,7 +138,10 @@ export default function Feed({ isActive = true }: { isActive?: boolean } = {}) {
         setIsRefreshing(false);
         // Return the user to the top if they scrolled during the refresh spin.
         const elAfter = scrollRef.current;
-        if (elAfter && elAfter.scrollTop > 0) elAfter.scrollTo({ top: 0, behavior: "smooth" });
+        if (elAfter) {
+          elAfter.scrollTo({ top: 0, behavior: "smooth" });
+          scrollStore.set("feed", 0);
+        }
       });
   }, [qc, feedMode]);
 

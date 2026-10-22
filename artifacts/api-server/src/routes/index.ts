@@ -27,6 +27,7 @@ import personRouter from "./person";
 import characterRouter from "./character";
 import albumsRouter from "./albums";
 import ogRouter from "./og";
+import musicRouter from "./music";
 
 const router: IRouter = Router();
 
@@ -58,5 +59,6 @@ router.use("/person", personRouter);
 router.use("/character", characterRouter);
 router.use("/albums", albumsRouter);
 router.use("/og", ogRouter);
+router.use("/music", musicRouter);
 
 export default router;
