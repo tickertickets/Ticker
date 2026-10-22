@@ -696,6 +696,16 @@ export default function Search({ isActive = true }: { isActive?: boolean } = {})
     setHeaderHidden(false);
     sessionStorage.setItem("search_category", catId);
   };
+  // Translate the movie categories before using them to derive the visible
+  // pills. Search stays mounted beside the feed, so a declaration-order error
+  // here would crash the entire persistent tab shell on every page.
+  const CATEGORIES_T = ALL_CATEGORIES.map(cat => {
+    if (SECTION_META[cat.id]) {
+      const sec = t.sections[cat.id];
+      return sec ? { ...cat, label: sec.title } : cat;
+    }
+    return cat;
+  });
   const activePillId = mediaMode === "movie" ? activeCategory : musicMood;
   const visibleCategories = mediaMode === "movie"
     ? CATEGORIES_T.map(cat => ({ id: cat.id, label: cat.label, icon: cat.icon }))
@@ -813,16 +823,6 @@ export default function Search({ isActive = true }: { isActive?: boolean } = {})
     staleTime: 30_000,
   });
   const searchedChains = chainSearchData?.chains ?? [];
-
-  // ── Translated categories for pills ──────────────────────────────────────
-
-  const CATEGORIES_T = ALL_CATEGORIES.map(cat => {
-    if (SECTION_META[cat.id]) {
-      const sec = t.sections[cat.id];
-      return sec ? { ...cat, label: sec.title } : cat;
-    }
-    return cat;
-  });
 
   return (
     <div

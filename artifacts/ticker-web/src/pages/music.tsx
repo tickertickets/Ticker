@@ -23,7 +23,14 @@ function MusicPageHeader({ title }: { title: string }) {
   const [, navigate] = useLocation();
   return (
     <div className="sticky top-0 z-20 flex items-center gap-3 border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
-      <button onClick={() => navigate(-1)} className="flex h-9 w-9 items-center justify-center rounded-xl bg-secondary text-foreground" aria-label="Back">
+      <button
+        onClick={() => {
+          if (window.history.length > 1) window.history.back();
+          else navigate("/search");
+        }}
+        className="flex h-9 w-9 items-center justify-center rounded-xl bg-secondary text-foreground"
+        aria-label="Back"
+      >
         <ArrowLeft className="h-4 w-4" />
       </button>
       <h1 className="min-w-0 flex-1 truncate font-display text-base font-bold text-foreground">{title}</h1>

@@ -385,6 +385,7 @@ export interface Strings {
   popcornSettingsLabel: string;
   popcornSettingsDesc: string;
   xpPosts: string;
+  xpTags: string;
   xpParty: string;
   howToEarnXP: string;
   xpPerPost: string;
@@ -1017,6 +1018,7 @@ const TH: Strings = {
   badgeCollectionDesc: "สะสม XP เพื่ออัพระดับ Badge",
   badgeCollectionDescPopcorn: "ยืนยันตัวตนเพจ/ครีเอเตอร์ของคุณ",
   xpPosts: "โพสต์",
+  xpTags: "แท็ก",
   xpParty: "ปาร์ตี้",
   howToEarnXP: "วิธีสะสม XP",
   xpPerPost: "+5 XP",
@@ -1647,6 +1649,7 @@ const EN: Strings = {
   badgeCollectionDesc: "Collect XP to level up your Badge",
   badgeCollectionDescPopcorn: "Verify your page or creator identity",
   xpPosts: "Posts",
+  xpTags: "Tags",
   xpParty: "Party",
   howToEarnXP: "How to Earn XP",
   xpPerPost: "+5 XP",

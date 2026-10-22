@@ -199,7 +199,7 @@ router.get("/profile/:username", async (req, res) => {
       .orderBy(desc(musicPlaylistsTable.createdAt)).limit(100),
     ownProfile
       ? db.select().from(musicSavesTable).where(eq(musicSavesTable.userId, owner.id)).orderBy(desc(musicSavesTable.createdAt)).limit(200)
-      : Promise.resolve([]),
+      : Promise.resolve([] as (typeof musicSavesTable.$inferSelect)[]),
   ]);
   const playlistItems = await Promise.all(playlists.map(async ({ playlist }) => ({
     ...playlist,

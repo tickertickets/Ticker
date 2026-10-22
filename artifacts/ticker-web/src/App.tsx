@@ -164,7 +164,9 @@ class PageErrorBoundary extends Component<
   static getDerivedStateFromError(err: unknown) {
     return { crashed: true, error: err instanceof Error ? err.message : String(err) };
   }
-  componentDidCatch() {}
+  componentDidCatch(error: unknown) {
+    try { console.error("[PageErrorBoundary]", error); } catch {}
+  }
   render() {
     if (this.state.crashed) {
       const isEn = (() => { try { return localStorage.getItem("ticker_lang") !== "th"; } catch { return true; } })();
@@ -706,23 +708,20 @@ class RootErrorBoundary extends Component<
   componentDidCatch(error: unknown) {
     try { console.error("[RootErrorBoundary]", error); } catch {}
   }
-  componentDidUpdate(_: Record<string, unknown>, prevState: { crashed: boolean }) {
-    if (!prevState.crashed && this.state.crashed) {
-      // Auto-recover: navigate to home without showing an error screen.
-      // Short timeout lets React flush the render before we navigate.
-      setTimeout(() => {
-        try { this.setState({ crashed: false }); } catch { /* ignore */ }
-        window.location.href = "/";
-      }, 350);
-    }
-  }
   render() {
     if (this.state.crashed) {
-      // Show a plain loading spinner while auto-redirecting — user never sees the error.
+      const isEn = (() => { try { return localStorage.getItem("ticker_lang") !== "th"; } catch { return true; } })();
       return (
-        <div style={{ height: "100dvh", background: "var(--background, #000)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <style>{`@keyframes _rSpinX{to{transform:rotate(360deg)}}`}</style>
-          <div style={{ width: 32, height: 32, borderRadius: "50%", border: "3px solid rgba(128,128,128,0.3)", borderTopColor: "rgba(128,128,128,0.8)", animation: "_rSpinX 0.8s linear infinite" }} />
+        <div style={{ height: "100dvh", background: "var(--background, #000)", color: "var(--foreground, #fff)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: 24, textAlign: "center" }}>
+          <p>{isEn ? "Something went wrong. Please try again." : "เกิดข้อผิดพลาด กรุณาลองอีกครั้ง"}</p>
+          <div style={{ display: "flex", gap: 16 }}>
+            <button onClick={() => window.location.reload()} style={{ textDecoration: "underline" }}>
+              {isEn ? "Try again" : "ลองอีกครั้ง"}
+            </button>
+            <a href="/" style={{ textDecoration: "underline" }}>
+              {isEn ? "Go to main page" : "กลับหน้าหลัก"}
+            </a>
+          </div>
         </div>
       );
     }
