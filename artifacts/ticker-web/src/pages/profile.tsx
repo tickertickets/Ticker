@@ -32,7 +32,7 @@ import {
   Loader2, Settings, Link2, Users, X, User as UserIcon,
   Camera, MessageCircle, Lock, Unlock, Flag, MoreHorizontal, ChevronLeft, Bookmark, Share2,
   Heart, Send, Pencil, Trash2, Ticket as TicketIcon, AtSign, Check, Search, EyeOff, Eye, Plus, Globe, GripVertical,
-  Bell, BellOff, FolderOpen, Archive, ArchiveRestore,
+  Bell, BellOff, FolderOpen, Archive, ArchiveRestore, Disc3,
 } from "lucide-react";
 import { cn, fmtCount } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
@@ -47,6 +47,7 @@ import { type SocialLink, detectPlatform, normalizeUrl, isValidUrl, getPlatformN
 import { VerifiedBadge, isVerified } from "@/components/VerifiedBadge";
 import { BadgeIcon } from "@/components/BadgeIcon";
 import { useToast } from "@/hooks/use-toast";
+import { MusicProfileSection } from "@/components/MusicProfileSection";
 
 function formatRunDuration(ms: number): string {
   const totalSec = Math.floor(ms / 1000);
@@ -1935,6 +1936,19 @@ export default function Profile() {
     if (urlTab === "chain" || urlTab === "albums") return urlTab;
     return "films";
   });
+  const [profileMediaMode, setProfileMediaMode] = useState<"movie" | "music">(() => {
+    try { return localStorage.getItem(`ticker-profile-media:${username}`) === "music" ? "music" : "movie"; }
+    catch { return "movie"; }
+  });
+  useEffect(() => {
+    try { setProfileMediaMode(localStorage.getItem(`ticker-profile-media:${username}`) === "music" ? "music" : "movie"); }
+    catch { setProfileMediaMode("movie"); }
+  }, [username]);
+  const toggleProfileMediaMode = () => {
+    const next = profileMediaMode === "movie" ? "music" : "movie";
+    setProfileMediaMode(next);
+    try { localStorage.setItem(`ticker-profile-media:${username}`, next); } catch {}
+  };
   // Restore chain sub-tab from URL (?subtab=) on mount.
   const [chainSubTab, setChainSubTab] = useState<"played" | "created">(() => {
     const urlSub = new URLSearchParams(window.location.search).get("subtab");
@@ -2211,6 +2225,7 @@ export default function Profile() {
     return Promise.all([
       queryClient.invalidateQueries({ queryKey: ["profile-data", username] }),
       queryClient.invalidateQueries({ queryKey: ["profile-tickets", username] }),
+      queryClient.invalidateQueries({ queryKey: ["profile-music", username] }),
       queryClient.invalidateQueries({ queryKey: ["profile-albums", profileUserId] }),
       queryClient.invalidateQueries({ queryKey: ["profile-chains-created"] }),
       queryClient.invalidateQueries({ queryKey: ["profile-chains-played"] }),
@@ -2596,6 +2611,20 @@ export default function Profile() {
               <h2 className="font-display font-bold text-lg text-foreground leading-tight break-all">{profile.displayName}</h2>
               {isVerified(profile.username) && <VerifiedBadge className="w-[18px] h-[18px]" />}
               {profile.id && <BadgeIcon userId={profile.id} size={18} nudge={1.2} />}
+              <button
+                type="button"
+                onClick={toggleProfileMediaMode}
+                aria-label={profileMediaMode === "movie"
+                  ? (lang === "th" ? "ดูโปรไฟล์เพลง" : "Show music profile")
+                  : (lang === "th" ? "กลับไปโปรไฟล์หนัง" : "Show movie profile")}
+                aria-pressed={profileMediaMode === "music"}
+                className={cn(
+                  "ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors",
+                  profileMediaMode === "music" ? "bg-foreground text-background" : "bg-secondary text-foreground",
+                )}
+              >
+                <Disc3 className="h-4 w-4" />
+              </button>
             </div>
             <p className="text-xs text-muted-foreground">@{profile.username}</p>
           </div>
@@ -2695,6 +2724,8 @@ export default function Profile() {
             <p className="text-sm text-muted-foreground">{t.privateAccountDesc}</p>
           </div>
         </div>
+      ) : profileMediaMode === "music" ? (
+        <MusicProfileSection username={username} isOwn={isOwn} />
       ) : (
         <>
           {/* Tabs — centered pills. For other users, hide Chains pill if they have no chains at all. */}

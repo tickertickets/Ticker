@@ -64,14 +64,27 @@ export function MusicDetailPage() {
   const post = isVinyl ? data : null;
   const playlist = isPlaylist ? data : null;
   const item = isVinyl ? post?.itemSnapshot : isPlaylist ? null : data?.item as MusicItem | undefined;
-  const savedItems = queryClient.getQueryData<{ saves?: Array<{ entity: string; providerId: string }> }>(["music-profile", user?.username]);
-  const isSaved = !!item && !!savedItems?.saves?.some(entry => entry.entity === item.entity && entry.providerId === item.providerId);
+  const saveStatusKey = ["music-save-status", user?.id, entity, id] as const;
+  const { data: saveStatus, isLoading: saveStatusLoading } = useQuery<{ saved: boolean }>({
+    queryKey: saveStatusKey,
+    queryFn: () => apiJson(`/api/music/saves/${entity}/${encodeURIComponent(id)}`),
+    enabled: !!user && !!item,
+    staleTime: 30_000,
+  });
+  const isSaved = !!saveStatus?.saved;
   const saveMutation = useMutation({
-    mutationFn: () => isSaved
-      ? apiJson(`/api/music/saves/${item!.entity}/${item!.providerId}`, { method: "DELETE" })
-      : apiJson("/api/music/saves", { method: "POST", body: JSON.stringify({ entity: item!.entity, providerId: item!.providerId }) }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["music-profile"] });
+    mutationFn: async () => {
+      const nextSaved = !isSaved;
+      if (isSaved) {
+        await apiJson(`/api/music/saves/${item!.entity}/${item!.providerId}`, { method: "DELETE" });
+      } else {
+        await apiJson("/api/music/saves", { method: "POST", body: JSON.stringify({ entity: item!.entity, providerId: item!.providerId }) });
+      }
+      return nextSaved;
+    },
+    onSuccess: saved => {
+      queryClient.setQueryData(saveStatusKey, { saved });
+      queryClient.invalidateQueries({ queryKey: ["profile-music", user?.username] });
       queryClient.invalidateQueries({ queryKey: ["music-trending"] });
     },
   });
@@ -84,7 +97,10 @@ export function MusicDetailPage() {
   if (error || (!item && !playlist && !post)) return <div className="p-8 text-center text-sm text-muted-foreground">{lang === "th" ? "ไม่พบข้อมูลเพลง" : "Music item not found"}</div>;
 
   return (
-    <div className="h-full overflow-y-auto bg-background">
+    <div
+      className="h-full overflow-y-auto bg-background"
+      data-music-profile-dropzone={!isVinyl && !isPlaylist && entity === "song" ? "true" : undefined}
+    >
       <MusicPageHeader title={title} />
       {playlist ? (
         <div className="px-5 py-6">
@@ -125,7 +141,7 @@ export function MusicDetailPage() {
             {user && (
               <button
                 onClick={() => saveMutation.mutate()}
-                disabled={saveMutation.isPending}
+                disabled={saveMutation.isPending || saveStatusLoading}
                 className="mt-5 flex h-11 items-center gap-2 rounded-2xl border border-border bg-secondary px-4 text-sm font-bold text-foreground disabled:opacity-60"
               >
                 {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : isSaved ? <Check className="h-4 w-4" /> : <Bookmark className="h-4 w-4" />}
@@ -197,7 +213,7 @@ export function CreateVinylPage() {
     }),
     onSuccess: ({ post }) => {
       queryClient.invalidateQueries({ queryKey: ["music-feed"] });
-      queryClient.invalidateQueries({ queryKey: ["music-profile"] });
+       queryClient.invalidateQueries({ queryKey: ["profile-music", user?.username] });
       navigate(`/music/vinyl/${post.id}`);
     },
   });
@@ -278,7 +294,7 @@ export function CreatePlaylistPage() {
     }),
     onSuccess: ({ playlist }) => {
       queryClient.invalidateQueries({ queryKey: ["music-feed"] });
-      queryClient.invalidateQueries({ queryKey: ["music-profile"] });
+       queryClient.invalidateQueries({ queryKey: ["profile-music", user?.username] });
       navigate(`/music/playlist/${playlist.id}`);
     },
   });

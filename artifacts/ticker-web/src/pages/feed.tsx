@@ -15,11 +15,20 @@ import type { ChainItem } from "@/components/ChainsSection";
 import { FeedUpcomingCard, TabActiveCtx, type UpcomingMovie } from "@/components/UpcomingCard";
 import { useLang } from "@/lib/i18n";
 import { LangToggle } from "@/components/LangToggle";
+import { PlaylistCard, VinylCard, type VinylPost } from "@/components/MusicCards";
 
 
 type FeedItem =
   | { type: "ticket"; ticket: any }
-  | { type: "chain"; chain: ChainItem };
+  | { type: "chain"; chain: ChainItem }
+  | { type: "vinyl"; post: VinylPost }
+  | { type: "playlist"; post: any };
+
+function feedItemKey(item: FeedItem): string {
+  if (item.type === "ticket") return `ticket:${item.ticket.id}`;
+  if (item.type === "chain") return `chain:${item.chain.id}`;
+  return `${item.type}:${item.post.id}`;
+}
 
 function useUpcomingMovies() {
   return useQuery<UpcomingMovie[]>({
@@ -210,7 +219,7 @@ export default function Feed({ isActive = true }: { isActive?: boolean } = {}) {
     // Always register page-1 items in seenIds — prevents cross-request
     // duplicates if score drift puts the same item on both page 1 and page 2.
     feedData.items.forEach((item) => {
-      seenIdsRef.current.add(item.type === "ticket" ? item.ticket.id : item.chain.id);
+      seenIdsRef.current.add(feedItemKey(item));
     });
   }, [feedData]);
 
@@ -218,7 +227,7 @@ export default function Feed({ isActive = true }: { isActive?: boolean } = {}) {
 
   // "Not interested" — soft-hide (stays in list) + persist to backend
   const handleNotInterested = useCallback((itemId: string, itemType: "ticket" | "chain") => {
-    seenIdsRef.current.add(itemId);
+    seenIdsRef.current.add(`${itemType}:${itemId}`);
     if (itemType === "ticket") hideItem(itemId);
     else hideChain(itemId);
   }, [hideItem, hideChain]);
@@ -247,11 +256,10 @@ export default function Feed({ isActive = true }: { isActive?: boolean } = {}) {
         });
       } else {
         const newItems = data.items.filter((item) => {
-          const id = item.type === "ticket" ? item.ticket.id : item.chain.id;
-          return !seenIdsRef.current.has(id);
+          return !seenIdsRef.current.has(feedItemKey(item));
         });
         newItems.forEach((item) => {
-          seenIdsRef.current.add(item.type === "ticket" ? item.ticket.id : item.chain.id);
+          seenIdsRef.current.add(feedItemKey(item));
         });
         if (newItems.length > 0) setExtraItems((prev) => [...prev, ...newItems]);
       }
@@ -400,6 +408,8 @@ export default function Feed({ isActive = true }: { isActive?: boolean } = {}) {
   type Injected =
     | { kind: "ticket"; ticket: any; key: string }
     | { kind: "chain"; chain: ChainItem; key: string }
+    | { kind: "vinyl"; post: VinylPost; key: string }
+    | { kind: "playlist"; post: any; key: string }
     | { kind: "upcoming"; movie: UpcomingMovie; key: string }
     | { kind: "caught-up"; key: string };
   // useMemo — this rebuild used to run on every render (including scroll-driven
@@ -416,11 +426,15 @@ export default function Feed({ isActive = true }: { isActive?: boolean } = {}) {
         list.push({ kind: "caught-up", key: "caught-up" });
       }
       // Suffix keys with the index — recycled laps intentionally repeat the
-      // same underlying ticket/chain id, so the id alone is not a unique key.
+      // same underlying content id, so the id alone is not a unique key.
       if (item.type === "ticket") {
         list.push({ kind: "ticket", ticket: item.ticket, key: `t-${item.ticket.id}-${i}` });
-      } else {
+      } else if (item.type === "chain") {
         list.push({ kind: "chain", chain: item.chain, key: `c-${item.chain.id}-${i}` });
+      } else if (item.type === "vinyl") {
+        list.push({ kind: "vinyl", post: item.post, key: `v-${item.post.id}-${i}` });
+      } else {
+        list.push({ kind: "playlist", post: item.post, key: `p-${item.post.id}-${i}` });
       }
       if ((i + 1) % 6 === 0 && upcomingIdx < upcoming.length && feedMode !== "following") {
         list.push({ kind: "upcoming", movie: upcoming[upcomingIdx++], key: `up-${upcomingIdx}` });
@@ -672,6 +686,8 @@ export default function Feed({ isActive = true }: { isActive?: boolean } = {}) {
                   />
                 );
               }
+              if (item.kind === "vinyl") return <VinylCard key={item.key} post={item.post} />;
+              if (item.kind === "playlist") return <PlaylistCard key={item.key} playlist={item.post} />;
               return (
                 // -mt-px + h-px bg-background strip hides the preceding card's
                 // border-b, which would otherwise look like a top border here.

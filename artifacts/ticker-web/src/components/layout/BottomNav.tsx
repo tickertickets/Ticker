@@ -210,6 +210,12 @@ export function BottomNav() {
     try { movieId = decodeURIComponent(movieMatch[1].replace(/\/$/, "")); }
     catch { movieId = movieMatch[1].replace(/\/$/, ""); }
   }
+  const musicMatch = location.split("?")[0]?.match(/^\/music\/song\/([^/]+)\/?$/);
+  let musicTrackId: string | null = null;
+  if (musicMatch?.[1]) {
+    try { musicTrackId = decodeURIComponent(musicMatch[1].replace(/\/$/, "")); }
+    catch { musicTrackId = musicMatch[1].replace(/\/$/, ""); }
+  }
 
   useEffect(() => () => {
     if (holdTimerRef.current !== null) window.clearTimeout(holdTimerRef.current);
@@ -244,7 +250,7 @@ export function BottomNav() {
   };
 
   const handlePlusPointerDown = (event: PointerEvent<HTMLButtonElement>) => {
-    if (!movieId) return;
+    if (!movieId && !musicTrackId) return;
     clearHoldTimer();
     gestureRef.current = {
       pointerId: event.pointerId,
@@ -281,7 +287,7 @@ export function BottomNav() {
     setDragPreview({
       ...point,
       frame,
-      overProfile: !!target?.closest("[data-movie-profile-dropzone]"),
+      overProfile: !!target?.closest("[data-movie-profile-dropzone], [data-music-profile-dropzone]"),
     });
   };
 
@@ -298,10 +304,14 @@ export function BottomNav() {
     const point = constrainDragPoint(event.clientX, event.clientY, frame);
     const target = document.elementFromPoint(point.x, point.y);
     const droppedOnMovie = !!target?.closest("[data-movie-profile-dropzone]");
+    const droppedOnMusic = !!target?.closest("[data-music-profile-dropzone]");
     setDragPreview(null);
     if (droppedOnMovie && movieId) {
       setCreateOpen(false);
       navigate(`/ticket/new?movieId=${encodeURIComponent(movieId)}`);
+    } else if (droppedOnMusic && musicTrackId) {
+      setCreateOpen(false);
+      navigate(`/vinyl/new?track=${encodeURIComponent(musicTrackId)}`);
     }
     window.setTimeout(() => { suppressClickRef.current = false; }, 0);
   };
@@ -346,7 +356,7 @@ export function BottomNav() {
                   onPointerMove={handlePlusPointerMove}
                   onPointerUp={handlePlusPointerUp}
                   onPointerCancel={handlePlusPointerCancel}
-                  style={{ touchAction: movieId ? "none" : "auto" }}
+                   style={{ touchAction: movieId || musicTrackId ? "none" : "auto" }}
                   className="outline-none flex-1 flex justify-center"
                 >
                   <div className={cn(
@@ -414,7 +424,9 @@ export function BottomNav() {
             }}
           >
             <span className="block rounded-full bg-black/80 px-3 py-1 text-center text-xs font-semibold text-white">
-              {lang === "th" ? "ปล่อยบนหน้าโปรไฟล์หนังเพื่อรีวิว" : "Release on the movie profile to review"}
+              {movieId
+                ? (lang === "th" ? "ปล่อยเพื่อสร้าง Ticket" : "Release to create a Ticket")
+                : (lang === "th" ? "ปล่อยเพื่อสร้าง Vinyl" : "Release to create a Vinyl")}
             </span>
           </div>
         </div>,

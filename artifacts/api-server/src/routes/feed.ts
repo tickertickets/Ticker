@@ -14,8 +14,12 @@ import {
   bookmarksTable,
   feedSignalsTable,
   ticketReactionsTable,
+  musicVinylsTable,
+  musicPlaylistsTable,
+  musicPlaylistItemsTable,
+  musicSavesTable,
 } from "@workspace/db/schema";
-import { eq, and, desc, isNull, count, countDistinct, max, inArray, ne, or, sql, lt, gte } from "drizzle-orm";
+import { eq, and, asc, desc, isNull, count, countDistinct, max, inArray, ne, or, sql, lt, gte } from "drizzle-orm";
 import {
   hotScore,
   makeFreshBoost,
@@ -35,7 +39,7 @@ const router: IRouter = Router();
 /**
  * GET /api/feed
  *
- * Unified ranked feed mixing Tickets and Chains via a shared hotScore.
+ * Unified ranked feed mixing Tickets, Chains, Vinyls and Playlists via a shared hotScore.
  *
  * ── Modes ────────────────────────────────────────────────────────────────────
  * mode=discover  All public content, pure hotScore ranking (default, logged-out)
@@ -78,9 +82,8 @@ const router: IRouter = Router();
  *   page-equivalent window (Twitter/Instagram standard). Applies identically to
  *   the unified feed (home), the following feed, and the discovery/Tickets/Chains
  *   tabs — no single author can dominate any of them.
- * Content-type diversity — applyContentTypeInterleave: prevents > 2 consecutive
- *   items of the same type (Ticket or Chain) when both types exist (Instagram,
- *   TikTok standard).
+ * Content-type diversity — applyContentTypeInterleave keeps any available type
+ *   (Ticket, Chain, Vinyl or Playlist) from dominating the feed.
  *
  * ── Pool time window ─────────────────────────────────────────────────────────
  * home / discover fetch public content from the last POOL_DAYS days only.
@@ -426,10 +429,64 @@ router.get("/", async (req, res) => {
     }
   }
 
+  // ── Fetch music post pools ───────────────────────────────────────────────────
+  // Music posts follow the same visibility rules and bounded ranking window as
+  // Tickets/Chains. In home mode, merge recent public posts with the followed
+  // users' full history so older posts from followed accounts remain eligible.
+  const musicFollowUserIds = [...new Set([...followedIds, ...(currentUserId ? [currentUserId] : [])])];
+  const includePublicMusic = mode !== "following";
+  const includeFollowedMusic = (mode === "home" || mode === "following") && musicFollowUserIds.length > 0;
+  const musicPublicUserRows = includePublicMusic
+    ? await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.isPrivate, false))
+    : [];
+  const musicPublicUserIds = musicPublicUserRows.map(row => row.id);
+
+  const [publicVinylRows, followedVinylRows, publicPlaylistRows, followedPlaylistRows] = await Promise.all([
+    musicPublicUserIds.length > 0
+      ? db.select().from(musicVinylsTable).where(and(
+          isNull(musicVinylsTable.deletedAt),
+          eq(musicVinylsTable.isPrivate, false),
+          inArray(musicVinylsTable.userId, musicPublicUserIds),
+          poolWindowStart ? gte(musicVinylsTable.createdAt, poolWindowStart) : undefined,
+        )).orderBy(desc(musicVinylsTable.createdAt)).limit(POOL)
+      : Promise.resolve([]),
+    includeFollowedMusic
+      ? db.select().from(musicVinylsTable).where(and(
+          isNull(musicVinylsTable.deletedAt),
+          or(eq(musicVinylsTable.isPrivate, false), eq(musicVinylsTable.userId, currentUserId!)),
+          inArray(musicVinylsTable.userId, musicFollowUserIds),
+        )).orderBy(desc(musicVinylsTable.createdAt)).limit(POOL)
+      : Promise.resolve([]),
+    musicPublicUserIds.length > 0
+      ? db.select().from(musicPlaylistsTable).where(and(
+          isNull(musicPlaylistsTable.deletedAt),
+          eq(musicPlaylistsTable.isPrivate, false),
+          inArray(musicPlaylistsTable.userId, musicPublicUserIds),
+          poolWindowStart ? gte(musicPlaylistsTable.createdAt, poolWindowStart) : undefined,
+        )).orderBy(desc(musicPlaylistsTable.createdAt)).limit(POOL)
+      : Promise.resolve([]),
+    includeFollowedMusic
+      ? db.select().from(musicPlaylistsTable).where(and(
+          isNull(musicPlaylistsTable.deletedAt),
+          or(eq(musicPlaylistsTable.isPrivate, false), eq(musicPlaylistsTable.userId, currentUserId!)),
+          inArray(musicPlaylistsTable.userId, musicFollowUserIds),
+        )).orderBy(desc(musicPlaylistsTable.createdAt)).limit(POOL)
+      : Promise.resolve([]),
+  ]);
+
+  const vinylById = new Map<string, typeof musicVinylsTable.$inferSelect>();
+  for (const post of [...publicVinylRows, ...followedVinylRows]) vinylById.set(post.id, post);
+  const musicVinylPool = [...vinylById.values()];
+  const playlistById = new Map<string, typeof musicPlaylistsTable.$inferSelect>();
+  for (const post of [...publicPlaylistRows, ...followedPlaylistRows]) playlistById.set(post.id, post);
+  const musicPlaylistPool = [...playlistById.values()];
+
   // ── Score tickets ────────────────────────────────────────────────────────────
   type ScoredTicket = { type: "ticket"; data: typeof ticketsTable.$inferSelect; score: number };
   type ScoredChain  = { type: "chain";  data: typeof chainsTable.$inferSelect;  score: number };
-  type ScoredItem   = ScoredTicket | ScoredChain;
+  type ScoredVinyl  = { type: "vinyl"; data: typeof musicVinylsTable.$inferSelect; score: number };
+  type ScoredPlaylist = { type: "playlist"; data: typeof musicPlaylistsTable.$inferSelect; score: number };
+  type ScoredItem   = ScoredTicket | ScoredChain | ScoredVinyl | ScoredPlaylist;
 
   const scoredItems: ScoredItem[] = [];
 
@@ -542,6 +599,55 @@ router.get("/", async (req, res) => {
     }
   }
 
+  // Music has no post-level likes/comments yet, so use saved-song intent for
+  // Vinyls and playlist size as the available engagement signals. Both still
+  // use the common hotScore age decay, followed-author boost and diversity cap.
+  const vinylTrackIds = [...new Set(musicVinylPool.map(post => post.trackId))].slice(0, 500);
+  const playlistIds = musicPlaylistPool.map(post => post.id).slice(0, 500);
+  const [vinylSaveRows, playlistItemCounts] = await Promise.all([
+    vinylTrackIds.length > 0
+      ? db.select({ providerId: musicSavesTable.providerId, n: count() })
+        .from(musicSavesTable)
+        .where(and(inArray(musicSavesTable.providerId, vinylTrackIds), eq(musicSavesTable.entity, "song")))
+        .groupBy(musicSavesTable.providerId)
+      : Promise.resolve([]),
+    playlistIds.length > 0
+      ? db.select({ playlistId: musicPlaylistItemsTable.playlistId, n: count() })
+        .from(musicPlaylistItemsTable)
+        .where(inArray(musicPlaylistItemsTable.playlistId, playlistIds))
+        .groupBy(musicPlaylistItemsTable.playlistId)
+      : Promise.resolve([]),
+  ]);
+  const vinylSaveMap = new Map(vinylSaveRows.map(row => [row.providerId, Number(row.n)]));
+  const playlistSizeMap = new Map(playlistItemCounts.map(row => [row.playlistId, Number(row.n)]));
+
+  for (const post of musicVinylPool) {
+    const affinity = (mode === "home" && followedSet.has(post.userId)) ? AFFINITY_FOLLOWED : 1.0;
+    scoredItems.push({
+      type: "vinyl",
+      data: post,
+      score: hotScore({
+        likes: 0,
+        comments: 0,
+        saves: vinylSaveMap.get(post.trackId) ?? 0,
+        lastActivityAt: post.createdAt,
+      }) * freshBoost(post.userId, post.createdAt) * affinity,
+    });
+  }
+  for (const post of musicPlaylistPool) {
+    const affinity = (mode === "home" && followedSet.has(post.userId)) ? AFFINITY_FOLLOWED : 1.0;
+    scoredItems.push({
+      type: "playlist",
+      data: post,
+      score: hotScore({
+        likes: 0,
+        comments: 0,
+        bonus: Math.min(playlistSizeMap.get(post.id) ?? 0, 20),
+        lastActivityAt: post.createdAt,
+      }) * freshBoost(post.userId, post.createdAt) * affinity,
+    });
+  }
+
   // ── Sort by score desc; tiebreak by newest content first ─────────────────────
   scoredItems.sort((a, b) => {
     const diff = b.score - a.score;
@@ -584,11 +690,9 @@ router.get("/", async (req, res) => {
   }
 
   // ── Apply content-type interleaving ──────────────────────────────────────────
-  // Strictly alternates Ticket / Chain (maxRun = 1) so that both content types
-  // get equal screen time when both exist. Without this, a large Ticket pool
-  // would allow many consecutive Tickets before the first Chain appears, making
-  // Chains almost invisible despite having good scores.
-  // Graceful degradation: if one type is exhausted the other fills the rest
+  // Interleave every available content type (maxRun = 1) so a large pool of
+  // one kind cannot bury the others. Graceful degradation fills from whichever
+  // kinds still have eligible posts.
   // (behaviour inherited from applyContentTypeInterleave's pass-2 logic).
   const interleaved = applyContentTypeInterleave(diversified, (i) => i.type, 1);
 
@@ -622,24 +726,63 @@ router.get("/", async (req, res) => {
   // ── Build full response objects ───────────────────────────────────────────────
   const rawTickets = page.filter((i): i is ScoredTicket => i.type === "ticket").map((i) => i.data);
   const rawChains  = page.filter((i): i is ScoredChain  => i.type === "chain").map((i) => i.data);
+  const rawVinyls = page.filter((i): i is ScoredVinyl => i.type === "vinyl").map(i => i.data);
+  const rawPlaylists = page.filter((i): i is ScoredPlaylist => i.type === "playlist").map(i => i.data);
+  const musicOwnerIds = [...new Set([...rawVinyls, ...rawPlaylists].map(post => post.userId))];
 
-  const [builtTickets, builtChains] = await Promise.all([
+  const [builtTickets, builtChains, playlistTrackRows, musicOwners] = await Promise.all([
     rawTickets.length > 0 ? buildTicketBatch(rawTickets, currentUserId) : [],
     Promise.all(rawChains.map((c) => buildChain(c, currentUserId))),
+    rawPlaylists.length > 0
+      ? db.select().from(musicPlaylistItemsTable)
+        .where(inArray(musicPlaylistItemsTable.playlistId, rawPlaylists.map(playlist => playlist.id)))
+        .orderBy(asc(musicPlaylistItemsTable.position))
+      : [],
+    musicOwnerIds.length > 0
+      ? db.select({
+          id: usersTable.id,
+          username: usersTable.username,
+          displayName: usersTable.displayName,
+          avatarUrl: usersTable.avatarUrl,
+        }).from(usersTable).where(inArray(usersTable.id, musicOwnerIds))
+      : [],
   ]);
 
   const ticketMap = new Map(builtTickets.map((t) => [t.id, t]));
   const chainMap  = new Map(builtChains.map((c) => [c.id, c]));
+  const ownerMap = new Map(musicOwners.map(owner => [owner.id, owner]));
+  const playlistTracksMap = new Map<string, typeof playlistTrackRows>();
+  for (const track of playlistTrackRows) {
+    const existing = playlistTracksMap.get(track.playlistId) ?? [];
+    existing.push(track);
+    playlistTracksMap.set(track.playlistId, existing);
+  }
+  const vinylMap = new Map(rawVinyls.map(post => [post.id, {
+    ...post,
+    user: ownerMap.get(post.userId),
+  }]));
+  const playlistMap = new Map(rawPlaylists.map(playlist => [playlist.id, {
+    ...playlist,
+    tracks: playlistTracksMap.get(playlist.id) ?? [],
+    user: ownerMap.get(playlist.userId),
+  }]));
 
   const items = page
     .map((scored) => {
       if (scored.type === "ticket") {
         const ticket = ticketMap.get(scored.data.id);
         return ticket ? { type: "ticket" as const, ticket } : null;
-      } else {
+      }
+      if (scored.type === "chain") {
         const chain = chainMap.get(scored.data.id);
         return chain ? { type: "chain" as const, chain } : null;
       }
+      if (scored.type === "vinyl") {
+        const post = vinylMap.get(scored.data.id);
+        return post ? { type: "vinyl" as const, post } : null;
+      }
+      const post = playlistMap.get(scored.data.id);
+      return post ? { type: "playlist" as const, post } : null;
     })
     .filter(Boolean);
 

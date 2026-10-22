@@ -73,6 +73,8 @@ async function canViewProfile(username: string, viewerId?: string) {
   const [owner] = await db.select({
     id: usersTable.id,
     username: usersTable.username,
+    displayName: usersTable.displayName,
+    avatarUrl: usersTable.avatarUrl,
     isPrivate: usersTable.isPrivate,
   }).from(usersTable).where(eq(usersTable.username, username)).limit(1);
   if (!owner) return { owner: null, allowed: false };
@@ -201,12 +203,22 @@ router.get("/profile/:username", async (req, res) => {
       ? db.select().from(musicSavesTable).where(eq(musicSavesTable.userId, owner.id)).orderBy(desc(musicSavesTable.createdAt)).limit(200)
       : Promise.resolve([] as (typeof musicSavesTable.$inferSelect)[]),
   ]);
-  const playlistItems = await Promise.all(playlists.map(async ({ playlist }) => ({
+  const playlistTrackRows = playlists.length > 0
+    ? await db.select().from(musicPlaylistItemsTable)
+      .where(inArray(musicPlaylistItemsTable.playlistId, playlists.map(({ playlist }) => playlist.id)))
+      .orderBy(asc(musicPlaylistItemsTable.position))
+    : [];
+  const tracksByPlaylist = new Map<string, typeof playlistTrackRows>();
+  for (const track of playlistTrackRows) {
+    const tracks = tracksByPlaylist.get(track.playlistId) ?? [];
+    if (tracks.length < 100) tracks.push(track);
+    tracksByPlaylist.set(track.playlistId, tracks);
+  }
+  const playlistItems = playlists.map(({ playlist }) => ({
     ...playlist,
-    tracks: await db.select().from(musicPlaylistItemsTable)
-      .where(eq(musicPlaylistItemsTable.playlistId, playlist.id))
-      .orderBy(asc(musicPlaylistItemsTable.position)).limit(100),
-  })));
+    tracks: tracksByPlaylist.get(playlist.id) ?? [],
+    user: { username: owner.username, displayName: owner.displayName },
+  }));
   res.json({
     counts: {
       vinyls: vinyls.length,
@@ -325,6 +337,22 @@ router.post("/playlists", musicWriteLimiter, async (req, res) => {
     return created;
   });
   res.status(201).json({ playlist, tracks: items });
+});
+
+router.get("/saves/:entity/:id", async (req, res) => {
+  const userId = req.session?.userId;
+  const entity = parseEntity(req.params["entity"]);
+  const providerId = validProviderId(req.params["id"]);
+  if (!userId) { res.status(401).json({ error: "unauthorized" }); return; }
+  if (!entity || !providerId) { res.status(400).json({ error: "invalid_music_item" }); return; }
+  const [saved] = await db.select({ userId: musicSavesTable.userId })
+    .from(musicSavesTable)
+    .where(and(
+      eq(musicSavesTable.userId, userId),
+      eq(musicSavesTable.providerId, providerId),
+      eq(musicSavesTable.entity, entity),
+    )).limit(1);
+  res.json({ saved: !!saved });
 });
 
 router.post("/saves", musicWriteLimiter, async (req, res) => {
