@@ -144,19 +144,20 @@ function readDrafts(key: string): Draft[] {
   try { return JSON.parse(localStorage.getItem(key) ?? "[]"); } catch { return []; }
 }
 const pendingDraftServerOps = new Map<string, Promise<void>>();
-function queueDraftServerOp(key: string, operation: () => Promise<void>) {
+function queueDraftServerOp(key: string, operation: () => Promise<void>): Promise<void> {
   const previous = pendingDraftServerOps.get(key) ?? Promise.resolve();
   const next = previous.catch(() => {}).then(operation).catch(() => {});
   pendingDraftServerOps.set(key, next);
   void next.then(() => {
     if (pendingDraftServerOps.get(key) === next) pendingDraftServerOps.delete(key);
   });
+  return next;
 }
 function writeDraft(key: string, d: Draft, userId?: string) {
   const rest = readDrafts(key).filter(x => x.movieId !== d.movieId);
   localStorage.setItem(key, JSON.stringify([d, ...rest]));
   if (userId) {
-    queueDraftServerOp(`${userId}:ticket:${d.movieId}`, async () => {
+    void queueDraftServerOp(`${userId}:ticket:${d.movieId}`, async () => {
       await fetch("/api/drafts", {
         method: "PUT", credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -165,15 +166,16 @@ function writeDraft(key: string, d: Draft, userId?: string) {
     });
   }
 }
-function eraseDraft(key: string, movieId: string, userId?: string) {
+function eraseDraft(key: string, movieId: string, userId?: string): Promise<void> {
   localStorage.setItem(key, JSON.stringify(readDrafts(key).filter(x => x.movieId !== movieId)));
   if (userId) {
-    queueDraftServerOp(`${userId}:ticket:${movieId}`, async () => {
+    return queueDraftServerOp(`${userId}:ticket:${movieId}`, async () => {
       await fetch(`/api/drafts?type=ticket&key=${encodeURIComponent(movieId)}`, {
         method: "DELETE", credentials: "include",
       });
     });
   }
+  return Promise.resolve();
 }
 
 
@@ -866,7 +868,8 @@ export default function CreateTicket() {
         autosaveTimerRef.current = null;
       }
       autoSaveDraftDataRef.current = null;
-      eraseDraft(draftKey, selectedMovieId, user?.id);
+      await eraseDraft(draftKey, selectedMovieId, user?.id);
+      setDrafts(current => current.filter(draft => draft.movieId !== selectedMovieId));
 
       // Navigate to following feed at top — same as Instagram post flow
       scrollStore.set("following", 0);

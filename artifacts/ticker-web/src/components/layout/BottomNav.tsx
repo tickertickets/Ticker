@@ -386,13 +386,25 @@ export function BottomNav() {
                 }}
               >
                 <div className="flex items-center justify-center p-3">
-                  <item.icon
-                    className={cn(
-                      "w-6 h-6 transition-all duration-200",
-                      isActive ? "text-foreground" : "text-muted-foreground"
-                    )}
-                    strokeWidth={isActive ? 2.5 : 2}
-                  />
+                  {item.icon === User && user?.avatarUrl ? (
+                    <span className="relative block h-6 w-6 overflow-hidden rounded-full bg-secondary">
+                      <User className="absolute inset-0 h-6 w-6 p-0.5 text-muted-foreground" strokeWidth={2} />
+                      <img
+                        src={user.avatarUrl}
+                        alt=""
+                        className="relative h-full w-full object-cover"
+                        onError={event => { event.currentTarget.style.display = "none"; }}
+                      />
+                    </span>
+                  ) : (
+                    <item.icon
+                      className={cn(
+                        "w-6 h-6 transition-all duration-200",
+                        isActive ? "text-foreground" : "text-muted-foreground"
+                      )}
+                      strokeWidth={isActive ? 2.5 : 2}
+                    />
+                  )}
                 </div>
               </Link>
             );

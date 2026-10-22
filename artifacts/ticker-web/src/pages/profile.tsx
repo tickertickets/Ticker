@@ -1944,6 +1944,18 @@ export default function Profile() {
     try { setProfileMediaMode(localStorage.getItem(`ticker-profile-media:${username}`) === "music" ? "music" : "movie"); }
     catch { setProfileMediaMode("movie"); }
   }, [username]);
+  const { data: profileMusicData } = useQuery<{
+    counts: { vinyls: number; playlists: number };
+  }>({
+    queryKey: ["profile-music", username],
+    queryFn: async () => {
+      const response = await fetch(`/api/music/profile/${encodeURIComponent(username)}`, { credentials: "include" });
+      if (!response.ok) throw new Error("Could not load music profile counts");
+      return response.json();
+    },
+    enabled: profileMediaMode === "music" && !!username,
+    staleTime: 30_000,
+  });
   const toggleProfileMediaMode = () => {
     const next = profileMediaMode === "movie" ? "music" : "movie";
     setProfileMediaMode(next);
@@ -2607,10 +2619,12 @@ export default function Profile() {
               : <div className="w-full h-full flex items-center justify-center text-xl font-bold text-background">{profile.displayName?.[0]?.toUpperCase() ?? "?"}</div>}
           </div>
           <div className="flex-1 min-w-0 flex flex-col justify-center" style={{ minHeight: 32, marginTop: "-10px" }}>
-            <div className="flex items-center gap-1">
-              <h2 className="font-display font-bold text-lg text-foreground leading-tight break-all">{profile.displayName}</h2>
-              {isVerified(profile.username) && <VerifiedBadge className="w-[18px] h-[18px]" />}
-              {profile.id && <BadgeIcon userId={profile.id} size={18} nudge={1.2} />}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-1">
+                <h2 className="truncate font-display font-bold text-lg text-foreground leading-tight">{profile.displayName}</h2>
+                {isVerified(profile.username) && <VerifiedBadge className="w-[18px] h-[18px] shrink-0" />}
+                {profile.id && <BadgeIcon userId={profile.id} size={18} nudge={1.2} />}
+              </div>
               <button
                 type="button"
                 onClick={toggleProfileMediaMode}
@@ -2619,7 +2633,7 @@ export default function Profile() {
                   : (lang === "th" ? "กลับไปโปรไฟล์หนัง" : "Show movie profile")}
                 aria-pressed={profileMediaMode === "music"}
                 className={cn(
-                  "ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors",
+                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-colors",
                   profileMediaMode === "music" ? "bg-foreground text-background" : "bg-secondary text-foreground",
                 )}
               >
@@ -2641,12 +2655,16 @@ export default function Profile() {
 
         <div className="grid grid-cols-4 divide-x divide-border py-3 mt-3 border-t border-border">
           <div className="flex flex-col items-center gap-0.5">
-            <span className="font-display font-bold text-base text-foreground">{fmtCount(tickets.length)}</span>
-            <span className="text-[11px] text-muted-foreground">Tickets</span>
+            <span className="font-display font-bold text-base text-foreground">
+              {fmtCount(profileMediaMode === "music" ? profileMusicData?.counts.vinyls ?? 0 : tickets.length)}
+            </span>
+            <span className="text-[11px] text-muted-foreground">{profileMediaMode === "music" ? "Vinyl" : "Tickets"}</span>
           </div>
           <div className="flex flex-col items-center gap-0.5">
-            <span className="font-display font-bold text-base text-foreground">{fmtCount((profile as any).chainCount ?? 0)}</span>
-            <span className="text-[11px] text-muted-foreground">Chains</span>
+            <span className="font-display font-bold text-base text-foreground">
+              {fmtCount(profileMediaMode === "music" ? profileMusicData?.counts.playlists ?? 0 : (profile as any).chainCount ?? 0)}
+            </span>
+            <span className="text-[11px] text-muted-foreground">{profileMediaMode === "music" ? "Playlist" : "Chains"}</span>
           </div>
           {profile.username === "tickerofficial" && (profile.followerCount ?? 0) < 100 ? (
             <>

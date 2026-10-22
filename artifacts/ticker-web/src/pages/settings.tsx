@@ -475,7 +475,7 @@ function BadgeSection({
     const dx = touch.clientX - touchStart.current.x;
     const dy = touch.clientY - touchStart.current.y;
     touchStart.current = null;
-    if (Math.abs(dx) < 90 || Math.abs(dx) < Math.abs(dy) * 2.5) return;
+    if (Math.abs(dx) < SWIPE_THRESHOLD || Math.abs(dx) < Math.abs(dy) * 1.35) return;
     setActiveDot(prev => Math.max(0, Math.min(MAX_DOT, prev + (dx < 0 ? 1 : -1))));
   };
 

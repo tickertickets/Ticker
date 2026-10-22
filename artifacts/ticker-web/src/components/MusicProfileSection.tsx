@@ -9,12 +9,14 @@ type MusicProfileData = {
   counts: {
     vinyls: number;
     playlists: number;
+    listenedPlaylists: number;
     savedSongs: number;
     savedAlbums: number;
     savedArtists: number;
   };
   vinyls: VinylPost[];
   playlists: Array<any>;
+  listenedPlaylists: Array<any>;
   saves: Array<{ entity: MusicEntity; itemSnapshot: MusicItem }>;
 };
 
@@ -23,6 +25,7 @@ type MusicTab = "vinyls" | "playlists" | "song" | "album" | "artist";
 export function MusicProfileSection({ username, isOwn }: { username: string; isOwn: boolean }) {
   const { lang } = useLang();
   const [activeTab, setActiveTab] = useState<MusicTab>("vinyls");
+  const [playlistView, setPlaylistView] = useState<"created" | "listened">("created");
   const { data, isLoading, isError } = useQuery<MusicProfileData>({
     queryKey: ["profile-music", username],
     queryFn: async () => {
@@ -45,6 +48,9 @@ export function MusicProfileSection({ username, isOwn }: { username: string; isO
     ] : []),
   ];
   const savedItems = (data?.saves ?? []).filter(item => item.entity === activeTab);
+  const visiblePlaylists = playlistView === "created"
+    ? data?.playlists ?? []
+    : data?.listenedPlaylists ?? [];
 
   return (
     <section className="min-h-[35vh]">
@@ -65,6 +71,25 @@ export function MusicProfileSection({ username, isOwn }: { username: string; isO
         </div>
       </div>
 
+      {activeTab === "playlists" && isOwn && (
+        <div className="flex justify-center gap-2 px-4 pb-2">
+          <button
+            type="button"
+            onClick={() => setPlaylistView("created")}
+            className={cn("rounded-xl px-3 py-1.5 text-xs font-semibold", playlistView === "created" ? "bg-foreground text-background" : "bg-secondary text-foreground/70")}
+          >
+            {lang === "th" ? "สร้างไว้" : "Created"} <span className="ml-1 opacity-70">{counts?.playlists ?? 0}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setPlaylistView("listened")}
+            className={cn("rounded-xl px-3 py-1.5 text-xs font-semibold", playlistView === "listened" ? "bg-foreground text-background" : "bg-secondary text-foreground/70")}
+          >
+            {lang === "th" ? "ฟังแล้ว" : "Listened"} <span className="ml-1 opacity-70">{counts?.listenedPlaylists ?? 0}</span>
+          </button>
+        </div>
+      )}
+
       {isLoading ? (
         <div className="flex justify-center py-12"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
       ) : isError ? (
@@ -76,9 +101,13 @@ export function MusicProfileSection({ username, isOwn }: { username: string; isO
           ? <div className="flex flex-col">{data!.vinyls.map(post => <VinylCard key={post.id} post={post} />)}</div>
           : <p className="px-4 py-12 text-center text-sm text-muted-foreground">{lang === "th" ? "ยังไม่มี Vinyl" : "No Vinyl posts yet"}</p>
       ) : activeTab === "playlists" ? (
-        (data?.playlists ?? []).length
-          ? <div className="flex flex-col">{data!.playlists.map(playlist => <PlaylistCard key={playlist.id} playlist={playlist} />)}</div>
-          : <p className="px-4 py-12 text-center text-sm text-muted-foreground">{lang === "th" ? "ยังไม่มี Playlist" : "No playlists yet"}</p>
+        visiblePlaylists.length
+          ? <div className="flex flex-col">{visiblePlaylists.map((playlist: any) => <PlaylistCard key={playlist.id} playlist={playlist} />)}</div>
+          : <p className="px-4 py-12 text-center text-sm text-muted-foreground">
+              {lang === "th"
+                ? playlistView === "created" ? "ยังไม่มี Playlist ที่สร้าง" : "ยังไม่มี Playlist ที่ฟังแล้ว"
+                : playlistView === "created" ? "No playlists created yet" : "No listened playlists yet"}
+            </p>
       ) : savedItems.length ? (
         <div className="flex flex-col gap-2 px-4 py-3">
           {savedItems.map(item => <MusicSearchRow key={`${item.entity}:${item.itemSnapshot.providerId}`} item={item.itemSnapshot} />)}

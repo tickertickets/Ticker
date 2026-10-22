@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
-import { and, asc, desc, eq, gte, inArray, isNull } from "drizzle-orm";
+import { and, asc, avg, count, desc, eq, gte, inArray, isNotNull, isNull } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db } from "@workspace/db";
 import {
@@ -8,6 +8,7 @@ import {
   musicItemsTable,
   musicPlaylistItemsTable,
   musicPlaylistsTable,
+  musicPlaylistSavesTable,
   musicSavesTable,
   musicVinylsTable,
   usersTable,
@@ -15,7 +16,11 @@ import {
   type MusicItemSnapshot,
 } from "@workspace/db/schema";
 import { sanitize } from "../lib/sanitize";
-import { getMusicItem, musicCatalogProvider } from "../services/music-catalog.service";
+import {
+  getMusicItem,
+  MusicCatalogUnavailableError,
+  musicCatalogProvider,
+} from "../services/music-catalog.service";
 
 const router: IRouter = Router();
 const musicSearchLimiter = rateLimit({
@@ -102,8 +107,19 @@ router.get("/search", musicSearchLimiter, async (req, res) => {
     return;
   }
   const limit = Math.max(1, Math.min(25, Number.parseInt(String(req.query["limit"] ?? "20"), 10) || 20));
-  const results = await musicCatalogProvider.search(query.trim(), requestedEntity as MusicEntity | "all", countryFor(req), limit);
-  res.setHeader("Cache-Control", "private, max-age=60");
+  let results: Awaited<ReturnType<typeof musicCatalogProvider.search>>;
+  try {
+    results = await musicCatalogProvider.search(query.trim(), requestedEntity as MusicEntity | "all", countryFor(req), limit);
+  } catch (error) {
+    if (error instanceof MusicCatalogUnavailableError) {
+      res.setHeader("Retry-After", "60");
+      res.status(503).json({ error: "music_catalog_busy" });
+      return;
+    }
+    throw error;
+  }
+  res.vary("X-UI-Lang");
+  res.setHeader("Cache-Control", "public, max-age=60, s-maxage=3600, stale-while-revalidate=86400");
   res.json({ results });
 });
 
@@ -114,13 +130,60 @@ router.get("/lookup/:entity/:id", musicSearchLimiter, async (req, res) => {
     res.status(400).json({ error: "invalid_music_item" });
     return;
   }
-  const item = await getMusicItem(providerId, entity, countryFor(req));
+  let item: Awaited<ReturnType<typeof getMusicItem>>;
+  try {
+    item = await getMusicItem(providerId, entity, countryFor(req));
+  } catch (error) {
+    if (error instanceof MusicCatalogUnavailableError) {
+      res.setHeader("Retry-After", "60");
+      res.status(503).json({ error: "music_catalog_busy" });
+      return;
+    }
+    throw error;
+  }
   if (!item) {
     res.status(404).json({ error: "music_item_not_found" });
     return;
   }
-  res.setHeader("Cache-Control", "private, max-age=300");
-  res.json({ item });
+  let related: Awaited<ReturnType<typeof musicCatalogProvider.related>> | undefined;
+  if (entity === "album" || entity === "artist") {
+    try {
+      related = await musicCatalogProvider.related(providerId, entity, countryFor(req));
+    } catch (error) {
+      if (error instanceof MusicCatalogUnavailableError) {
+        res.setHeader("Retry-After", "60");
+        res.status(503).json({ error: "music_catalog_busy" });
+        return;
+      }
+      throw error;
+    }
+  }
+  res.vary("X-UI-Lang");
+  res.setHeader("Cache-Control", "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400");
+  res.json({ item, ...(related ? { related } : {}) });
+});
+
+router.get("/community/:id", async (req, res) => {
+  const trackId = validProviderId(req.params["id"]);
+  if (!trackId) {
+    res.status(400).json({ error: "invalid_music_item" });
+    return;
+  }
+  const [summary] = await db.select({
+    averageRating: avg(musicVinylsTable.rating),
+    ratingCount: count(),
+  }).from(musicVinylsTable).where(and(
+    eq(musicVinylsTable.trackId, trackId),
+    isNull(musicVinylsTable.deletedAt),
+    eq(musicVinylsTable.isPrivate, false),
+    eq(musicVinylsTable.hideRating, false),
+    isNotNull(musicVinylsTable.rating),
+  ));
+  res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
+  res.json({
+    averageRating: summary?.averageRating == null ? null : Number(summary.averageRating),
+    ratingCount: Number(summary?.ratingCount ?? 0),
+  });
 });
 
 router.get("/trending", async (req, res) => {
@@ -208,9 +271,31 @@ router.get("/profile/:username", async (req, res) => {
       ? db.select().from(musicSavesTable).where(eq(musicSavesTable.userId, owner.id)).orderBy(desc(musicSavesTable.createdAt)).limit(200)
       : Promise.resolve([] as (typeof musicSavesTable.$inferSelect)[]),
   ]);
-  const playlistTrackRows = playlists.length > 0
+  const playlistSaves = ownProfile
+    ? await db.select({
+        status: musicPlaylistSavesTable.status,
+        playlist: musicPlaylistsTable,
+        username: usersTable.username,
+        displayName: usersTable.displayName,
+        avatarUrl: usersTable.avatarUrl,
+      }).from(musicPlaylistSavesTable)
+        .innerJoin(musicPlaylistsTable, eq(musicPlaylistSavesTable.playlistId, musicPlaylistsTable.id))
+        .innerJoin(usersTable, eq(musicPlaylistsTable.userId, usersTable.id))
+        .where(and(
+          eq(musicPlaylistSavesTable.userId, owner.id),
+          eq(musicPlaylistSavesTable.status, "listened"),
+          isNull(musicPlaylistsTable.deletedAt),
+          eq(musicPlaylistsTable.isPrivate, false),
+        ))
+        .orderBy(desc(musicPlaylistSavesTable.createdAt)).limit(100)
+    : [];
+  const allPlaylistIds = [...new Set([
+    ...playlists.map(({ playlist }) => playlist.id),
+    ...playlistSaves.map(({ playlist }) => playlist.id),
+  ])];
+  const playlistTrackRows = allPlaylistIds.length > 0
     ? await db.select().from(musicPlaylistItemsTable)
-      .where(inArray(musicPlaylistItemsTable.playlistId, playlists.map(({ playlist }) => playlist.id)))
+      .where(inArray(musicPlaylistItemsTable.playlistId, allPlaylistIds))
       .orderBy(asc(musicPlaylistItemsTable.position))
     : [];
   const tracksByPlaylist = new Map<string, typeof playlistTrackRows>();
@@ -224,6 +309,12 @@ router.get("/profile/:username", async (req, res) => {
     tracks: tracksByPlaylist.get(playlist.id) ?? [],
     user: { username: owner.username, displayName: owner.displayName },
   }));
+  const listenedPlaylistItems = playlistSaves.map(({ playlist, status, ...user }) => ({
+    ...playlist,
+    status,
+    tracks: tracksByPlaylist.get(playlist.id) ?? [],
+    user,
+  }));
   res.json({
     counts: {
       vinyls: vinyls.length,
@@ -231,9 +322,11 @@ router.get("/profile/:username", async (req, res) => {
       savedSongs: saves.filter(item => item.entity === "song").length,
       savedAlbums: saves.filter(item => item.entity === "album").length,
       savedArtists: saves.filter(item => item.entity === "artist").length,
+      listenedPlaylists: listenedPlaylistItems.length,
     },
     vinyls: vinyls.map(({ post, ...user }) => ({ ...post, user })),
     playlists: playlistItems,
+    listenedPlaylists: listenedPlaylistItems,
     saves,
   });
 });
@@ -270,11 +363,57 @@ router.get("/playlists/:id", async (req, res) => {
   const tracks = await db.select().from(musicPlaylistItemsTable)
     .where(eq(musicPlaylistItemsTable.playlistId, row.playlist.id))
     .orderBy(asc(musicPlaylistItemsTable.position));
+  let listened = false;
+  if (req.session?.userId) {
+    const [saved] = await db.select({ playlistId: musicPlaylistSavesTable.playlistId })
+      .from(musicPlaylistSavesTable)
+      .where(and(
+        eq(musicPlaylistSavesTable.userId, req.session.userId),
+        eq(musicPlaylistSavesTable.playlistId, row.playlist.id),
+        eq(musicPlaylistSavesTable.status, "listened"),
+      )).limit(1);
+    listened = !!saved;
+  }
+  res.setHeader("Cache-Control", "private, no-store");
   res.json({
     ...row.playlist,
     tracks,
+    listened,
     user: { username: row.username, displayName: row.displayName, avatarUrl: row.avatarUrl },
   });
+});
+
+router.post("/playlists/:id/listened", musicWriteLimiter, async (req, res) => {
+  const userId = req.session?.userId;
+  const playlistId = String(req.params["id"] ?? "");
+  if (!userId) { res.status(401).json({ error: "unauthorized" }); return; }
+  const [row] = await db.select({
+    playlist: musicPlaylistsTable,
+    username: usersTable.username,
+  }).from(musicPlaylistsTable).innerJoin(usersTable, eq(musicPlaylistsTable.userId, usersTable.id))
+    .where(and(eq(musicPlaylistsTable.id, playlistId), isNull(musicPlaylistsTable.deletedAt))).limit(1);
+  if (!row) { res.status(404).json({ error: "playlist_not_found" }); return; }
+  if (row.playlist.isPrivate && row.playlist.userId !== userId) {
+    const { allowed } = await canViewProfile(row.username ?? "", userId);
+    if (!allowed) { res.status(403).json({ error: "forbidden" }); return; }
+  }
+  await db.insert(musicPlaylistSavesTable).values({ userId, playlistId, status: "listened" })
+    .onConflictDoUpdate({
+      target: [musicPlaylistSavesTable.userId, musicPlaylistSavesTable.playlistId],
+      set: { status: "listened", createdAt: new Date() },
+    });
+  res.json({ listened: true });
+});
+
+router.delete("/playlists/:id/listened", musicWriteLimiter, async (req, res) => {
+  const userId = req.session?.userId;
+  const playlistId = String(req.params["id"] ?? "");
+  if (!userId) { res.status(401).json({ error: "unauthorized" }); return; }
+  await db.delete(musicPlaylistSavesTable).where(and(
+    eq(musicPlaylistSavesTable.userId, userId),
+    eq(musicPlaylistSavesTable.playlistId, playlistId),
+  ));
+  res.json({ listened: false });
 });
 
 router.post("/vinyls", musicWriteLimiter, async (req, res) => {
@@ -282,8 +421,9 @@ router.post("/vinyls", musicWriteLimiter, async (req, res) => {
   if (!userId) { res.status(401).json({ error: "unauthorized" }); return; }
   const trackId = validProviderId(req.body?.trackId);
   const ratingValue = req.body?.rating == null || req.body.rating === "" ? null : Number(req.body.rating);
+  const ratingType = req.body?.ratingType ?? "star";
   const shape = req.body?.shape === "square" ? "square" : req.body?.shape === "vinyl" ? "vinyl" : null;
-  if (!trackId || !shape || (ratingValue != null && (!Number.isFinite(ratingValue) || ratingValue < 0 || ratingValue > 5))) {
+  if (!trackId || !shape || !["star", "blackhole"].includes(ratingType) || (ratingValue != null && (!Number.isFinite(ratingValue) || ratingValue < 0 || ratingValue > 5))) {
     res.status(400).json({ error: "invalid_vinyl" });
     return;
   }
@@ -295,6 +435,8 @@ router.post("/vinyls", musicWriteLimiter, async (req, res) => {
     trackId,
     itemSnapshot: item,
     rating: ratingValue == null ? null : String(Math.round(ratingValue * 10) / 10),
+    ratingType,
+    hideRating: ratingValue != null && Boolean(req.body?.hideRating),
     caption: sanitize(String(req.body?.caption ?? "")).slice(0, 2000),
     shape,
     isPrivate: Boolean(req.body?.isPrivate),

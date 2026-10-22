@@ -106,11 +106,13 @@ export function SplashScreen({ onDone }: SplashScreenProps) {
   }, []);
 
   useEffect(() => {
-    if (!serverReady) return;
+    // Fail open if a cold server takes too long. The app underneath is already
+    // mounted and its data requests continue retrying in the background.
+    if (!serverReady && !timedOut) return;
     setFadeOut(true);
     const t = setTimeout(onDone, 500); // รอ fade-out animation เสร็จ
     return () => clearTimeout(t);
-  }, [serverReady, onDone]);
+  }, [serverReady, timedOut, onDone]);
 
   return (
     <div
@@ -209,17 +211,9 @@ export function SplashScreen({ onDone }: SplashScreenProps) {
           }}
         >
           {timedOut
-            ? (isThai ? "เซิร์ฟเวอร์ยังไม่ตอบสนอง คุณสามารถลองเปิดแอปต่อได้" : "The server is taking longer than expected. You can still open the app.")
+            ? (isThai ? "กำลังเปิดแอปให้คุณ..." : "Opening the app for you...")
             : COPY.sub}
         </p>
-        {timedOut && (
-          <button
-            onClick={onDone}
-            className="mt-5 rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white"
-          >
-            {isThai ? "เปิดแอปต่อ" : "Continue to app"}
-          </button>
-        )}
       </div>
 
       {/* ข้อความซัพพอร์ต */}

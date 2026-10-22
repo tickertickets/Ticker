@@ -7,7 +7,7 @@
  * - browser เก็บ native scrollTop เองอัตโนมัติ — ไม่มี scroll bug ระหว่างหมวด
  * - lazy mount: เรนเดอร์เฉพาะหมวดที่เคยเข้าชมแล้วเท่านั้น
  */
-import { useState, useRef, useEffect, useCallback, memo } from "react";
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, memo } from "react";
 import { useHorizWheel } from "@/hooks/use-horiz-wheel";
 import { PosterImage } from "@/components/PosterImage";
 import { scrollStore } from "@/lib/scroll-store";
@@ -339,7 +339,10 @@ function MovieSectionVertical({ categoryId }: { categoryId: string }) {
     getNextPageParam: (last: PagedMovies, _allPages: PagedMovies[], lastParam: unknown) => {
       return (lastParam as number) < (last?.totalPages ?? 1) ? (lastParam as number) + 1 : undefined;
     },
-    staleTime: meta?.staleTime ?? 0,
+    // Keep previously opened categories immediately available. The cached
+    // results refresh in the background instead of showing a spinner again
+    // every time the user returns to a category.
+    staleTime: meta?.staleTime ?? 30 * 60 * 1000,
     // A failed fetch must never be read as "this category has no movies" — it's
     // retried a few times with backoff before we tell the user anything is wrong.
     retry: 3,
@@ -398,7 +401,11 @@ function MovieSectionVertical({ categoryId }: { categoryId: string }) {
         <p className="text-xs text-muted-foreground mt-0.5">{meta?.desc}</p>
       </div>
       {isLoading ? (
-        <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+        <div className="grid grid-cols-3 gap-2.5 px-4 pb-2.5" aria-busy="true">
+          {Array.from({ length: 9 }, (_, i) => (
+            <div key={i} className="aspect-[2/3] w-full animate-pulse rounded-xl bg-secondary/70" />
+          ))}
+        </div>
       ) : isError && movies.length === 0 ? (
         // A fetch error is NOT the same as "no movies" — never claim the category
         // is empty when we simply failed to load it; offer a retry instead.
@@ -555,13 +562,14 @@ export default function Search({ isActive = true }: { isActive?: boolean } = {})
     try { return localStorage.getItem("ticker-discovery-mode") === "music" ? "music" : "movie"; }
     catch { return "movie"; }
   });
+  const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const [musicMood, setMusicMood] = useState("ticker");
   const [musicEntity, setMusicEntity] = useState<MusicEntity | "all">("song");
 
   const [query, setQuery]                   = useState<string>(() => {
     try { return new URLSearchParams(window.location.search).get("q") ?? ""; } catch { return ""; }
   });
-  const [debouncedQuery]                    = useDebounceValue(query, 500);
+  const [debouncedQuery]                    = useDebounceValue(query, 250);
   const [activeCategory, setActiveCategory] = useState<string>(() => {
     // Check URL ?cat= param first (used by push notifications)
     try {
@@ -576,21 +584,15 @@ export default function Search({ isActive = true }: { isActive?: boolean } = {})
   const [visitedCategories, setVisitedCategories] = useState<Set<string>>(() => new Set([activeCategory]));
   const catSwipeRef      = useRef<{ x: number; y: number } | null>(null);
   // headerWrapRef  — whole header (title + search + pills) slides up as one unit
-  // collapsibleRef — title + search bar (measured for scroll threshold)
   const headerWrapRef    = useRef<HTMLDivElement>(null);
-  const collapsibleRef   = useRef<HTMLDivElement>(null);
-  const pillsRowRef      = useRef<HTMLDivElement>(null);
   const pillContainerRef  = useRef<HTMLDivElement>(null);
   const pillRefs          = useRef<Map<string, HTMLButtonElement>>(new Map());
   const searchResultsRef  = useRef<HTMLDivElement>(null);
   useHorizWheel(pillContainerRef);   // desktop: category pills
 
-  const [collapsibleH, setCollapsibleH]     = useState(90);
-  const [pillsH, setPillsH]                 = useState(48);
+  const [headerH, setHeaderH]               = useState(0);
   const [headerHidden, setHeaderHidden]     = useState(false);
   const [pillContainerW, setPillContainerW] = useState(0);
-  // Total header height used for content paddingTop (keeps content below pills always)
-  const headerH = collapsibleH + pillsH;
 
   // Measure pill container width (for centering)
   useEffect(() => {
@@ -603,29 +605,17 @@ export default function Search({ isActive = true }: { isActive?: boolean } = {})
     return () => ro.disconnect();
   }, []);
 
-  // Measure collapsible section height (title + search bar).
-  // This drives how far both the collapsible slides up AND how far the
-  // pills row chases it, so they meet cleanly at the top of the viewport.
-  useEffect(() => {
-    const el = collapsibleRef.current;
+  // Measure the complete header, including the safe-area inset and border.
+  // Using only the inner title/pill heights made music descriptions start
+  // underneath the sticky category pills on mobile.
+  useLayoutEffect(() => {
+    const el = headerWrapRef.current;
     if (!el) return;
-    const measure = () => setCollapsibleH(el.offsetHeight);
+    const measure = () => setHeaderH(el.offsetHeight);
     measure();
-    const tid = setTimeout(measure, 300);
-    const obs = new ResizeObserver(measure);
-    obs.observe(el);
-    return () => { obs.disconnect(); clearTimeout(tid); };
-  }, []);
-
-  // Measure pills row height so content paddingTop stays accurate.
-  useEffect(() => {
-    const el = pillsRowRef.current;
-    if (!el) return;
-    const measure = () => setPillsH(el.offsetHeight);
-    measure();
-    const obs = new ResizeObserver(measure);
-    obs.observe(el);
-    return () => obs.disconnect();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
   }, []);
 
   // Accumulate upward scroll — bar only reappears after scrolling up 40 px
@@ -771,7 +761,7 @@ export default function Search({ isActive = true }: { isActive?: boolean } = {})
 
   const { data: movieSearchData, isLoading: movieSearchLoading } = useSearchMovies(
     { query: debouncedQuery, page: 1 },
-    { query: { enabled: debouncedQuery.length > 1 } as any }
+    { query: { enabled: debouncedQuery.length > 1, staleTime: 10 * 60 * 1000 } as any }
   );
   const searchedMovies = (movieSearchData?.movies ?? []) as unknown as SearchMovieItem[];
   useEnsureMovieCores(searchedMovies.map(m => m.imdbId));
@@ -869,17 +859,44 @@ export default function Search({ isActive = true }: { isActive?: boolean } = {})
         ref={headerWrapRef}
         className="absolute top-0 left-0 right-0 z-30 bg-background border-b border-border transition-transform duration-300 ease-in-out will-change-transform"
         style={{
-          paddingTop: "max(1rem, var(--sai-top))",
+          paddingTop: "max(16px, var(--sai-top))",
           transform: headerHidden ? "translateY(-100%)" : "translateY(0)",
         }}
       >
 
         {/* ── Collapsible section: title + community bar + search bar ── */}
-        <div ref={collapsibleRef}>
+        <div>
           {/* Title */}
-          <div className="flex items-center justify-between px-4 pb-3">
-            <h1 className="font-display text-xl font-bold tracking-tight text-foreground">Ticker</h1>
-            <div className="flex items-center gap-1.5" role="group" aria-label={lang === "th" ? "เลือกหมวดค้นหา" : "Choose search category"}>
+          <div className="flex items-center px-4 pb-3">
+            <div className="h-9 w-9 shrink-0" aria-hidden="true" />
+            <h1 className="flex-1 text-center">
+              <button
+                type="button"
+                onClick={() => setModeMenuOpen(open => !open)}
+                aria-expanded={modeMenuOpen}
+                aria-controls="search-media-mode"
+                className="font-display text-xl font-bold tracking-tight text-foreground"
+              >
+                Ticker
+              </button>
+            </h1>
+            <div className="h-9 w-9 shrink-0" aria-hidden="true" />
+          </div>
+
+          {/* Media controls slide down when the centered title is tapped. */}
+          <div
+            id="search-media-mode"
+            aria-hidden={!modeMenuOpen}
+            className="overflow-hidden transition-[max-height,opacity,transform] duration-200 ease-out"
+            style={{
+              maxHeight: modeMenuOpen ? 56 : 0,
+              opacity: modeMenuOpen ? 1 : 0,
+              transform: modeMenuOpen ? "translateY(0)" : "translateY(-6px)",
+              pointerEvents: modeMenuOpen ? "auto" : "none",
+            }}
+            inert={!modeMenuOpen}
+          >
+            <div className="flex items-center justify-center gap-2 px-4 pb-2" role="group" aria-label={lang === "th" ? "เลือกหมวดค้นหา" : "Choose search category"}>
               <button
                 type="button"
                 onClick={() => {
@@ -887,6 +904,7 @@ export default function Search({ isActive = true }: { isActive?: boolean } = {})
                   localStorage.setItem("ticker-discovery-mode", "movie");
                   setActiveCategory("trending");
                   setHeaderHidden(false);
+                  setModeMenuOpen(false);
                 }}
                 aria-label={lang === "th" ? "ค้นหาหนัง" : "Search movies"}
                 aria-pressed={mediaMode === "movie"}
@@ -905,6 +923,7 @@ export default function Search({ isActive = true }: { isActive?: boolean } = {})
                   localStorage.setItem("ticker-discovery-mode", "music");
                   setMusicMood("ticker");
                   setHeaderHidden(false);
+                  setModeMenuOpen(false);
                 }}
                 aria-label={lang === "th" ? "ค้นหาเพลง" : "Search music"}
                 aria-pressed={mediaMode === "music"}
@@ -946,7 +965,7 @@ export default function Search({ isActive = true }: { isActive?: boolean } = {})
         </div>
 
         {/* ── Pills row — part of the single sliding header ── */}
-        <div ref={pillsRowRef}>
+        <div>
           <div ref={pillContainerRef} className="flex items-center gap-2 pb-3 px-4 overflow-x-auto scrollbar-hide overscroll-x-contain">
             {visibleCategories.map(cat => {
               const Icon = cat.icon;
@@ -988,7 +1007,11 @@ export default function Search({ isActive = true }: { isActive?: boolean } = {})
                   </button>
                 ))}
               </div>
-              {musicSearchLoading && <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>}
+              {musicSearchLoading && (
+                <div className="space-y-2" aria-busy="true">
+                  {Array.from({ length: 4 }, (_, i) => <div key={i} className="h-16 animate-pulse rounded-2xl bg-secondary/70" />)}
+                </div>
+              )}
               {!musicSearchLoading && (musicSearchData?.results?.length ?? 0) === 0 && (
                 <div className="py-12 text-center text-sm text-muted-foreground">{lang === "th" ? "ไม่พบเพลงที่ค้นหา" : "No music found"}</div>
               )}
@@ -999,7 +1022,17 @@ export default function Search({ isActive = true }: { isActive?: boolean } = {})
           ) : (
             <div className="px-4 pt-2">
               {movieSearchLoading && (
-                <div className="flex justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+                <div className="flex flex-col gap-2" aria-busy="true">
+                  {Array.from({ length: 5 }, (_, i) => (
+                    <div key={i} className="flex items-center gap-3 rounded-2xl border border-border p-3">
+                      <div className="h-[68px] w-12 animate-pulse rounded-xl bg-secondary/70" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-3 w-3/4 animate-pulse rounded bg-secondary/70" />
+                        <div className="h-2.5 w-1/3 animate-pulse rounded bg-secondary/70" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
               {!movieSearchLoading && searchedMovies.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-16 gap-4 text-center px-6">
@@ -1065,6 +1098,9 @@ export default function Search({ isActive = true }: { isActive?: boolean } = {})
               <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{lang === "th" ? "เพลงที่กำลังเป็นกระแสใน Ticker" : "Trending in Ticker"}</p>
             </div>
             <div className="space-y-2">
+              {tickerTrendingLoading && Array.from({ length: 5 }, (_, i) => (
+                <div key={`music-skeleton-${i}`} className="h-16 animate-pulse rounded-2xl bg-secondary/70" />
+              ))}
               {(tickerTrendingData?.results ?? []).map(item => <MusicSearchRow key={`${item.entity}-${item.providerId}`} item={item} />)}
               {!tickerTrendingLoading && !tickerTrendingData?.results?.length && <p className="py-10 text-center text-xs text-muted-foreground">{lang === "th" ? "ยังไม่มีข้อมูลเพลงที่กำลังเป็นกระแส" : "No Ticker music trends yet"}</p>}
             </div>

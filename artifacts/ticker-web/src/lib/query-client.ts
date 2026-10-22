@@ -5,6 +5,10 @@ import { persistQueryClient } from "@tanstack/react-query-persist-client";
 const PERSIST_PREFIXES = [
   "/api/users/",
   "badge-user",
+  // Public discovery lists are safe to cache locally, so previously opened
+  // categories can render before a cold server has finished waking up.
+  "movies-section-v",
+  "music-trending",
 ];
 
 function shouldPersistQuery(queryKey: unknown): boolean {

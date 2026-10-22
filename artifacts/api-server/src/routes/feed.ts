@@ -436,17 +436,15 @@ router.get("/", async (req, res) => {
   const musicFollowUserIds = [...new Set([...followedIds, ...(currentUserId ? [currentUserId] : [])])];
   const includePublicMusic = mode !== "following";
   const includeFollowedMusic = (mode === "home" || mode === "following") && musicFollowUserIds.length > 0;
-  const musicPublicUserRows = includePublicMusic
-    ? await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.isPrivate, false))
-    : [];
-  const musicPublicUserIds = musicPublicUserRows.map(row => row.id);
 
   const [publicVinylRows, followedVinylRows, publicPlaylistRows, followedPlaylistRows] = await Promise.all([
-    musicPublicUserIds.length > 0
-      ? db.select().from(musicVinylsTable).where(and(
+    includePublicMusic
+      ? db.select({ post: musicVinylsTable }).from(musicVinylsTable)
+        .innerJoin(usersTable, eq(musicVinylsTable.userId, usersTable.id))
+        .where(and(
           isNull(musicVinylsTable.deletedAt),
           eq(musicVinylsTable.isPrivate, false),
-          inArray(musicVinylsTable.userId, musicPublicUserIds),
+          eq(usersTable.isPrivate, false),
           poolWindowStart ? gte(musicVinylsTable.createdAt, poolWindowStart) : undefined,
         )).orderBy(desc(musicVinylsTable.createdAt)).limit(POOL)
       : Promise.resolve([]),
@@ -457,11 +455,13 @@ router.get("/", async (req, res) => {
           inArray(musicVinylsTable.userId, musicFollowUserIds),
         )).orderBy(desc(musicVinylsTable.createdAt)).limit(POOL)
       : Promise.resolve([]),
-    musicPublicUserIds.length > 0
-      ? db.select().from(musicPlaylistsTable).where(and(
+    includePublicMusic
+      ? db.select({ post: musicPlaylistsTable }).from(musicPlaylistsTable)
+        .innerJoin(usersTable, eq(musicPlaylistsTable.userId, usersTable.id))
+        .where(and(
           isNull(musicPlaylistsTable.deletedAt),
           eq(musicPlaylistsTable.isPrivate, false),
-          inArray(musicPlaylistsTable.userId, musicPublicUserIds),
+          eq(usersTable.isPrivate, false),
           poolWindowStart ? gte(musicPlaylistsTable.createdAt, poolWindowStart) : undefined,
         )).orderBy(desc(musicPlaylistsTable.createdAt)).limit(POOL)
       : Promise.resolve([]),
@@ -475,10 +475,10 @@ router.get("/", async (req, res) => {
   ]);
 
   const vinylById = new Map<string, typeof musicVinylsTable.$inferSelect>();
-  for (const post of [...publicVinylRows, ...followedVinylRows]) vinylById.set(post.id, post);
+  for (const post of [...publicVinylRows.map(row => row.post), ...followedVinylRows]) vinylById.set(post.id, post);
   const musicVinylPool = [...vinylById.values()];
   const playlistById = new Map<string, typeof musicPlaylistsTable.$inferSelect>();
-  for (const post of [...publicPlaylistRows, ...followedPlaylistRows]) playlistById.set(post.id, post);
+  for (const post of [...publicPlaylistRows.map(row => row.post), ...followedPlaylistRows]) playlistById.set(post.id, post);
   const musicPlaylistPool = [...playlistById.values()];
 
   // ── Score tickets ────────────────────────────────────────────────────────────

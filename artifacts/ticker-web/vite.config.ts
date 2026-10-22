@@ -26,8 +26,11 @@ function sitemapNoindex(): Plugin {
           res.setHeader("X-Robots-Tag", "noindex");
         }
         // Rewrite /@username → /profile/:username so Vite's SPA fallback handles it
-        if (req.url && /^\/@[^/]+\/?$/.test(req.url.split("?")[0])) {
-          const username = req.url.split("?")[0].replace(/^\/@/, "").replace(/\/$/, "");
+        const requestPath = req.url?.split("?")[0] ?? "";
+        const usernameRoute = requestPath.match(/^\/@([^/]+)\/?$/);
+        const isViteInternalRoute = /^\/@(?:react-refresh|vite|id|fs)$/.test(requestPath);
+        if (usernameRoute && !isViteInternalRoute) {
+          const username = usernameRoute[1];
           req.url = `/profile/${username}`;
         }
         next();

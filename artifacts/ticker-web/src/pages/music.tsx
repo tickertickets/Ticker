@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Bookmark, Check, Disc3, Loader2, Music2, Plus, Search, Square, UserRound } from "lucide-react";
+import { ArrowLeft, Bookmark, Check, CircleOff, Disc3, Loader2, Music2, Plus, Search, Square, Star } from "lucide-react";
 import { useDebounceValue } from "usehooks-ts";
 import { useAuth } from "@/hooks/use-auth";
 import { useLang } from "@/lib/i18n";
@@ -54,7 +54,7 @@ export function MusicDetailPage() {
     ? `/api/music/vinyls/${encodeURIComponent(id)}`
     : isPlaylist
       ? `/api/music/playlists/${encodeURIComponent(id)}`
-      : `/api/music/lookup/${entity}/${encodeURIComponent(id)}`;
+      : `/api/music/lookup/${entity}/${encodeURIComponent(id)}?country=${lang === "th" ? "TH" : "US"}`;
   const { data, isLoading, error } = useQuery<any>({
     queryKey: ["music-detail", endpoint],
     queryFn: () => apiJson(endpoint),
@@ -88,10 +88,29 @@ export function MusicDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["music-trending"] });
     },
   });
+  const playlistListenedMutation = useMutation({
+    mutationFn: async () => {
+      const nextListened = !playlist?.listened;
+      await apiJson(`/api/music/playlists/${encodeURIComponent(id)}/listened`, {
+        method: nextListened ? "POST" : "DELETE",
+      });
+      return nextListened;
+    },
+    onSuccess: listened => {
+      queryClient.setQueryData(["music-detail", endpoint], (current: any) => current ? { ...current, listened } : current);
+      queryClient.invalidateQueries({ queryKey: ["profile-music", user?.username] });
+    },
+  });
   const title = playlist?.title ?? post?.itemSnapshot?.name ?? item?.name ?? (lang === "th" ? "เพลง" : "Music");
   const raw = item?.raw ?? {};
   const albumId = String(raw["collectionId"] ?? "");
   const artistId = String(raw["artistId"] ?? "");
+  const { data: community } = useQuery<{ averageRating: number | null; ratingCount: number }>({
+    queryKey: ["music-community", id],
+    queryFn: () => apiJson(`/api/music/community/${encodeURIComponent(id)}`),
+    enabled: !!id && !isVinyl && !isPlaylist && entity === "song",
+    staleTime: 60_000,
+  });
 
   if (isLoading) return <div className="flex h-full items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
   if (error || (!item && !playlist && !post)) return <div className="p-8 text-center text-sm text-muted-foreground">{lang === "th" ? "ไม่พบข้อมูลเพลง" : "Music item not found"}</div>;
@@ -112,6 +131,22 @@ export function MusicDetailPage() {
               {playlist.description && <p className="mt-2 text-sm text-muted-foreground">{playlist.description}</p>}
             </div>
           </div>
+          {user && (
+            <button
+              type="button"
+              disabled={playlistListenedMutation.isPending}
+              onClick={() => playlistListenedMutation.mutate()}
+              className={cn(
+                "mt-5 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold transition-colors disabled:opacity-60",
+                playlist.listened ? "bg-secondary text-foreground" : "bg-foreground text-background",
+              )}
+            >
+              <Check className="h-4 w-4" />
+              {playlist.listened
+                ? lang === "th" ? "ฟังแล้ว · แตะเพื่อนำออก" : "Listened · tap to undo"
+                : lang === "th" ? "ทำเครื่องหมายว่าฟังแล้ว" : "Mark as listened"}
+            </button>
+          )}
           <div className="mt-5 divide-y divide-border">
             {(playlist.tracks ?? []).map((track: any, index: number) => (
               <div key={track.trackId} className="flex items-center gap-3 py-3">
@@ -138,6 +173,20 @@ export function MusicDetailPage() {
             {item.genre && <p className="mt-2 rounded-full bg-secondary px-3 py-1 text-xs text-muted-foreground">{item.genre}</p>}
             {item.releaseDate && <p className="mt-1 text-xs text-muted-foreground">{new Date(item.releaseDate).getFullYear()}</p>}
             {item.previewUrl && <audio className="mt-5 w-full max-w-sm" controls preload="none" src={item.previewUrl} />}
+            {entity === "song" && (community?.ratingCount ?? 0) > 0 && (
+              <div className="mt-4 rounded-2xl border border-border bg-secondary/60 px-4 py-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                  {lang === "th" ? "คะแนนชุมชน Ticker" : "Ticker Community"}
+                </p>
+                <p className="mt-1 flex items-center justify-center gap-1.5 text-sm font-black text-amber-500">
+                  <Star className="h-4 w-4 fill-current" />
+                  {community?.averageRating?.toFixed(1)} / 5
+                  <span className="text-[10px] font-medium text-muted-foreground">
+                    ({community?.ratingCount})
+                  </span>
+                </p>
+              </div>
+            )}
             {user && (
               <button
                 onClick={() => saveMutation.mutate()}
@@ -164,6 +213,39 @@ export function MusicDetailPage() {
               </button>
             )}
           </div>
+          {entity === "album" && (
+            <section className="mt-7">
+              <h3 className="mb-2 text-sm font-bold text-foreground">{lang === "th" ? "รายชื่อเพลง" : "Tracks"}</h3>
+              <div className="space-y-2">
+                {(data?.related?.tracks ?? []).map((track: MusicItem) => (
+                  <MusicSearchRow key={track.providerId} item={track} />
+                ))}
+                {!data?.related?.tracks?.length && <p className="py-5 text-center text-xs text-muted-foreground">{lang === "th" ? "ไม่พบรายชื่อเพลงในอัลบั้มนี้" : "No tracks found for this album."}</p>}
+              </div>
+            </section>
+          )}
+          {entity === "artist" && (
+            <div className="mt-7 space-y-7">
+              <section>
+                <h3 className="mb-2 text-sm font-bold text-foreground">{lang === "th" ? "อัลบั้ม" : "Albums"}</h3>
+                <div className="space-y-2">
+                  {(data?.related?.albums ?? []).map((album: MusicItem) => (
+                    <MusicSearchRow key={album.providerId} item={album} />
+                  ))}
+                  {!data?.related?.albums?.length && <p className="py-4 text-center text-xs text-muted-foreground">{lang === "th" ? "ไม่พบข้อมูลอัลบั้ม" : "No albums found."}</p>}
+                </div>
+              </section>
+              <section>
+                <h3 className="mb-2 text-sm font-bold text-foreground">{lang === "th" ? "เพลง" : "Songs"}</h3>
+                <div className="space-y-2">
+                  {(data?.related?.tracks ?? []).map((track: MusicItem) => (
+                    <MusicSearchRow key={track.providerId} item={track} />
+                  ))}
+                  {!data?.related?.tracks?.length && <p className="py-4 text-center text-xs text-muted-foreground">{lang === "th" ? "ไม่พบข้อมูลเพลง" : "No songs found."}</p>}
+                </div>
+              </section>
+            </div>
+          )}
           {entity === "song" && user && (
             <button onClick={() => navigate(`/vinyl/new?track=${item.providerId}`)} className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-foreground text-sm font-bold text-background">
               <Disc3 className="h-4 w-4" /> {lang === "th" ? "สร้าง Vinyl" : "Post a Vinyl"}
@@ -194,26 +276,38 @@ export function CreateVinylPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [query, setQuery] = useState("");
-  const [debouncedQuery] = useDebounceValue(query, 450);
+  const [debouncedQuery] = useDebounceValue(query, 500);
   const [selected, setSelected] = useState<MusicItem | null>(null);
   const [rating, setRating] = useState("");
   const [caption, setCaption] = useState("");
   const [shape, setShape] = useState<"vinyl" | "square">("vinyl");
+  const [ratingType, setRatingType] = useState<"star" | "blackhole">("star");
+  const [hideRating, setHideRating] = useState(false);
   const [isPrivate, setIsPrivate] = useState(false);
   const preselectedId = new URLSearchParams(window.location.search).get("track");
+  const { data: preselectedData } = useQuery<{ item: MusicItem }>({
+    queryKey: ["music-detail", `/api/music/lookup/song/${preselectedId ?? ""}`],
+    queryFn: () => apiJson(`/api/music/lookup/song/${encodeURIComponent(preselectedId ?? "")}?country=${lang === "th" ? "TH" : "US"}`),
+    enabled: !!preselectedId && !selected,
+    staleTime: 30 * 24 * 60 * 60 * 1000,
+  });
+  useEffect(() => {
+    if (preselectedData?.item) setSelected(current => current ?? preselectedData.item);
+  }, [preselectedData]);
   const { data, isLoading } = useQuery<{ results: MusicItem[] }>({
     queryKey: ["music-create-search", debouncedQuery],
-    queryFn: () => apiJson(`/api/music/search?q=${encodeURIComponent(debouncedQuery)}&entity=song&limit=12`),
+    queryFn: () => apiJson(`/api/music/search?q=${encodeURIComponent(debouncedQuery)}&entity=song&limit=12&country=${lang === "th" ? "TH" : "US"}`),
     enabled: debouncedQuery.trim().length >= 2 && !selected,
   });
   const createMutation = useMutation({
     mutationFn: () => apiJson<{ post: { id: string } }>("/api/music/vinyls", {
       method: "POST",
-      body: JSON.stringify({ trackId: selected?.providerId, rating: rating || null, caption, shape, isPrivate }),
+      body: JSON.stringify({ trackId: selected?.providerId, rating: rating || null, ratingType, hideRating, caption, shape, isPrivate }),
     }),
     onSuccess: ({ post }) => {
+      if (selected?.providerId) queryClient.invalidateQueries({ queryKey: ["music-community", selected.providerId] });
       queryClient.invalidateQueries({ queryKey: ["music-feed"] });
-       queryClient.invalidateQueries({ queryKey: ["profile-music", user?.username] });
+      queryClient.invalidateQueries({ queryKey: ["profile-music", user?.username] });
       navigate(`/music/vinyl/${post.id}`);
     },
   });
@@ -232,9 +326,7 @@ export function CreateVinylPage() {
             {isLoading && <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>}
             <div className="space-y-2">
               {(data?.results ?? []).map(item => (
-                <button key={item.providerId} onClick={() => setSelected(item)} className="w-full text-left">
-                  <MusicSearchRow item={item} />
-                </button>
+                <MusicSearchRow key={item.providerId} item={item} onSelect={() => setSelected(item)} />
               ))}
             </div>
           </>
@@ -251,13 +343,22 @@ export function CreateVinylPage() {
                 {[5, 4.5, 4, 3.5, 3, 2.5, 2, 1.5, 1, 0.5].map(value => <option key={value} value={value}>{value} / 5</option>)}
               </select>
             </label>
-            <label className="block text-xs font-bold text-muted-foreground">{lang === "th" ? "บันทึกความรู้สึก" : "Caption"}
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setRatingType("star")} className={cn("flex flex-1 items-center justify-center gap-2 rounded-xl border p-3 text-xs font-bold", ratingType === "star" ? "border-foreground text-foreground" : "border-border text-muted-foreground")}>
+                <Star className="h-4 w-4" /> {lang === "th" ? "ดาว" : "Stars"}
+              </button>
+              <button type="button" onClick={() => setRatingType("blackhole")} className={cn("flex flex-1 items-center justify-center gap-2 rounded-xl border p-3 text-xs font-bold", ratingType === "blackhole" ? "border-foreground text-foreground" : "border-border text-muted-foreground")}>
+                <CircleOff className="h-4 w-4" /> {lang === "th" ? "ดาวเน่า" : "Blackhole"}
+              </button>
+            </div>
+            <label className="block text-xs font-bold text-muted-foreground">{lang === "th" ? "ความทรงจำด้านหลัง Vinyl" : "Memory on the back"}
               <textarea className="mt-2 min-h-24 w-full resize-y rounded-xl bg-secondary p-3 text-sm text-foreground" maxLength={2000} value={caption} onChange={event => setCaption(event.target.value)} />
             </label>
             <div className="flex gap-2">
               <button onClick={() => setShape("vinyl")} className={cn("flex flex-1 items-center justify-center gap-2 rounded-xl border p-3 text-xs font-bold", shape === "vinyl" ? "border-foreground text-foreground" : "border-border text-muted-foreground")}><Disc3 className="h-4 w-4" /> Vinyl</button>
               <button onClick={() => setShape("square")} className={cn("flex flex-1 items-center justify-center gap-2 rounded-xl border p-3 text-xs font-bold", shape === "square" ? "border-foreground text-foreground" : "border-border text-muted-foreground")}><Square className="h-4 w-4" /> {lang === "th" ? "จัตุรัส" : "Square"}</button>
             </div>
+            {rating && <label className="flex items-center gap-2 text-xs text-muted-foreground"><input type="checkbox" checked={hideRating} onChange={event => setHideRating(event.target.checked)} /> {lang === "th" ? "ซ่อนคะแนน" : "Hide rating"}</label>}
             <label className="flex items-center gap-2 text-xs text-muted-foreground"><input type="checkbox" checked={isPrivate} onChange={event => setIsPrivate(event.target.checked)} /> {lang === "th" ? "โพสต์ส่วนตัว" : "Private post"}</label>
             {createMutation.error && <p className="text-xs text-red-500">{createMutation.error.message}</p>}
             <button onClick={() => createMutation.mutate()} disabled={createMutation.isPending} className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-foreground text-sm font-bold text-background disabled:opacity-60">
@@ -277,14 +378,14 @@ export function CreatePlaylistPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [query, setQuery] = useState("");
-  const [debouncedQuery] = useDebounceValue(query, 450);
+  const [debouncedQuery] = useDebounceValue(query, 500);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [tracks, setTracks] = useState<MusicItem[]>([]);
   const [isPrivate, setIsPrivate] = useState(false);
   const { data, isLoading } = useQuery<{ results: MusicItem[] }>({
     queryKey: ["music-playlist-search", debouncedQuery],
-    queryFn: () => apiJson(`/api/music/search?q=${encodeURIComponent(debouncedQuery)}&entity=song&limit=12`),
+    queryFn: () => apiJson(`/api/music/search?q=${encodeURIComponent(debouncedQuery)}&entity=song&limit=12&country=${lang === "th" ? "TH" : "US"}`),
     enabled: debouncedQuery.trim().length >= 2,
   });
   const createMutation = useMutation({
@@ -294,7 +395,7 @@ export function CreatePlaylistPage() {
     }),
     onSuccess: ({ playlist }) => {
       queryClient.invalidateQueries({ queryKey: ["music-feed"] });
-       queryClient.invalidateQueries({ queryKey: ["profile-music", user?.username] });
+      queryClient.invalidateQueries({ queryKey: ["profile-music", user?.username] });
       navigate(`/music/playlist/${playlist.id}`);
     },
   });
@@ -313,12 +414,14 @@ export function CreatePlaylistPage() {
         {isLoading && <div className="flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>}
         <div className="space-y-2">
           {(data?.results ?? []).map(item => (
-            <button key={item.providerId} onClick={() => setTracks(current => selectedIds.has(item.providerId) ? current.filter(track => track.providerId !== item.providerId) : [...current, item])} className="w-full text-left">
-              <div className="relative">
-                <MusicSearchRow item={item} />
-                {selectedIds.has(item.providerId) && <Check className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-primary" />}
-              </div>
-            </button>
+              <MusicSearchRow
+                key={item.providerId}
+                item={item}
+                selected={selectedIds.has(item.providerId)}
+                onSelect={() => setTracks(current => selectedIds.has(item.providerId)
+                  ? current.filter(track => track.providerId !== item.providerId)
+                  : [...current, item])}
+              />
           ))}
         </div>
         {tracks.length > 0 && <div className="divide-y divide-border rounded-xl border border-border px-3">

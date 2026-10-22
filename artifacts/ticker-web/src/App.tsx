@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback, Component, type ReactNode } from "react";
+import { useEffect, useState, useRef, useCallback, Component, lazy, Suspense, type ReactNode } from "react";
 import { SplashScreen } from "@/components/SplashScreen";
 import { LangProvider } from "@/lib/i18n";
 import { Switch, Route, Router as WouterRouter, useLocation, Redirect } from "wouter";
@@ -12,36 +12,39 @@ import { Layout } from "@/components/layout/Layout";
 import { Loader2 } from "lucide-react";
 import { navPush, navBack, navHandlePopState, peekBackNavigation } from "@/lib/nav-back";
 
-// ── All pages eagerly imported — no lazy chunks, no URL bar spinner ─────────
+// Keep the main browsing tabs in the startup bundle. Detail and utility pages
+// are loaded only when opened so the first screen becomes interactive sooner.
 import Home             from "@/pages/home";
 import Feed             from "@/pages/feed";
 import Search           from "@/pages/search";
-import TermsPage        from "@/pages/terms";
-import PrivacyPage      from "@/pages/privacy";
-import CreateTicket     from "@/pages/create-ticket";
-import TicketDetail     from "@/pages/ticket-detail";
-import EditTicket       from "@/pages/edit-ticket";
-import Profile          from "@/pages/profile";
-import Bookmarks        from "@/pages/bookmarks";
-import Notifications    from "@/pages/notifications";
-import MovieDetail      from "@/pages/movie-detail";
-import CreateChain      from "@/pages/create-chain";
-import ChainDetail      from "@/pages/chain-detail";
-import EditChain        from "@/pages/edit-chain";
-import Onboarding       from "@/pages/onboarding";
-import Settings         from "@/pages/settings";
-import ChatList         from "@/pages/chat";
-import ChatConversation from "@/pages/chat-conversation";
-import NotFound         from "@/pages/not-found";
-import PageVerificationRequest from "@/pages/page-verification-request";
-import AuthSignup        from "@/pages/auth-signup";
-import AuthLogin         from "@/pages/auth-login";
-import AdminPanel       from "@/pages/admin";
-import FeedPost         from "@/pages/feed-post";
-import PersonDetail     from "@/pages/person-detail";
-import CharacterDetail  from "@/pages/character-detail";
-import WikiDetail       from "@/pages/wiki-detail";
-import { CreatePlaylistPage, CreateVinylPage, MusicDetailPage } from "@/pages/music";
+const TermsPage = lazy(() => import("@/pages/terms"));
+const PrivacyPage = lazy(() => import("@/pages/privacy"));
+const CreateTicket = lazy(() => import("@/pages/create-ticket"));
+const TicketDetail = lazy(() => import("@/pages/ticket-detail"));
+const EditTicket = lazy(() => import("@/pages/edit-ticket"));
+const Profile = lazy(() => import("@/pages/profile"));
+const Bookmarks = lazy(() => import("@/pages/bookmarks"));
+const Notifications = lazy(() => import("@/pages/notifications"));
+const MovieDetail = lazy(() => import("@/pages/movie-detail"));
+const CreateChain = lazy(() => import("@/pages/create-chain"));
+const ChainDetail = lazy(() => import("@/pages/chain-detail"));
+const EditChain = lazy(() => import("@/pages/edit-chain"));
+const Onboarding = lazy(() => import("@/pages/onboarding"));
+const Settings = lazy(() => import("@/pages/settings"));
+const ChatList = lazy(() => import("@/pages/chat"));
+const ChatConversation = lazy(() => import("@/pages/chat-conversation"));
+const NotFound = lazy(() => import("@/pages/not-found"));
+const PageVerificationRequest = lazy(() => import("@/pages/page-verification-request"));
+const AuthSignup = lazy(() => import("@/pages/auth-signup"));
+const AuthLogin = lazy(() => import("@/pages/auth-login"));
+const AdminPanel = lazy(() => import("@/pages/admin"));
+const FeedPost = lazy(() => import("@/pages/feed-post"));
+const PersonDetail = lazy(() => import("@/pages/person-detail"));
+const CharacterDetail = lazy(() => import("@/pages/character-detail"));
+const WikiDetail = lazy(() => import("@/pages/wiki-detail"));
+const CreatePlaylistPage = lazy(() => import("@/pages/music").then(module => ({ default: module.CreatePlaylistPage })));
+const CreateVinylPage = lazy(() => import("@/pages/music").then(module => ({ default: module.CreateVinylPage })));
+const MusicDetailPage = lazy(() => import("@/pages/music").then(module => ({ default: module.MusicDetailPage })));
 import { TicketLarge, BadgeIconStatic } from "@/components/BadgeIcon";
 import { PushPermissionPrompt } from "@/components/PushPermissionPrompt";
 import { PwaInstallPrompt } from "@/components/PwaInstallPrompt";
@@ -743,7 +746,9 @@ function App() {
             <TooltipProvider>
               <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
                 <AuthProvider>
-                  <AppRoutes />
+                  <Suspense fallback={<AppLoader />}>
+                    <AppRoutes />
+                  </Suspense>
                 </AuthProvider>
               </WouterRouter>
               <Toaster />

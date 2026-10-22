@@ -43,6 +43,8 @@ export const musicVinylsTable = pgTable("music_vinyls", {
   trackId: text("track_id").notNull(),
   itemSnapshot: jsonb("item_snapshot").$type<MusicItemSnapshot>().notNull(),
   rating: numeric("rating", { precision: 2, scale: 1 }),
+  ratingType: text("rating_type").notNull().default("star"),
+  hideRating: boolean("hide_rating").notNull().default(false),
   caption: text("caption").notNull().default(""),
   shape: text("shape").notNull().default("vinyl"),
   isPrivate: boolean("is_private").notNull().default(false),
@@ -90,4 +92,14 @@ export const musicSavesTable = pgTable("music_saves", {
 }, table => [
   primaryKey({ columns: [table.userId, table.providerId, table.entity] }),
   index("music_saves_item_idx").on(table.entity, table.providerId),
+]);
+
+export const musicPlaylistSavesTable = pgTable("music_playlist_saves", {
+  userId: text("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+  playlistId: text("playlist_id").notNull().references(() => musicPlaylistsTable.id, { onDelete: "cascade" }),
+  status: text("status").$type<"listened">().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, table => [
+  primaryKey({ columns: [table.userId, table.playlistId] }),
+  index("music_playlist_saves_user_status_idx").on(table.userId, table.status, table.createdAt),
 ]);
