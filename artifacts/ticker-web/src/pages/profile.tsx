@@ -2190,6 +2190,7 @@ export default function Profile() {
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [messagingError, setMessagingError] = useState("");
   const [reportUserOpen, setReportUserOpen] = useState(false);
+  const [showProfileActions, setShowProfileActions] = useState(false);
 
   // ── Avatar full-screen viewer (long-press to open) ──────────────────────
   const [showAvatarViewer, setShowAvatarViewer] = useState(false);
@@ -2250,6 +2251,22 @@ export default function Profile() {
   const tickets  = ticketsData?.tickets ?? [];
   const profileUserId = ((profile as unknown) as Record<string, unknown>)?.["id"] as string | undefined;
   const showBell = !!me && !isOwn && !!profile?.isFollowing;
+
+  const handleShareProfile = async () => {
+    const url = `${window.location.origin}/@${profile?.username ?? username}`;
+    try { await navigator.clipboard.writeText(url); }
+    catch {
+      const el = document.createElement("textarea");
+      el.value = url;
+      el.style.cssText = "position:fixed;top:-9999px;left:-9999px;";
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand("copy");
+      document.body.removeChild(el);
+    }
+    setShowProfileActions(false);
+    toast({ title: t.copiedLabel, duration: 1500 });
+  };
 
   useEffect(() => {
     if (!me || isOwn || !profile || !username) return;

@@ -15,7 +15,7 @@ import { useImageLoaded } from "./PosterImage";
 // ── Constants ──────────────────────────────────────────────────────────────────
 export const POSTER_BG   = "#ccc9c3";
 export const POSTER_DARK = "#1c1c1c";
-export const POSTER_FRAME_BORDER = "2px solid rgba(28,28,28,0.38)";
+export const POSTER_IMAGE_FRAME = "inset 0 0 0 2px rgba(255,255,255,0.82)";
 
 /** Canonical seed size — all card faces render at this size then are CSS-scaled to fit each surface */
 export const CARD_SEED_W = 190;
@@ -243,8 +243,6 @@ export function PosterCardFront({
         background: POSTER_BG,
         borderRadius: 0,
         ...style,
-        border: POSTER_FRAME_BORDER,
-        boxSizing: "border-box",
       }}
     >
       {/* Full-card skeleton overlay while backdrop loads — keeps Poster consistent with Classic */}
@@ -257,7 +255,7 @@ export function PosterCardFront({
       <div className="flex-shrink-0 w-full" style={{ padding: "5px 5px 0" }}>
         <div
           className="relative overflow-hidden w-full"
-          style={{ aspectRatio: "1 / 1", outline: "1px solid rgba(0,0,0,0.24)" }}
+          style={{ aspectRatio: "1 / 1", boxShadow: POSTER_IMAGE_FRAME }}
         >
           {backdropUrl ? (
             <>
@@ -472,8 +470,7 @@ export function CardBackFace({ ticket }: { ticket: Ticket }) {
       style={{
         borderRadius: "inherit",
         background: isPoster ? POSTER_BG : "#ffffff",
-        border: isPoster ? POSTER_FRAME_BORDER : "1px solid #e4e4e7",
-        boxShadow: isPoster ? "0 0 0 0.5px rgba(0,0,0,0.18)" : undefined,
+        border: isPoster ? "none" : "1px solid #e4e4e7",
       }}
     >
       {partySeat && (
