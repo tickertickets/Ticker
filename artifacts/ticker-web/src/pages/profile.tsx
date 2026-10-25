@@ -14,9 +14,9 @@ import { useHorizWheel } from "@/hooks/use-horiz-wheel";
 import { scrollStore } from "@/lib/scroll-store";
 import { useRoute, Link, useLocation } from "wouter";
 import { DndContext, DragOverlay, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core";
-import { SortableContext, rectSortingStrategy, horizontalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
+import { SortableContext, rectSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { restrictToParentElement, restrictToHorizontalAxis } from "@dnd-kit/modifiers";
+import { restrictToParentElement } from "@dnd-kit/modifiers";
 import { navBack, wasBackNavigation } from "@/lib/nav-back";
 import { compressImage, AVATAR_COMPRESS } from "@/lib/image-compress";
 import {
@@ -47,6 +47,16 @@ import { type SocialLink, detectPlatform, normalizeUrl, isValidUrl, getPlatformN
 import { VerifiedBadge, isVerified } from "@/components/VerifiedBadge";
 import { BadgeIcon } from "@/components/BadgeIcon";
 import { useToast } from "@/hooks/use-toast";
+
+const MAX_ALBUM_TITLE_LENGTH = 24;
+
+function albumTitleLength(title: string): number {
+  return Array.from(title).length;
+}
+
+function limitAlbumTitle(title: string): string {
+  return Array.from(title).slice(0, MAX_ALBUM_TITLE_LENGTH).join("");
+}
 
 function formatRunDuration(ms: number): string {
   const totalSec = Math.floor(ms / 1000);
@@ -602,7 +612,7 @@ function AlbumPillBtn({ label, isActive, onClick, onLongPress, pillRef }: {
     <button
       ref={pillRef}
       className={cn(
-        "flex-shrink-0 text-sm font-semibold px-3 py-1.5 rounded-xl transition-colors",
+        "flex-shrink-0 min-w-0 max-w-[calc(100vw-2rem)] text-sm font-semibold px-3 py-1.5 rounded-xl transition-colors",
         isActive ? "bg-foreground text-background" : "bg-secondary text-foreground/60"
       )}
       onClick={handleClick}
@@ -611,7 +621,7 @@ function AlbumPillBtn({ label, isActive, onClick, onLongPress, pillRef }: {
       onPointerCancel={cancel}
       onTouchEnd={cancel}
     >
-      {label}
+      <span className="block truncate">{label}</span>
     </button>
   );
 }
@@ -630,11 +640,11 @@ function AlbumPillContent({ album, activeAlbumId, isDragOverlay }: {
 }) {
   return (
     <div className={cn(
-      "text-sm font-semibold px-3 py-1.5 rounded-xl pointer-events-none select-none flex items-center gap-1",
+      "inline-flex min-w-0 max-w-[calc(100vw-2rem)] text-sm font-semibold px-3 py-1.5 rounded-xl pointer-events-none select-none items-center gap-1",
       activeAlbumId === album.id ? "bg-foreground text-background" : "bg-secondary text-foreground/60",
       isDragOverlay && "shadow-lg",
     )}>
-      {album.title}
+      <span className="min-w-0 truncate">{album.title}</span>
       <GripVertical className="w-3 h-3 opacity-40 flex-shrink-0" />
     </div>
   );
@@ -649,7 +659,7 @@ function SortableAlbumPill({ album, activeAlbumId, isDragActive }: {
   return (
     <div
       ref={setNodeRef}
-      className="flex-shrink-0"
+      className="min-w-0 max-w-full"
       style={{
         transform: CSS.Transform.toString(transform),
         transition: isDragging ? undefined : transition,
@@ -731,13 +741,12 @@ const AlbumReorderRow = memo(function AlbumReorderRow({
     <DndContext
       sensors={sensors}
       collisionDetection={closestCenter}
-      modifiers={[restrictToHorizontalAxis]}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >
-      <SortableContext items={order} strategy={horizontalListSortingStrategy}>
-        <div className="flex items-center gap-2" style={{ touchAction: "pan-y" }}>
+      <SortableContext items={order} strategy={rectSortingStrategy}>
+        <div className="flex w-full max-w-full flex-wrap items-center justify-center gap-2" style={{ touchAction: "pan-y" }}>
           {orderedAlbums.map(album => (
             <SortableAlbumPill
               key={album.id}
@@ -848,7 +857,7 @@ function FilmsGrid({ tickets, isOwn, username, isReorderMode = false, onToggleRe
   if (!isOwn) {
     return (
       <>
-        <div className="flex justify-end px-3 pt-1.5 pb-0.5">
+        <div className="flex justify-end px-3 pt-1 pb-1">
           <button
             onClick={() => setShowDetails(d => !d)}
             className={cn(
@@ -872,7 +881,7 @@ function FilmsGrid({ tickets, isOwn, username, isReorderMode = false, onToggleRe
 
   return (
     <>
-      <div className="flex justify-end items-center gap-2 px-3 pt-1.5 pb-0.5">
+      <div className="flex justify-end items-center gap-2 px-3 pt-1 pb-1">
         <button
           onClick={() => setShowDetails(d => !d)}
           className={cn(
@@ -1993,13 +2002,14 @@ export default function Profile() {
   const [albumActionLoading, setAlbumActionLoading] = useState(false);
   const [albumDeleteConfirm, setAlbumDeleteConfirm] = useState(false);
   const [albumCreateError, setAlbumCreateError] = useState<string | null>(null);
+  const [albumRenameError, setAlbumRenameError] = useState<string | null>(null);
   const [mainAlbumTitle, setMainAlbumTitle] = useState(() => {
     try { return localStorage.getItem(`main_album_title_${username}`) || ""; }
     catch { return ""; }
   });
 
   const handleCreateAlbum = async () => {
-    if (!newAlbumTitle.trim() || albumActionLoading) return;
+    if (!newAlbumTitle.trim() || albumTitleLength(newAlbumTitle) > MAX_ALBUM_TITLE_LENGTH || albumActionLoading) return;
     setAlbumActionLoading(true);
     setAlbumCreateError(null);
     try {
@@ -2016,10 +2026,14 @@ export default function Profile() {
         setAlbumCreateError(
           body?.error === "album_limit_reached"
             ? (lang === "th" ? "สร้างอัลบั้มได้สูงสุด 10 อัลบั้ม (รวม Main)" : "You can have up to 10 albums (including Main)")
+            : body?.error === "album_title_too_long"
+              ? (lang === "th" ? `ชื่ออัลบั้มต้องไม่เกิน ${MAX_ALBUM_TITLE_LENGTH} ตัวอักษร` : `Album names can be up to ${MAX_ALBUM_TITLE_LENGTH} characters`)
             : (lang === "th" ? "เกิดข้อผิดพลาด กรุณาลองใหม่" : "Something went wrong, please try again"),
         );
       }
-    } catch { /* ignore */ } finally { setAlbumActionLoading(false); }
+    } catch {
+      setAlbumCreateError(lang === "th" ? "เชื่อมต่อไม่สำเร็จ กรุณาลองใหม่" : "Could not connect. Please try again.");
+    } finally { setAlbumActionLoading(false); }
   };
 
   const handleDeleteAlbum = async (albumId: string) => {
@@ -2035,6 +2049,12 @@ export default function Profile() {
 
   const handleSaveMainAlbumTitle = (title: string) => {
     const trimmed = title.trim();
+    if (albumTitleLength(trimmed) > MAX_ALBUM_TITLE_LENGTH) {
+      setAlbumRenameError(lang === "th"
+        ? `ชื่ออัลบั้มต้องไม่เกิน ${MAX_ALBUM_TITLE_LENGTH} ตัวอักษร`
+        : `Album names can be up to ${MAX_ALBUM_TITLE_LENGTH} characters`);
+      return;
+    }
     setMainAlbumTitle(trimmed);
     try { localStorage.setItem(`main_album_title_${username}`, trimmed); } catch { /* ignore */ }
     setAlbumMenu(null);
@@ -2043,8 +2063,9 @@ export default function Profile() {
   };
 
   const handleRenameAlbum = async () => {
-    if (!albumMenu || !albumRenameTitle.trim() || albumActionLoading) return;
+    if (!albumMenu || !albumRenameTitle.trim() || albumTitleLength(albumRenameTitle) > MAX_ALBUM_TITLE_LENGTH || albumActionLoading) return;
     setAlbumActionLoading(true);
+    setAlbumRenameError(null);
     try {
       const res = await fetch(`/api/albums/${albumMenu.id}`, {
         method: "PATCH", credentials: "include",
@@ -2054,8 +2075,15 @@ export default function Profile() {
       if (res.ok) {
         queryClient.invalidateQueries({ queryKey: ["profile-albums", profileUserId] });
         setAlbumMenu(null); setAlbumRenaming(false); setAlbumRenameTitle("");
+      } else {
+        const body = await res.json().catch(() => null);
+        setAlbumRenameError(body?.error === "album_title_too_long"
+          ? (lang === "th" ? `ชื่ออัลบั้มต้องไม่เกิน ${MAX_ALBUM_TITLE_LENGTH} ตัวอักษร` : `Album names can be up to ${MAX_ALBUM_TITLE_LENGTH} characters`)
+          : (lang === "th" ? "บันทึกไม่สำเร็จ กรุณาลองใหม่" : "Could not save. Please try again."));
       }
-    } catch { /* ignore */ } finally { setAlbumActionLoading(false); }
+    } catch {
+      setAlbumRenameError(lang === "th" ? "เชื่อมต่อไม่สำเร็จ กรุณาลองใหม่" : "Could not connect. Please try again.");
+    } finally { setAlbumActionLoading(false); }
   };
 
   const handleHideAlbum = async (albumId: string) => {
@@ -2523,7 +2551,7 @@ export default function Profile() {
                   toast({ title: t.copiedLabel, duration: 1500 });
                 }}
               >
-                <Share2 className="w-6 h-6 text-white/70" />
+                <Share2 className="w-6 h-6 text-white" />
               </button>
             ) : null}
           </div>
@@ -2547,7 +2575,7 @@ export default function Profile() {
               toast({ title: t.copiedLabel, duration: 1500 });
             }}
           >
-            <Share2 className="w-6 h-6 text-white/70" />
+            <Share2 className="w-6 h-6 text-white" />
           </button>
         )}
 
@@ -2578,9 +2606,9 @@ export default function Profile() {
 
       {/* Profile info */}
       <div className="px-4 pt-4 pb-3">
-        <div className="flex items-start gap-3 mb-3">
+        <div className="flex items-start gap-4 mb-3">
           <div
-            className="w-16 h-16 rounded-2xl overflow-hidden bg-foreground border-4 border-background shadow-lg flex-shrink-0 -mt-8 relative z-10"
+            className="w-20 h-20 rounded-2xl overflow-hidden bg-foreground border-4 border-background shadow-lg flex-shrink-0 -mt-8 relative z-10"
             onPointerDown={profile.avatarUrl ? avatarLongPress.start : undefined}
             onPointerUp={profile.avatarUrl ? avatarLongPress.cancel : undefined}
             onPointerCancel={profile.avatarUrl ? avatarLongPress.cancel : undefined}
@@ -2761,17 +2789,15 @@ export default function Profile() {
               // orderedAlbums is memoised at component level — no local redeclaration needed
               return (
                 <>
-                  {/* Album pill row — text-align:center + inline-flex ensures pills are
-                      always horizontally centred regardless of count or name length,
-                      while overflow-x-auto still allows scrolling when there are many. */}
-                  <div ref={albumPillRowRef} className="overflow-x-auto scrollbar-hide text-center pt-0.5 pb-1">
-                    <div className="inline-flex items-center gap-2 px-4">
+                  {/* Wrap album pills into centered rows when the available width is limited. */}
+                  <div ref={albumPillRowRef} className="px-2 pt-0.5 pb-1">
+                    <div className="flex w-full max-w-full flex-wrap items-center justify-center gap-2 px-2">
                       {/* Main/หลัก pill — never reorderable, long-press to rename */}
-                                      <AlbumPillBtn
+                      <AlbumPillBtn
                           label={mainAlbumTitle || (lang === "th" ? "หลัก" : "Main")}
                           isActive={!activeAlbumId}
                           onClick={() => { if (!isReorderMode) { handleAlbumChange(null); scrollPillToCenter(null); } }}
-                          onLongPress={isOwn && !isReorderMode ? () => { setAlbumMenu({ id: "main", title: mainAlbumTitle }); setAlbumRenaming(false); setAlbumRenameTitle(mainAlbumTitle || (lang === "th" ? "หลัก" : "Main")); setAlbumDeleteConfirm(false); } : undefined}
+                          onLongPress={isOwn && !isReorderMode ? () => { setAlbumMenu({ id: "main", title: mainAlbumTitle }); setAlbumRenaming(false); setAlbumRenameTitle(mainAlbumTitle || (lang === "th" ? "หลัก" : "Main")); setAlbumRenameError(null); setAlbumDeleteConfirm(false); } : undefined}
                           pillRef={(el) => { if (el) albumPillRefsMap.current.set(null, el); else albumPillRefsMap.current.delete(null); }}
                         />
                       {/* Custom album pills — custom pointer-event reorder when in reorder mode */}
@@ -2792,7 +2818,7 @@ export default function Profile() {
                               label={album.title}
                               isActive={activeAlbumId === album.id}
                               onClick={() => { handleAlbumChange(album.id); scrollPillToCenter(album.id); }}
-                              onLongPress={isOwn ? () => { setAlbumMenu({ id: album.id, title: album.title, isHidden: album.isHidden }); setAlbumRenaming(false); setAlbumRenameTitle(album.title); setAlbumDeleteConfirm(false); } : undefined}
+                              onLongPress={isOwn ? () => { setAlbumMenu({ id: album.id, title: album.title, isHidden: album.isHidden }); setAlbumRenaming(false); setAlbumRenameTitle(album.title); setAlbumRenameError(null); setAlbumDeleteConfirm(false); } : undefined}
                               pillRef={(el) => { if (el) albumPillRefsMap.current.set(album.id, el); else albumPillRefsMap.current.delete(album.id); }}
                             />
                           ))}
@@ -2802,7 +2828,7 @@ export default function Profile() {
                       {isOwn && albums.length < 9 && !isReorderMode && (
                         <button
                           onClick={() => { setNewAlbumTitle(""); setAlbumCreateError(null); setShowCreateAlbum(true); }}
-                          className="flex-shrink-0 flex items-center gap-1 text-sm font-semibold px-3 py-1.5 rounded-xl transition-colors bg-secondary text-foreground/60"
+                          className="inline-flex flex-shrink-0 max-w-[calc(100vw-2rem)] items-center gap-1 text-sm font-semibold px-3 py-1.5 rounded-xl transition-colors bg-secondary text-foreground/60"
                         >
                           <Plus className="w-3 h-3" />
                           <span>{lang === "th" ? "ใหม่" : "New"}</span>
@@ -2911,12 +2937,15 @@ export default function Profile() {
             <input
               autoFocus
               value={newAlbumTitle}
-              onChange={e => setNewAlbumTitle(e.target.value)}
+              onChange={e => setNewAlbumTitle(limitAlbumTitle(e.target.value))}
               onKeyDown={e => e.key === "Enter" && handleCreateAlbum()}
               placeholder={lang === "th" ? "ชื่ออัลบั้ม" : "Album name"}
-              maxLength={40}
+              maxLength={MAX_ALBUM_TITLE_LENGTH * 2}
               className="w-full px-4 py-3 rounded-2xl border border-border bg-secondary text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-foreground/20 mb-4"
             />
+            <p className="text-right text-[11px] text-muted-foreground -mt-3 mb-4">
+              {albumTitleLength(newAlbumTitle)}/{MAX_ALBUM_TITLE_LENGTH}
+            </p>
             {albumCreateError && (
               <p className="text-xs text-red-500 font-semibold mb-4 -mt-2">{albumCreateError}</p>
             )}
@@ -2947,15 +2976,30 @@ export default function Profile() {
                 <input
                   autoFocus
                   value={albumRenameTitle}
-                  onChange={e => setAlbumRenameTitle(e.target.value)}
+                  onChange={e => {
+                    const next = e.target.value;
+                    const nextLength = albumTitleLength(next);
+                    const currentLength = albumTitleLength(albumRenameTitle);
+                    if (nextLength <= MAX_ALBUM_TITLE_LENGTH || nextLength < currentLength) {
+                      setAlbumRenameTitle(next);
+                      setAlbumRenameError(null);
+                    }
+                  }}
                   onKeyDown={e => {
                     if (e.key !== "Enter") return;
                     if (albumMenu.id === "main") handleSaveMainAlbumTitle(albumRenameTitle);
                     else handleRenameAlbum();
                   }}
-                  maxLength={40}
+                  maxLength={80}
                   className="w-full px-4 py-3 rounded-2xl border border-border bg-secondary text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-foreground/20 mb-4"
                 />
+                <p className={cn(
+                  "text-right text-[11px] -mt-3 mb-2",
+                  albumTitleLength(albumRenameTitle) > MAX_ALBUM_TITLE_LENGTH ? "text-red-500" : "text-muted-foreground",
+                )}>
+                  {albumTitleLength(albumRenameTitle)}/{MAX_ALBUM_TITLE_LENGTH}
+                </p>
+                {albumRenameError && <p className="text-xs text-red-500 font-semibold mb-3">{albumRenameError}</p>}
                 <div className="flex gap-2">
                   <button onClick={() => setAlbumRenaming(false)} className="flex-1 h-11 rounded-2xl border border-border text-sm font-bold text-foreground">
                     {lang === "th" ? "ยกเลิก" : "Cancel"}
@@ -2965,7 +3009,7 @@ export default function Profile() {
                       if (albumMenu.id === "main") handleSaveMainAlbumTitle(albumRenameTitle);
                       else handleRenameAlbum();
                     }}
-                    disabled={!albumRenameTitle.trim() || albumActionLoading}
+                    disabled={!albumRenameTitle.trim() || albumTitleLength(albumRenameTitle) > MAX_ALBUM_TITLE_LENGTH || albumActionLoading}
                     className="flex-1 h-11 rounded-2xl bg-foreground text-background text-sm font-bold disabled:opacity-50"
                   >
                     {albumActionLoading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : (lang === "th" ? "บันทึก" : "Save")}
@@ -2995,7 +3039,7 @@ export default function Profile() {
             ) : (
               <div className="space-y-2">
                 <button
-                  onClick={() => { setAlbumRenaming(true); setAlbumRenameTitle(albumMenu.id === "main" ? (mainAlbumTitle || (lang === "th" ? "หลัก" : "Main")) : albumMenu.title); }}
+                  onClick={() => { setAlbumRenaming(true); setAlbumRenameTitle(albumMenu.id === "main" ? (mainAlbumTitle || (lang === "th" ? "หลัก" : "Main")) : albumMenu.title); setAlbumRenameError(null); }}
                   className="w-full h-12 rounded-2xl bg-secondary text-foreground text-sm font-semibold flex items-center gap-3 px-4"
                 >
                   <Pencil className="w-4 h-4" />

@@ -6,6 +6,7 @@ import { sanitize } from "../lib/sanitize";
 import { nanoid } from "nanoid";
 
 const router: IRouter = Router();
+const MAX_ALBUM_TITLE_LENGTH = 24;
 
 // ── GET /albums?userId= — list albums for a user ──────────────────────────────
 router.get("/", async (req, res) => {
@@ -105,29 +106,45 @@ router.post("/", async (req, res) => {
   }
 
   const { title } = req.body;
-  if (!title || !String(title).trim()) {
+  const normalizedTitle = title ? sanitize(String(title).trim()) : "";
+  if (!normalizedTitle) {
     res.status(400).json({ error: "title is required" });
     return;
   }
-
-  // Max 10 albums per user total, counting the implicit "Main" album that
-  // every user has — so at most 9 non-archived custom albums may exist here.
-  // Archived albums don't count since they're no longer active/visible.
-  const existing = await db.select({ id: albumsTable.id }).from(albumsTable)
-    .where(and(eq(albumsTable.userId, currentUserId), isNull(albumsTable.archivedAt)));
-  if (existing.length >= 9) {
-    res.status(400).json({ error: "album_limit_reached" });
+  if (Array.from(normalizedTitle).length > MAX_ALBUM_TITLE_LENGTH) {
+    res.status(400).json({ error: "album_title_too_long", maxLength: MAX_ALBUM_TITLE_LENGTH });
     return;
   }
 
   const id = nanoid();
-  await db.insert(albumsTable).values({
-    id,
-    userId: currentUserId,
-    title: sanitize(String(title).trim()),
-  });
+  // Lock the owner row while checking the cap so two simultaneous create
+  // requests cannot both pass the count check and exceed the album limit.
+  const album = await db.transaction(async (tx) => {
+    await tx.select({ id: usersTable.id })
+      .from(usersTable)
+      .where(eq(usersTable.id, currentUserId))
+      .for("update");
 
-  const [album] = await db.select().from(albumsTable).where(eq(albumsTable.id, id)).limit(1);
+    // Max 10 albums per user total, counting the implicit "Main" album that
+    // every user has — so at most 9 non-archived custom albums may exist here.
+    // Archived albums don't count since they're no longer active/visible.
+    const existing = await tx.select({ id: albumsTable.id }).from(albumsTable)
+      .where(and(eq(albumsTable.userId, currentUserId), isNull(albumsTable.archivedAt)));
+    if (existing.length >= 9) return null;
+
+    await tx.insert(albumsTable).values({
+      id,
+      userId: currentUserId,
+      title: normalizedTitle,
+    });
+    const [created] = await tx.select().from(albumsTable).where(eq(albumsTable.id, id)).limit(1);
+    return created ?? null;
+  });
+  if (!album) {
+    res.status(400).json({ error: "album_limit_reached" });
+    return;
+  }
+
   res.status(201).json({ ...album, ticketCount: 0, posters: [], ticketIds: [], movieIds: [] });
 });
 
@@ -222,7 +239,18 @@ router.patch("/:id", async (req, res) => {
   if (album.userId !== currentUserId) { res.status(403).json({ error: "forbidden" }); return; }
 
   const updates: Partial<typeof albumsTable.$inferInsert> = { updatedAt: new Date() };
-  if (req.body.title !== undefined) updates.title = sanitize(String(req.body.title).trim());
+  if (req.body.title !== undefined) {
+    const normalizedTitle = sanitize(String(req.body.title).trim());
+    if (!normalizedTitle) {
+      res.status(400).json({ error: "title is required" });
+      return;
+    }
+    if (Array.from(normalizedTitle).length > MAX_ALBUM_TITLE_LENGTH) {
+      res.status(400).json({ error: "album_title_too_long", maxLength: MAX_ALBUM_TITLE_LENGTH });
+      return;
+    }
+    updates.title = normalizedTitle;
+  }
   if (req.body.displayOrder !== undefined) updates.displayOrder = Number(req.body.displayOrder);
 
   await db.update(albumsTable).set(updates).where(eq(albumsTable.id, id));

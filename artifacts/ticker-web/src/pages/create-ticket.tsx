@@ -143,24 +143,43 @@ interface Draft {
 function readDrafts(key: string): Draft[] {
   try { return JSON.parse(localStorage.getItem(key) ?? "[]"); } catch { return []; }
 }
-function writeDraft(key: string, d: Draft, userId?: string) {
+
+const draftRequestQueues = new Map<string, Promise<void>>();
+function queueDraftRequest(queueKey: string, request: () => Promise<void>): Promise<void> {
+  const next = (draftRequestQueues.get(queueKey) ?? Promise.resolve())
+    .catch(() => {})
+    .then(request)
+    .catch(() => {});
+  draftRequestQueues.set(queueKey, next);
+  void next.then(() => {
+    if (draftRequestQueues.get(queueKey) === next) draftRequestQueues.delete(queueKey);
+  });
+  return next;
+}
+
+function writeDraft(key: string, d: Draft, userId?: string): Promise<void> {
   const rest = readDrafts(key).filter(x => x.movieId !== d.movieId);
   localStorage.setItem(key, JSON.stringify([d, ...rest]));
-  if (userId) {
-    fetch("/api/drafts", {
+  if (!userId) return Promise.resolve();
+  return queueDraftRequest(`${userId}:ticket:${d.movieId}`, async () => {
+    const res = await fetch("/api/drafts", {
       method: "PUT", credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ type: "ticket", key: d.movieId, data: d }),
-    }).catch(() => {});
-  }
+    });
+    if (!res.ok) throw new Error("draft_save_failed");
+  });
 }
-function eraseDraft(key: string, movieId: string, userId?: string) {
+
+function eraseDraft(key: string, movieId: string, userId?: string): Promise<void> {
   localStorage.setItem(key, JSON.stringify(readDrafts(key).filter(x => x.movieId !== movieId)));
-  if (userId) {
-    fetch(`/api/drafts?type=ticket&key=${encodeURIComponent(movieId)}`, {
+  if (!userId) return Promise.resolve();
+  return queueDraftRequest(`${userId}:ticket:${movieId}`, async () => {
+    const res = await fetch(`/api/drafts?type=ticket&key=${encodeURIComponent(movieId)}`, {
       method: "DELETE", credentials: "include",
-    }).catch(() => {});
-  }
+    });
+    if (!res.ok) throw new Error("draft_delete_failed");
+  });
 }
 
 
@@ -848,8 +867,10 @@ export default function CreateTicket() {
       queryClient.invalidateQueries({ queryKey: ["mixed-feed"] });
 
       // Erase draft for this movie since it was successfully posted
-      eraseDraft(draftKey, selectedMovieId, user?.id);
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
       autoSaveDraftDataRef.current = null;
+      await eraseDraft(draftKey, selectedMovieId, user?.id);
+      setDrafts(readDrafts(draftKey));
 
       // Navigate to following feed at top — same as Instagram post flow
       scrollStore.set("following", 0);

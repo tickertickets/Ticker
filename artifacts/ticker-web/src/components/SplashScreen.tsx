@@ -42,14 +42,21 @@ const COPY = isThai
     };
 
 // ── URL สำหรับ health-check ───────────────────────────────────────────────────
-function getHealthUrl(): string {
+function getApiUrl(path: string): string {
   const base = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
-  return base
-    ? `${base.replace(/\/$/, "")}/api/healthz`
-    : "/api/healthz";
+  const apiBase = base.replace(/\/+$/, "");
+  return `${apiBase}/api/${path.replace(/^\/+/, "")}`;
 }
 
-// ── Hook: poll จนกว่าจะได้ 2xx ───────────────────────────────────────────────
+function getInitialFeedMode(): "home" | "following" {
+  try {
+    return localStorage.getItem("feed-sub-mode") === "following" ? "following" : "home";
+  } catch {
+    return "home";
+  }
+}
+
+// ── Poll until the API, database, and initial feed query are ready ────────────
 function useServerReady(): boolean {
   const [ready, setReady] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -60,18 +67,35 @@ function useServerReady(): boolean {
 
     async function ping() {
       if (cancelled) return;
+      const controller = new AbortController();
+      abortRef.current = controller;
+      const timeout = setTimeout(() => controller.abort(), 12_000);
       try {
-        abortRef.current = new AbortController();
-        const res = await fetch(getHealthUrl(), {
-          signal: abortRef.current.signal,
-          cache: "no-store",
-        });
-        if (res.ok && !cancelled) {
+        const [healthRes, feedRes] = await Promise.all([
+          fetch(getApiUrl("healthz"), {
+            signal: controller.signal,
+            cache: "no-store",
+          }),
+          fetch(getApiUrl(`feed?mode=${getInitialFeedMode()}&limit=20`), {
+            signal: controller.signal,
+            cache: "no-store",
+            credentials: "include",
+          }),
+        ]);
+        if (!healthRes.ok || !feedRes.ok) throw new Error("app services are not ready");
+
+        const [health, feed] = await Promise.all([
+          healthRes.json() as Promise<{ status?: string }>,
+          feedRes.json() as Promise<{ items?: unknown; hasMore?: unknown }>,
+        ]);
+        if (health.status === "ok" && Array.isArray(feed.items) && typeof feed.hasMore === "boolean" && !cancelled) {
           setReady(true);
           return;
         }
       } catch {
-        // network error / abort → ลองใหม่
+        // Retry while the API, database, or feed is still warming up.
+      } finally {
+        clearTimeout(timeout);
       }
       if (!cancelled) {
         timerRef.current = setTimeout(ping, 2_000);

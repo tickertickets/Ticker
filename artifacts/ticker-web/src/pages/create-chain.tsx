@@ -55,24 +55,43 @@ function readChainDrafts(key: string): ChainDraft[] {
     return parsed.filter(isValidChainDraft);
   } catch { return []; }
 }
-function writeChainDraft(key: string, d: ChainDraft, userId?: string) {
+
+const chainDraftRequestQueues = new Map<string, Promise<void>>();
+function queueChainDraftRequest(queueKey: string, request: () => Promise<void>): Promise<void> {
+  const next = (chainDraftRequestQueues.get(queueKey) ?? Promise.resolve())
+    .catch(() => {})
+    .then(request)
+    .catch(() => {});
+  chainDraftRequestQueues.set(queueKey, next);
+  void next.then(() => {
+    if (chainDraftRequestQueues.get(queueKey) === next) chainDraftRequestQueues.delete(queueKey);
+  });
+  return next;
+}
+
+function writeChainDraft(key: string, d: ChainDraft, userId?: string): Promise<void> {
   const rest = readChainDrafts(key).filter(x => x.draftId !== d.draftId);
   localStorage.setItem(key, JSON.stringify([d, ...rest]));
-  if (userId) {
-    fetch("/api/drafts", {
+  if (!userId) return Promise.resolve();
+  return queueChainDraftRequest(`${userId}:chain:${d.draftId}`, async () => {
+    const res = await fetch("/api/drafts", {
       method: "PUT", credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ type: "chain", key: d.draftId, data: d }),
-    }).catch(() => {});
-  }
+    });
+    if (!res.ok) throw new Error("draft_save_failed");
+  });
 }
-function eraseChainDraft(key: string, draftId: string, userId?: string) {
+
+function eraseChainDraft(key: string, draftId: string, userId?: string): Promise<void> {
   localStorage.setItem(key, JSON.stringify(readChainDrafts(key).filter(x => x.draftId !== draftId)));
-  if (userId) {
-    fetch(`/api/drafts?type=chain&key=${encodeURIComponent(draftId)}`, {
+  if (!userId) return Promise.resolve();
+  return queueChainDraftRequest(`${userId}:chain:${draftId}`, async () => {
+    const res = await fetch(`/api/drafts?type=chain&key=${encodeURIComponent(draftId)}`, {
       method: "DELETE", credentials: "include",
-    }).catch(() => {});
-  }
+    });
+    if (!res.ok) throw new Error("draft_delete_failed");
+  });
 }
 
 
@@ -371,7 +390,7 @@ export default function CreateChain() {
       if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [title, description, descriptionAlign, movies, communityOn, challengeOn, timerAmount, timerUnitIdx]);
+  }, [title, description, descriptionAlign, movies, communityOn, challengeOn, timerAmount, timerUnitIdx, submitting]);
 
   const addMovie = useCallback((movie: TrendingMovie) => {
     if (movies.find(m => m.imdbId === movie.imdbId)) return;
@@ -476,7 +495,9 @@ export default function CreateChain() {
       const data = await res.json();
       chainCreated = true; // server confirmed creation — cleanup below is non-fatal
       // Erase draft on successful submit
-      eraseChainDraft(chainDraftKey, activeDraftId, user?.id);
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+      await eraseChainDraft(chainDraftKey, activeDraftId, user?.id);
+      setDrafts(readChainDrafts(chainDraftKey));
       qc.invalidateQueries({ queryKey: ["/api/chains"] });
       qc.invalidateQueries({ queryKey: ["chains-feed"] });
       qc.invalidateQueries({ queryKey: ["chains-own-following"] });
