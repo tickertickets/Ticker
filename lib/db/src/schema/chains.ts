@@ -24,6 +24,7 @@ export const chainsTable = pgTable("chains", {
   taggedMoviePosterUrl: text("tagged_movie_poster_url"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  editedAt: timestamp("edited_at", { withTimezone: true }),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
   // Denormalized ranking signal: GREATEST(createdAt, latest like, latest comment,
   // latest run). Kept in sync by application code — see lib/db/src/activity.ts.

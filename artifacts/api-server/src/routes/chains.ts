@@ -272,6 +272,7 @@ export async function buildChain(
     } : null,
     createdAt: chain.createdAt,
     updatedAt: chain.updatedAt,
+    editedAt: chain.editedAt,
     foundMovieCount: foundMovieIds.length,
   };
 }
@@ -763,6 +764,7 @@ router.get("/search", async (req, res) => {
       challengeDurationMs: chainsTable.challengeDurationMs,
       createdAt: chainsTable.createdAt,
       updatedAt: chainsTable.updatedAt,
+      editedAt: chainsTable.editedAt,
       userId: chainsTable.userId,
       username: usersTable.username,
       displayName: usersTable.displayName,
@@ -867,6 +869,7 @@ router.get("/search", async (req, res) => {
       },
       createdAt: c.createdAt,
       updatedAt: c.updatedAt,
+      editedAt: c.editedAt,
       foundMovieIds: null,
       foundMovieCount: null,
     })),
@@ -1057,6 +1060,8 @@ router.patch("/:chainId", async (req, res) => {
     title: typeof title === "string" ? title.trim() : chain.title,
     description: typeof description === "string" ? (description.trim() || null) : chain.description,
     descriptionAlign: (descriptionAlign === "left" || descriptionAlign === "center" || descriptionAlign === "right") ? descriptionAlign : chain.descriptionAlign ?? "left",
+    updatedAt: new Date(),
+    editedAt: new Date(),
   };
   if ("taggedMovieImdbId" in req.body) {
     updateData.taggedMovieImdbId = taggedMovieImdbId ? String(taggedMovieImdbId) : null;
@@ -1088,7 +1093,11 @@ router.patch("/:chainId/description-links", async (req, res) => {
     platform: String(l["platform"] ?? "generic").slice(0, 20),
     label: l["label"] ? String(l["label"]).slice(0, 100) : undefined,
   }));
-  await db.update(chainsTable).set({ descriptionLinks: sanitized }).where(eq(chainsTable.id, chainId));
+  await db.update(chainsTable).set({
+    descriptionLinks: sanitized,
+    updatedAt: new Date(),
+    editedAt: new Date(),
+  }).where(eq(chainsTable.id, chainId));
   res.json({ success: true, links: sanitized });
 });
 
@@ -1206,7 +1215,7 @@ router.post("/:chainId/movies", async (req, res) => {
     tmdbSnapshot: snapshot ? JSON.stringify(snapshot) : null,
   });
 
-  await db.update(chainsTable).set({ updatedAt: new Date() }).where(eq(chainsTable.id, chainId));
+  await db.update(chainsTable).set({ updatedAt: new Date(), editedAt: new Date() }).where(eq(chainsTable.id, chainId));
 
   // Notify the chain owner when someone else adds a movie (community mode)
   if (currentUserId !== chain.userId) {
@@ -1248,7 +1257,7 @@ router.patch("/:chainId/movies/:movieId/note", async (req, res) => {
   const memoryNote = note ? String(note).trim().slice(0, 100) : null;
 
   await db.update(chainMoviesTable).set({ memoryNote }).where(eq(chainMoviesTable.id, movieId));
-  await db.update(chainsTable).set({ updatedAt: new Date() }).where(eq(chainsTable.id, chainId));
+  await db.update(chainsTable).set({ updatedAt: new Date(), editedAt: new Date() }).where(eq(chainsTable.id, chainId));
 
   const [updated] = await db.select().from(chainsTable).where(eq(chainsTable.id, chainId)).limit(1);
   const result = await buildChain(updated!, currentUserId);
@@ -1278,7 +1287,7 @@ router.patch("/:chainId/movies/reorder", async (req, res) => {
     )
   );
 
-  await db.update(chainsTable).set({ updatedAt: new Date() }).where(eq(chainsTable.id, chainId));
+  await db.update(chainsTable).set({ updatedAt: new Date(), editedAt: new Date() }).where(eq(chainsTable.id, chainId));
 
   const movies = await db.select().from(chainMoviesTable)
     .where(eq(chainMoviesTable.chainId, chainId))
@@ -1306,7 +1315,7 @@ router.delete("/:chainId/movies/:movieId", async (req, res) => {
   if (!isChainOwner && !isMovieAdder) { res.status(403).json({ error: "forbidden" }); return; }
 
   await db.delete(chainMoviesTable).where(eq(chainMoviesTable.id, movieId));
-  await db.update(chainsTable).set({ updatedAt: new Date() }).where(eq(chainsTable.id, chainId));
+  await db.update(chainsTable).set({ updatedAt: new Date(), editedAt: new Date() }).where(eq(chainsTable.id, chainId));
 
   const [updated] = await db.select().from(chainsTable).where(eq(chainsTable.id, chainId)).limit(1);
   const result = await buildChain(updated!, currentUserId);

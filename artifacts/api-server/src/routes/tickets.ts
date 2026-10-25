@@ -1370,6 +1370,7 @@ router.patch(
         } : {}),
         ...partyUpdate,
         updatedAt: new Date(),
+        editedAt: new Date(),
       })
       .where(eq(ticketsTable.id, ticketId));
 
@@ -1398,6 +1399,7 @@ router.patch(
         cardBackdropOffsetX: sourceOffsetX,
         cardBackdropOffsetY: sourceOffsetY,
         updatedAt: new Date(),
+        editedAt: new Date(),
       }).where(and(
         eq(ticketsTable.partyGroupId, ticket.partyGroupId),
         ne(ticketsTable.id, ticket.id),
@@ -1510,7 +1512,11 @@ router.patch(
       platform: String(l["platform"] ?? "generic").slice(0, 20),
       label: l["label"] ? String(l["label"]).slice(0, 100) : undefined,
     }));
-    await db.update(ticketsTable).set({ captionLinks: sanitized }).where(eq(ticketsTable.id, ticketId));
+    await db.update(ticketsTable).set({
+      captionLinks: sanitized,
+      updatedAt: new Date(),
+      editedAt: new Date(),
+    }).where(eq(ticketsTable.id, ticketId));
     res.json({ success: true, links: sanitized });
   }),
 );

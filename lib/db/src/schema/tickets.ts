@@ -75,6 +75,7 @@ export const ticketsTable = pgTable("tickets", {
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  editedAt: timestamp("edited_at", { withTimezone: true }),
   // Denormalized ranking signal: GREATEST(createdAt, latest like, latest comment).
   // Kept in sync by application code on every like/unlike/comment/delete-comment
   // so feed ranking queries can ORDER BY an indexed column instead of a

@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { scrollStore, scrollOnceStore } from "@/lib/scroll-store";
 import { getDraftKey } from "@/lib/query-client";
+import { CommunityGuidelinesSheet } from "@/components/CommunityGuidelinesSheet";
 
 interface TicketMovieItem {
   imdbId: string;
@@ -172,6 +173,10 @@ function detectLang(text: string): string {
   if (/[\u0400-\u04FF]/.test(text)) return "ru";
   if (/[\u0900-\u097F]/.test(text)) return "hi";
   return "en-US";
+}
+
+function stripInvisibleText(text: string) {
+  return text.replace(/[\u00AD\u034F\u200B-\u200F\u2028-\u202F\u205F-\u206F\u3164\uFEFF]/g, "").trim();
 }
 
 interface MovieDetails {
@@ -737,9 +742,7 @@ export default function CreateTicket() {
       setSubmitError(t.errNoRating);
       return;
     }
-    // Strip invisible/zero-width unicode before validation
-    const _stripInvisible = (s: string) => s.replace(/[\u00AD\u034F\u200B-\u200F\u2028-\u202F\u205F-\u206F\u3164\uFEFF]/g, "").trim();
-    const strippedMemory = _stripInvisible(memoryNote);
+    const strippedMemory = stripInvisibleText(memoryNote);
     if (memoryNote.trim().length > 0 && strippedMemory.length === 0) {
       setShowTamperingWarning(true);
       return;
@@ -887,6 +890,12 @@ export default function CreateTicket() {
       }
     }
   };
+
+  const canSubmitTicket = !!selectedMovieId
+    && !!movieDetails
+    && rating > 0
+    && stripInvisibleText(memoryNote).length >= 5
+    && !createTicket.isPending;
 
   return (
     <div ref={scrollRef} className="h-full overflow-y-auto overscroll-y-none">
@@ -1509,7 +1518,10 @@ export default function CreateTicket() {
                 placeholder={t.memoryPlaceholder}
                 value={memoryNote}
                 maxLength={100}
-                onChange={(e) => setMemoryNote(e.target.value)}
+                onChange={(e) => {
+                  setMemoryNote(e.target.value);
+                  if (submitError) setSubmitError("");
+                }}
                 required
               />
             </div>
@@ -1701,10 +1713,12 @@ export default function CreateTicket() {
             )}
 
             {/* Submit */}
-            <button onClick={() => { if (!createTicket.isPending) setShowCommunityWarning(true); }}
-              disabled={createTicket.isPending}
+            <button onClick={() => { if (canSubmitTicket) setShowCommunityWarning(true); }}
+              disabled={!canSubmitTicket}
               className={cn("w-full h-14 rounded-2xl font-bold text-base flex items-center justify-center gap-2 transition-all",
-                "bg-foreground text-background active:scale-[0.98]")}>
+                canSubmitTicket
+                  ? "bg-foreground text-background active:scale-[0.98]"
+                  : "bg-border text-muted-foreground cursor-not-allowed")}>
               {createTicket.isPending ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
               ) : partyMode ? (
@@ -1855,62 +1869,13 @@ export default function CreateTicket() {
       })()}
 
       {/* ── Community Rules Warning ── */}
-      {showCommunityWarning && createPortal(
-        <>
-          <div className="fixed inset-0 z-[9998] bg-black/50 backdrop-blur-sm" onClick={() => setShowCommunityWarning(false)} />
-          <div
-            className="fixed bottom-0 z-[9999] flex flex-col overflow-hidden bg-background rounded-t-3xl border-t border-border"
-            style={{
-              left: "50%",
-              transform: "translateX(-50%)",
-              width: "min(100vw, 430px)",
-              maxHeight: "92dvh",
-              paddingBottom: "max(var(--sai-bottom), 20px)",
-              boxShadow: "0 -4px 32px rgba(0,0,0,0.22)",
-            }}
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex justify-center pt-3 pb-1 shrink-0">
-              <div className="w-10 h-1 rounded-full bg-border" />
-            </div>
-            <div className="px-5 pt-3 pb-4 shrink-0">
-              <h2 className="font-display font-bold text-base text-foreground mb-2 text-center">{t.communityRulesTitle}</h2>
-              <p className="text-xs text-muted-foreground text-center leading-relaxed">{t.communityRulesSubtitle}</p>
-            </div>
-            <div className="mx-5 mb-4 max-h-[40dvh] overflow-y-auto overscroll-contain bg-secondary rounded-2xl px-4 py-3">
-              {t.communityRulesBody.split("\n").map((line, i) => (
-                <p key={i} className={`text-sm text-foreground/80 leading-snug text-left${i > 0 && line === "" ? " mt-3" : i > 0 ? " mt-1.5" : ""}`}>{line || "\u00A0"}</p>
-              ))}
-              <p className="text-xs text-muted-foreground mt-4 leading-relaxed">{t.communityRulesFootnote}</p>
-              <p className="text-[11px] text-muted-foreground mt-3 leading-relaxed">
-                {lang === "th"
-                  ? "ความคิดเห็น การรีวิว และการให้คะแนนเป็นของผู้ใช้แต่ละคน Ticker ขอไม่รับผิดชอบต่อเนื้อหาที่ผู้ใช้สร้างขึ้น"
-                  : "All reviews, ratings, and opinions are solely those of the users. Ticker is not responsible for user-generated content."}
-              </p>
-              <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-3 leading-relaxed bg-amber-50 dark:bg-amber-950/30 rounded-xl p-3">
-                {lang === "th"
-                  ? "⚠️ ภาพประกอบบนตั๋วที่คุณเลือกอาจอยู่ภายใต้ลิขสิทธิ์ของบุคคลที่สาม Ticker ไม่ได้เป็นเจ้าของหรืออ้างสิทธิ์ในภาพดังกล่าว และไม่รับผิดชอบต่อการเลือกใช้ภาพของผู้ใช้ หากเจ้าของสิทธิ์ยื่นคำร้อง DMCA Takedown ที่มีมูล ภาพในตั๋วของคุณอาจถูกนำออกโดยไม่แจ้งล่วงหน้า การกด \"สร้างตั๋ว\" ถือว่าคุณรับทราบและยอมรับเงื่อนไขนี้"
-                  : "⚠️ The cover image you select may be protected by third-party copyright. Ticker does not own or claim any rights to such images and is not responsible for users' image choices. If a rights holder submits a valid DMCA Takedown Notice, your post's cover image may be removed without prior notice. By tapping \"Post,\" you acknowledge and accept this condition."}
-              </p>
-            </div>
-            <div className="flex gap-2 px-5 shrink-0">
-              <button
-                onClick={() => setShowCommunityWarning(false)}
-                className="flex-1 h-12 rounded-2xl border border-border text-foreground text-sm font-bold"
-              >
-                {t.communityRulesCancel}
-              </button>
-              <button
-                onClick={() => { setShowCommunityWarning(false); handleSubmit(); }}
-                disabled={createTicket.isPending}
-                className="flex-1 h-12 rounded-2xl bg-foreground text-background font-bold text-sm disabled:opacity-50"
-              >
-                {createTicket.isPending ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : t.communityRulesConfirm}
-              </button>
-            </div>
-          </div>
-        </>,
-        document.body
+      {showCommunityWarning && (
+        <CommunityGuidelinesSheet
+          onClose={() => setShowCommunityWarning(false)}
+          onConfirm={handleSubmit}
+          isSubmitting={createTicket.isPending}
+          confirmLabel={t.communityRulesConfirm}
+        />
       )}
 
       {/* ── Tampering Warning ── */}
