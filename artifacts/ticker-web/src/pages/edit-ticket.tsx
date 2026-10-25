@@ -12,7 +12,7 @@ import { useDebounceValue } from "usehooks-ts";
 import { cn } from "@/lib/utils";
 import { useLang, displayYear } from "@/lib/i18n";
 import { useAuth } from "@/hooks/use-auth";
-import { RatingBadge, CARD_USERNAME_STYLE, getRatingCardStyle } from "@/components/CardFaceComponents";
+import { RatingBadge, CARD_USERNAME_STYLE, getRatingCardStyle, POSTER_FRAME_BORDER } from "@/components/CardFaceComponents";
 
 interface UserSearchResult {
   id: string;
@@ -480,12 +480,12 @@ export default function EditTicket() {
               {cardTheme === "poster" ? (
                 <div
                   className={cn("absolute inset-0 overflow-hidden flex flex-col", getRatingCardStyle(rating, isDyingStar ? "blackhole" : "star").shimmer)}
-                  style={{ background: "#ccc9c3", borderRadius: 0, backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden", ...getRatingCardStyle(rating, isDyingStar ? "blackhole" : "star").glow, boxShadow: "var(--ticket-shadow-poster)" }}
+                  style={{ background: "#ccc9c3", borderRadius: 0, backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden", ...getRatingCardStyle(rating, isDyingStar ? "blackhole" : "star").glow, boxShadow: "var(--ticket-shadow-poster)", border: POSTER_FRAME_BORDER, boxSizing: "border-box" }}
                 >
                   <div className="flex-shrink-0 w-full" style={{ padding: "5px 5px 0" }}>
                     <div
                       className="relative overflow-hidden w-full"
-                      style={{ aspectRatio: "1 / 1", outline: "0.5px solid rgba(0,0,0,0.2)", cursor: "grab", touchAction: "none" }}
+                      style={{ aspectRatio: "1 / 1", outline: "1px solid rgba(0,0,0,0.24)", cursor: "grab", touchAction: "none" }}
                       onPointerDown={isPartyMember ? undefined : onPanPointerDown}
                       onPointerMove={isPartyMember ? undefined : onPanPointerMove}
                       onPointerUp={isPartyMember ? undefined : onPanPointerUp}
@@ -542,7 +542,7 @@ export default function EditTicket() {
                   transform: "rotateY(180deg)",
                   borderRadius: cardTheme === "poster" ? 0 : 16,
                   background: cardTheme === "poster" ? "#ccc9c3" : "var(--card-back-bg)",
-                  border: cardTheme === "poster" ? "none" : "1px solid var(--card-back-border)",
+                  border: cardTheme === "poster" ? POSTER_FRAME_BORDER : "1px solid var(--card-back-border)",
                   boxShadow: cardTheme === "poster" ? "var(--ticket-shadow-back-poster)" : "var(--ticket-shadow)",
                 }}
               >

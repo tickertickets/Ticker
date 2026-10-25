@@ -14,10 +14,10 @@ import { useHorizWheel } from "@/hooks/use-horiz-wheel";
 import { scrollStore } from "@/lib/scroll-store";
 import { useRoute, Link, useLocation } from "wouter";
 import { DndContext, DragOverlay, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core";
-import { SortableContext, rectSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
+import { SortableContext, rectSortingStrategy, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { restrictToParentElement } from "@dnd-kit/modifiers";
-import { navBack, wasBackNavigation } from "@/lib/nav-back";
+import { navBack, peekBackNavigation, wasBackNavigation } from "@/lib/nav-back";
 import { compressImage, AVATAR_COMPRESS } from "@/lib/image-compress";
 import {
   useGetUserProfile,
@@ -30,7 +30,7 @@ import { PosterCollage, ChainCommentSheet, ChainShareModal } from "@/components/
 import type { ChainItem } from "@/components/ChainsSection";
 import {
   Loader2, Settings, Link2, Users, X, User as UserIcon,
-  Camera, MessageCircle, Lock, Unlock, Flag, MoreHorizontal, ChevronLeft, Bookmark, Share2,
+  Camera, MessageCircle, Lock, Unlock, Flag, MoreHorizontal, ChevronLeft, ChevronDown, Bookmark, Share2,
   Heart, Send, Pencil, Trash2, Ticket as TicketIcon, AtSign, Check, Search, EyeOff, Eye, Plus, Globe, GripVertical,
   Bell, BellOff, FolderOpen, Archive, ArchiveRestore,
 } from "lucide-react";
@@ -587,15 +587,20 @@ function SortableTicketItem({ ticket, isReorderMode, profileViewMode }: { ticket
   );
 }
 
-// ── AlbumPillBtn — pill with long-press support ────────────────────────────
-function AlbumPillBtn({ label, isActive, onClick, onLongPress, pillRef }: {
-  label: string; isActive: boolean; onClick: () => void; onLongPress?: () => void;
-  pillRef?: (el: HTMLButtonElement | null) => void;
+// ── AlbumPickerRow — selectable album row with long-press management ─────────
+function AlbumPickerRow({ label, isActive, count, onClick, onLongPress, disabled }: {
+  label: string;
+  isActive: boolean;
+  count: number;
+  onClick: () => void;
+  onLongPress?: () => void;
+  disabled?: boolean;
 }) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didLongPress = useRef(false);
   const start = (e: React.TouchEvent | React.PointerEvent) => {
     e.stopPropagation();
+    if (disabled || !onLongPress) return;
     didLongPress.current = false;
     timerRef.current = setTimeout(() => {
       didLongPress.current = true;
@@ -605,28 +610,39 @@ function AlbumPillBtn({ label, isActive, onClick, onLongPress, pillRef }: {
   const cancel = () => { if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; } };
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!didLongPress.current) onClick();
+    if (!didLongPress.current && !disabled) onClick();
     didLongPress.current = false;
   };
   return (
     <button
-      ref={pillRef}
+      type="button"
       className={cn(
-        "flex-shrink-0 min-w-0 max-w-[calc(100vw-2rem)] text-sm font-semibold px-3 py-1.5 rounded-xl transition-colors",
-        isActive ? "bg-foreground text-background" : "bg-secondary text-foreground/60"
+        "flex w-full min-w-0 items-center gap-3 rounded-2xl px-4 py-3 text-left transition-colors",
+        isActive ? "bg-foreground text-background" : "bg-secondary text-foreground",
+        disabled && "cursor-default",
       )}
       onClick={handleClick}
       onPointerDown={start}
       onPointerUp={cancel}
       onPointerCancel={cancel}
       onTouchEnd={cancel}
+      onContextMenu={e => {
+        if (!disabled && onLongPress) {
+          e.preventDefault();
+          didLongPress.current = true;
+          onLongPress();
+        }
+      }}
     >
-      <span className="block truncate">{label}</span>
+      <FolderOpen className="h-4 w-4 shrink-0 opacity-70" />
+      <span className="min-w-0 flex-1 truncate text-sm font-semibold">{label}</span>
+      <span className="shrink-0 text-xs tabular-nums opacity-60">{count}</span>
+      {isActive && <Check className="h-4 w-4 shrink-0" />}
     </button>
   );
 }
 
-// ── AlbumReorderRow — horizontal drag-to-reorder for album pills ─────────────
+// ── AlbumReorderRow — drag-to-reorder rows inside the album picker ───────────
 // Complete rewrite: uses DragOverlay so the dragged pill is always visible
 // on the first attempt (without it, mobile browsers show nothing on drag-start).
 // The original item fades to transparent while dragging so only the overlay
@@ -640,12 +656,13 @@ function AlbumPillContent({ album, activeAlbumId, isDragOverlay }: {
 }) {
   return (
     <div className={cn(
-      "inline-flex min-w-0 max-w-[calc(100vw-2rem)] text-sm font-semibold px-3 py-1.5 rounded-xl pointer-events-none select-none items-center gap-1",
+      "flex w-full min-w-0 items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold pointer-events-none select-none",
       activeAlbumId === album.id ? "bg-foreground text-background" : "bg-secondary text-foreground/60",
       isDragOverlay && "shadow-lg",
     )}>
-      <span className="min-w-0 truncate">{album.title}</span>
-      <GripVertical className="w-3 h-3 opacity-40 flex-shrink-0" />
+      <FolderOpen className="h-4 w-4 shrink-0 opacity-70" />
+      <span className="min-w-0 flex-1 truncate">{album.title}</span>
+      <GripVertical className="h-4 w-4 shrink-0 opacity-50" />
     </div>
   );
 }
@@ -659,7 +676,7 @@ function SortableAlbumPill({ album, activeAlbumId, isDragActive }: {
   return (
     <div
       ref={setNodeRef}
-      className="min-w-0 max-w-full"
+      className="w-full min-w-0"
       style={{
         transform: CSS.Transform.toString(transform),
         transition: isDragging ? undefined : transition,
@@ -745,8 +762,8 @@ const AlbumReorderRow = memo(function AlbumReorderRow({
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >
-      <SortableContext items={order} strategy={rectSortingStrategy}>
-        <div className="flex w-full max-w-full flex-wrap items-center justify-center gap-2" style={{ touchAction: "pan-y" }}>
+      <SortableContext items={order} strategy={verticalListSortingStrategy}>
+        <div className="flex w-full flex-col gap-2" style={{ touchAction: "pan-y" }}>
           {orderedAlbums.map(album => (
             <SortableAlbumPill
               key={album.id}
@@ -1920,8 +1937,14 @@ export default function Profile() {
       backFromEdit ||
       editTicketBack ||
       editChainBack;
-    if (!returningFromEdit && !wasBackNavigation()) {
+    const isBackNavigation = wasBackNavigation();
+    if (!returningFromEdit && !isBackNavigation) {
       scrollStore.set(scrollKey, 0);
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("album")) {
+        url.searchParams.delete("album");
+        window.history.replaceState({}, "", url.pathname + url.search);
+      }
     }
   }, [scrollKey]);
 
@@ -1933,9 +1956,7 @@ export default function Profile() {
   const filmsSwipeXRef     = useRef<number | null>(null);
   const chainSwipeXRef     = useRef<number | null>(null);
   const chainSubTabPillRef = useRef<HTMLDivElement>(null);
-  const albumPillRowRef    = useRef<HTMLDivElement>(null);
   useHorizWheel(chainSubTabPillRef); // desktop: chain sub-tab strip
-  useHorizWheel(albumPillRowRef);    // desktop: album pill row
 
   // Restore active tab from URL (?tab=) on mount so that navigating back to
   // /profile/:username?tab=chain (for example) re-activates the correct tab.
@@ -1977,15 +1998,44 @@ export default function Profile() {
 
   // (auto-switch chain sub-tab effect moved below hasCreatedChains / hasPlayedRuns declarations to avoid TDZ)
 
-  // Restore active album from URL (?album=) on mount so that navigating back
-  // to /profile/:username?tab=films&album=<id> re-selects the correct album.
+  // Fresh visits start on Main; only in-app back/edit navigation restores an album.
   const [activeAlbumId, setActiveAlbumId] = useState<string | null>(() => {
-    return new URLSearchParams(window.location.search).get("album");
+    const shouldRestoreAlbum =
+      peekBackNavigation() ||
+      !!sessionStorage.getItem("ticker:back-from-edit") ||
+      !!sessionStorage.getItem("ticker:edit-ticket-back") ||
+      !!sessionStorage.getItem("ticker:edit-chain-back");
+    return shouldRestoreAlbum ? new URLSearchParams(window.location.search).get("album") : null;
   });
+  const [hasPickedAlbum, setHasPickedAlbum] = useState(false);
+  const [showAlbumPicker, setShowAlbumPicker] = useState(false);
+  const profileAlbumUsernameRef = useRef(username);
+  const restoreAlbumOnRouteChange =
+    peekBackNavigation() ||
+    !!sessionStorage.getItem("ticker:back-from-edit") ||
+    !!sessionStorage.getItem("ticker:edit-ticket-back") ||
+    !!sessionStorage.getItem("ticker:edit-chain-back");
+
+  useEffect(() => {
+    if (profileAlbumUsernameRef.current === username) return;
+    profileAlbumUsernameRef.current = username;
+    const restoredAlbumId = restoreAlbumOnRouteChange
+      ? new URLSearchParams(window.location.search).get("album")
+      : null;
+    setActiveAlbumId(restoredAlbumId);
+    setHasPickedAlbum(false);
+    setShowAlbumPicker(false);
+    if (!restoreAlbumOnRouteChange) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("album");
+      window.history.replaceState({}, "", url.pathname + url.search);
+    }
+  }, [username]);
 
   // Helper: change active album AND persist to URL so the back-from-edit flow restores it.
   const handleAlbumChange = (albumId: string | null) => {
     setActiveAlbumId(albumId);
+    setHasPickedAlbum(true);
     const url = new URL(window.location.href);
     if (albumId) {
       url.searchParams.set("album", albumId);
@@ -2286,15 +2336,6 @@ export default function Profile() {
 
   const [isChainReorderMode, setIsChainReorderMode] = useState(false);
 
-  // Pill-to-center: track each album pill DOM element
-  const albumPillRefsMap = useRef<Map<string | null, HTMLButtonElement>>(new Map());
-  const scrollPillToCenter = (id: string | null) => {
-    const el = albumPillRefsMap.current.get(id);
-    const row = albumPillRowRef.current;
-    if (!el || !row) return;
-    const elCenter = el.offsetLeft + el.offsetWidth / 2;
-    row.scrollTo({ left: elCenter - row.clientWidth / 2, behavior: "smooth" });
-  };
   useEffect(() => {
     const ids = (albumsData?.albums ?? []).map((a: any) => a.id as string);
     setAlbumPillOrder(prev => {
@@ -2305,13 +2346,20 @@ export default function Profile() {
     });
   }, [albumsData]);
 
-  // orderedAlbums: stable memoised list for AlbumReorderRow and pill rendering
+  // orderedAlbums: stable memoised list for the album picker and reorder list.
   const orderedAlbums = useMemo(() => {
     const albums: any[] = albumsData?.albums ?? [];
     return albumPillOrder
       .map(id => albums.find((a: any) => a.id === id))
       .filter(Boolean) as any[];
   }, [albumPillOrder, albumsData]);
+  const mainAlbumLabel = mainAlbumTitle || (lang === "th" ? "หลัก" : "Main");
+  const genericAlbumLabel = lang === "th" ? "อัลบั้ม" : "Albums";
+  const albumPillLabel = activeAlbumId
+    ? orderedAlbums.find((album: any) => album.id === activeAlbumId)?.title ?? genericAlbumLabel
+    : hasPickedAlbum
+      ? mainAlbumLabel
+      : genericAlbumLabel;
 
   // Cover mosaic shows ONLY the user's pinned tickets (set via long-press →
   // "ปักหมุดบนโปรไฟล์" on their own cards). One image per pin, max 3,
@@ -2771,11 +2819,11 @@ export default function Profile() {
               if (Math.abs(dx) < 60) return;
               const allIds: (string | null)[] = [null, ...orderedAlbums.map((a: any) => a.id)];
               const ci = allIds.indexOf(activeAlbumId);
-              if (dx < 0 && ci < allIds.length - 1) { handleAlbumChange(allIds[ci + 1]); scrollPillToCenter(allIds[ci + 1]); }
-              else if (dx > 0 && ci > 0) { handleAlbumChange(allIds[ci - 1]); scrollPillToCenter(allIds[ci - 1]); }
+              if (dx < 0 && ci < allIds.length - 1) handleAlbumChange(allIds[ci + 1]);
+              else if (dx > 0 && ci > 0) handleAlbumChange(allIds[ci - 1]);
             }}
           >
-            {/* Album sub-pills — shown when user has albums or is owner */}
+            {/* Centered album selector — shown when user has albums or is owner */}
             {(() => {
               const albums: any[] = albumsData?.albums ?? [];
               const showAlbumPills = isOwn || albums.length > 0;
@@ -2789,52 +2837,18 @@ export default function Profile() {
               // orderedAlbums is memoised at component level — no local redeclaration needed
               return (
                 <>
-                  {/* Wrap album pills into centered rows when the available width is limited. */}
-                  <div ref={albumPillRowRef} className="px-2 pt-0.5 pb-1">
-                    <div className="flex w-full max-w-full flex-wrap items-center justify-center gap-2 px-2">
-                      {/* Main/หลัก pill — never reorderable, long-press to rename */}
-                      <AlbumPillBtn
-                          label={mainAlbumTitle || (lang === "th" ? "หลัก" : "Main")}
-                          isActive={!activeAlbumId}
-                          onClick={() => { if (!isReorderMode) { handleAlbumChange(null); scrollPillToCenter(null); } }}
-                          onLongPress={isOwn && !isReorderMode ? () => { setAlbumMenu({ id: "main", title: mainAlbumTitle }); setAlbumRenaming(false); setAlbumRenameTitle(mainAlbumTitle || (lang === "th" ? "หลัก" : "Main")); setAlbumRenameError(null); setAlbumDeleteConfirm(false); } : undefined}
-                          pillRef={(el) => { if (el) albumPillRefsMap.current.set(null, el); else albumPillRefsMap.current.delete(null); }}
-                        />
-                      {/* Custom album pills — custom pointer-event reorder when in reorder mode */}
-                      {isReorderMode ? (
-                        <AlbumReorderRow
-                          albums={orderedAlbums}
-                          activeAlbumId={activeAlbumId}
-                          onReorder={async (newIds) => {
-                            setAlbumPillOrder(newIds);
-                            await handleAlbumReorder(newIds);
-                          }}
-                        />
-                      ) : (
-                        <>
-                          {orderedAlbums.map((album: any) => (
-                            <AlbumPillBtn
-                              key={album.id}
-                              label={album.title}
-                              isActive={activeAlbumId === album.id}
-                              onClick={() => { handleAlbumChange(album.id); scrollPillToCenter(album.id); }}
-                              onLongPress={isOwn ? () => { setAlbumMenu({ id: album.id, title: album.title, isHidden: album.isHidden }); setAlbumRenaming(false); setAlbumRenameTitle(album.title); setAlbumRenameError(null); setAlbumDeleteConfirm(false); } : undefined}
-                              pillRef={(el) => { if (el) albumPillRefsMap.current.set(album.id, el); else albumPillRefsMap.current.delete(album.id); }}
-                            />
-                          ))}
-                        </>
-                      )}
-                      {/* + New album (owner only, max 9 custom = 10 total with Main) */}
-                      {isOwn && albums.length < 9 && !isReorderMode && (
-                        <button
-                          onClick={() => { setNewAlbumTitle(""); setAlbumCreateError(null); setShowCreateAlbum(true); }}
-                          className="inline-flex flex-shrink-0 max-w-[calc(100vw-2rem)] items-center gap-1 text-sm font-semibold px-3 py-1.5 rounded-xl transition-colors bg-secondary text-foreground/60"
-                        >
-                          <Plus className="w-3 h-3" />
-                          <span>{lang === "th" ? "ใหม่" : "New"}</span>
-                        </button>
-                      )}
-                    </div>
+                  <div className="flex justify-center px-3 pt-0.5 pb-1">
+                    <button
+                      type="button"
+                      aria-haspopup="dialog"
+                      aria-expanded={showAlbumPicker}
+                      onClick={() => setShowAlbumPicker(true)}
+                      className="inline-flex min-w-0 max-w-[calc(100vw-2rem)] items-center gap-2 rounded-xl bg-secondary px-4 py-2 text-sm font-semibold text-foreground transition-colors active:bg-secondary/70"
+                    >
+                      <FolderOpen className="h-4 w-4 shrink-0 opacity-70" />
+                      <span className="min-w-0 truncate">{albumPillLabel}</span>
+                      <ChevronDown className="h-4 w-4 shrink-0 opacity-60" />
+                    </button>
                   </div>
                   <FilmsGrid tickets={filteredTickets} isOwn={isOwn} username={username} isReorderMode={isReorderMode} onToggleReorderMode={() => setIsReorderMode(p => !p)} isLoading={ticketsLoading} />
                 </>
@@ -2927,6 +2941,152 @@ export default function Profile() {
           />
         </div>,
         document.body
+      )}
+
+      {/* Album picker — one centered pill opens the full, ordered album list. */}
+      {showAlbumPicker && createPortal(
+        <div
+          className="fixed inset-0 z-[9998] flex items-end justify-center bg-black/50"
+          onClick={() => setShowAlbumPicker(false)}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-label={lang === "th" ? "เลือกอัลบั้ม" : "Choose an album"}
+            className="flex max-h-[82dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border-t border-border bg-background"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="shrink-0 px-5 pt-3 pb-3">
+              <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-border" />
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="font-display text-base font-bold">
+                    {lang === "th" ? "เลือกอัลบั้ม" : "Choose an album"}
+                  </h3>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {orderedAlbums.length + 1} {lang === "th" ? "อัลบั้ม" : "albums"}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  {isOwn && (orderedAlbums.length > 1 || isReorderMode) && (
+                    <button
+                      type="button"
+                      onClick={() => setIsReorderMode(value => !value)}
+                      className={cn(
+                        "rounded-xl px-3 py-2 text-xs font-semibold transition-colors",
+                        isReorderMode ? "bg-foreground text-background" : "bg-secondary text-foreground",
+                      )}
+                    >
+                      {isReorderMode
+                        ? (lang === "th" ? "เสร็จ" : "Done")
+                        : (lang === "th" ? "เรียง" : "Reorder")}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    aria-label={lang === "th" ? "ปิด" : "Close"}
+                    onClick={() => setShowAlbumPicker(false)}
+                    className="flex h-9 w-9 items-center justify-center rounded-xl bg-secondary text-foreground"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 pb-4">
+              <AlbumPickerRow
+                label={mainAlbumLabel}
+                isActive={!activeAlbumId}
+                count={tickets.filter((ticket: Ticket) =>
+                  !orderedAlbums.some((album: any) => (album.ticketIds ?? []).includes(ticket.id)),
+                ).length}
+                disabled={isReorderMode}
+                onClick={() => {
+                  handleAlbumChange(null);
+                  setShowAlbumPicker(false);
+                }}
+                onLongPress={isOwn && !isReorderMode ? () => {
+                  setAlbumMenu({ id: "main", title: mainAlbumTitle });
+                  setAlbumRenaming(false);
+                  setAlbumRenameTitle(mainAlbumLabel);
+                  setAlbumRenameError(null);
+                  setAlbumDeleteConfirm(false);
+                } : undefined}
+              />
+
+              {isReorderMode ? (
+                <AlbumReorderRow
+                  albums={orderedAlbums}
+                  activeAlbumId={activeAlbumId}
+                  onReorder={async (newIds) => {
+                    setAlbumPillOrder(newIds);
+                    await handleAlbumReorder(newIds);
+                  }}
+                />
+              ) : (
+                orderedAlbums.map((album: any) => (
+                  <AlbumPickerRow
+                    key={album.id}
+                    label={album.title}
+                    isActive={activeAlbumId === album.id}
+                    count={Array.isArray(album.ticketIds) ? album.ticketIds.length : 0}
+                    onClick={() => {
+                      handleAlbumChange(album.id);
+                      setShowAlbumPicker(false);
+                    }}
+                    onLongPress={isOwn ? () => {
+                      setAlbumMenu({ id: album.id, title: album.title, isHidden: album.isHidden });
+                      setAlbumRenaming(false);
+                      setAlbumRenameTitle(album.title);
+                      setAlbumRenameError(null);
+                      setAlbumDeleteConfirm(false);
+                    } : undefined}
+                  />
+                ))
+              )}
+
+              {albumsLoading && (
+                <div className="flex items-center justify-center py-3 text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                </div>
+              )}
+            </div>
+
+            {isOwn && (
+              <div className="shrink-0 border-t border-border p-4 pb-safe">
+                {!isReorderMode && orderedAlbums.length < 9 ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAlbumPicker(false);
+                      setNewAlbumTitle("");
+                      setAlbumCreateError(null);
+                      setShowCreateAlbum(true);
+                    }}
+                    className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-secondary text-sm font-semibold text-foreground transition-colors active:bg-secondary/70"
+                  >
+                    <Plus className="h-4 w-4" />
+                    {lang === "th" ? "สร้างอัลบั้มใหม่" : "Create new album"}
+                  </button>
+                ) : !isReorderMode ? (
+                  <p className="text-center text-xs text-muted-foreground">
+                    {lang === "th" ? "สร้างได้สูงสุด 10 อัลบั้ม (รวม Main)" : "Maximum 10 albums (including Main)"}
+                  </p>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsReorderMode(false)}
+                    className="h-11 w-full rounded-2xl bg-foreground text-sm font-bold text-background"
+                  >
+                    {lang === "th" ? "เสร็จสิ้นการเรียง" : "Done reordering"}
+                  </button>
+                )}
+              </div>
+            )}
+          </section>
+        </div>,
+        document.body,
       )}
 
       {/* Create album modal */}

@@ -19,6 +19,7 @@ import { cn, fmtCount } from "@/lib/utils";
 import {
   POSTER_BG,
   POSTER_DARK,
+  POSTER_FRAME_BORDER,
   CARD_USERNAME_STYLE,
   CARD_SEED_W,
   CARD_SEED_H,
@@ -667,7 +668,7 @@ function CompactCard({ ticket, onLongPress, viewHref, onDoubleTap, profileViewMo
             transform: "rotateY(180deg)",
             borderRadius: isCompactPoster ? 0 : "0.75rem",
             background: isCompactPoster ? POSTER_BG : "var(--card-back-bg)",
-            border: isCompactPoster ? "none" : "1px solid var(--card-back-border)",
+            border: isCompactPoster ? POSTER_FRAME_BORDER : "1px solid var(--card-back-border)",
             boxShadow: isCompactPoster ? (specialColorCfg ? specialColorCfg.glow : "var(--ticket-shadow-back-poster)") : compactFrontShadow,
           }}
         >
@@ -1476,7 +1477,7 @@ function FeedCard({ ticket, onLongPress, onNotInterested }: { ticket: Ticket; on
                   transform: "rotateY(180deg)",
                   borderRadius: isPoster ? 0 : "0.75rem",
                   background: isPoster ? POSTER_BG : "var(--card-back-bg)",
-                  border: isPoster ? "none" : "1px solid var(--card-back-border)",
+                  border: isPoster ? POSTER_FRAME_BORDER : "1px solid var(--card-back-border)",
                   boxShadow: isPoster ? (specialColorCfg ? specialColorCfg.glow : "var(--ticket-shadow-back-poster)") : feedFrontShadow,
                 }}
               >

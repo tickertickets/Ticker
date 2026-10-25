@@ -9,7 +9,7 @@ import { Search, ChevronLeft, Film, MapPin, Calendar, Star, Loader2, Users, X, C
 import { computeCardTier, TIER_VISUAL, computeEffectTags, type ScoreInput } from "@/lib/ranks";
 import { MovieBadges } from "@/components/MovieBadges";
 import { useEnsureMovieCores } from "@/lib/use-movie-cores";
-import { RatingBadge, CARD_USERNAME_STYLE, getRatingCardStyle } from "@/components/CardFaceComponents";
+import { RatingBadge, CARD_USERNAME_STYLE, getRatingCardStyle, POSTER_FRAME_BORDER } from "@/components/CardFaceComponents";
 import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
@@ -1082,13 +1082,15 @@ export default function CreateTicket() {
                       WebkitBackfaceVisibility: "hidden",
                       ...getRatingCardStyle(rating, isDyingStar ? "blackhole" : "star").glow,
                       boxShadow: "var(--ticket-shadow-poster)",
+                      border: POSTER_FRAME_BORDER,
+                      boxSizing: "border-box",
                     }}
                   >
                     {/* Image — inset 5px L/R/T, drag-to-pan */}
                     <div className="flex-shrink-0 w-full" style={{ padding: "5px 5px 0" }}>
                       <div
                         className="relative overflow-hidden w-full"
-                        style={{ aspectRatio: "1 / 1", outline: "0.5px solid rgba(0,0,0,0.2)", cursor: "grab", touchAction: "none" }}
+                        style={{ aspectRatio: "1 / 1", outline: "1px solid rgba(0,0,0,0.24)", cursor: "grab", touchAction: "none" }}
                         onPointerDown={onPanPointerDown}
                         onPointerMove={onPanPointerMove}
                         onPointerUp={onPanPointerUp}
@@ -1189,7 +1191,7 @@ export default function CreateTicket() {
                     transform: "rotateY(180deg)",
                     borderRadius: cardTheme === "poster" ? 0 : 16,
                     background: cardTheme === "poster" ? "#ccc9c3" : "var(--card-back-bg)",
-                    border: cardTheme === "poster" ? "none" : "1px solid var(--card-back-border)",
+                    border: cardTheme === "poster" ? POSTER_FRAME_BORDER : "1px solid var(--card-back-border)",
                     boxShadow: cardTheme === "poster" ? "var(--ticket-shadow-back-poster)" : "var(--ticket-shadow)",
                   }}
                 >
