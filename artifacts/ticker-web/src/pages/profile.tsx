@@ -32,7 +32,7 @@ import {
   Loader2, Settings, Link2, Users, X, User as UserIcon,
   Camera, MessageCircle, Lock, Unlock, Flag, MoreHorizontal, ChevronLeft, ChevronDown, Bookmark, Share2,
   Heart, Send, Pencil, Trash2, Ticket as TicketIcon, AtSign, Check, Search, EyeOff, Eye, Plus, Globe, GripVertical,
-  Bell, BellOff, FolderOpen, Archive, ArchiveRestore,
+  Bell, BellOff, Images, Archive, ArchiveRestore,
 } from "lucide-react";
 import { cn, fmtCount } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
@@ -634,7 +634,7 @@ function AlbumPickerRow({ label, isActive, count, onClick, onLongPress, disabled
         }
       }}
     >
-      <FolderOpen className="h-4 w-4 shrink-0 opacity-70" />
+      <Images className="h-4 w-4 shrink-0" />
       <span className="min-w-0 flex-1 truncate text-sm font-semibold">{label}</span>
       <span className="shrink-0 text-xs tabular-nums opacity-60">{count}</span>
       {isActive && <Check className="h-4 w-4 shrink-0" />}
@@ -660,7 +660,7 @@ function AlbumPillContent({ album, activeAlbumId, isDragOverlay }: {
       activeAlbumId === album.id ? "bg-foreground text-background" : "bg-secondary text-foreground/60",
       isDragOverlay && "shadow-lg",
     )}>
-      <FolderOpen className="h-4 w-4 shrink-0 opacity-70" />
+      <Images className="h-4 w-4 shrink-0" />
       <span className="min-w-0 flex-1 truncate">{album.title}</span>
       <GripVertical className="h-4 w-4 shrink-0 opacity-50" />
     </div>
@@ -874,7 +874,7 @@ function FilmsGrid({ tickets, isOwn, username, isReorderMode = false, onToggleRe
   if (!isOwn) {
     return (
       <>
-        <div className="flex justify-end px-3 pt-1 pb-1">
+        <div className="flex justify-end px-3 pt-3 pb-1">
           <button
             onClick={() => setShowDetails(d => !d)}
             className={cn(
@@ -898,7 +898,7 @@ function FilmsGrid({ tickets, isOwn, username, isReorderMode = false, onToggleRe
 
   return (
     <>
-      <div className="flex justify-end items-center gap-2 px-3 pt-1 pb-1">
+      <div className="flex justify-end items-center gap-2 px-3 pt-3 pb-1">
         <button
           onClick={() => setShowDetails(d => !d)}
           className={cn(
@@ -2540,10 +2540,101 @@ export default function Profile() {
 
   return (
     <div ref={scrollRef} className="h-full overflow-y-auto overscroll-y-none">
-      {/* Mosaic Cover */}
+      {/* Profile navigation stays above the cover so its controls never cover profile art. */}
+      <div className="relative z-20 border-b border-border/60 bg-background" style={{ paddingTop: "var(--sai-top)" }}>
+        <div className="flex h-14 items-center justify-between px-4">
+          <div className="w-9 shrink-0">
+            {isOwn ? (
+              <Link href="/bookmarks">
+                <button aria-label={lang === "th" ? "บันทึกไว้" : "Bookmarks"} className="flex h-9 w-9 items-center justify-center">
+                  <Bookmark className="h-5 w-5 text-foreground" />
+                </button>
+              </Link>
+            ) : (
+              <button aria-label={lang === "th" ? "ย้อนกลับ" : "Go back"} onClick={() => navBack(navigate)} className="flex h-9 w-9 items-center justify-center">
+                <ChevronLeft className="h-6 w-6 text-foreground" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex min-w-0 flex-1 items-center justify-center gap-2">
+            <span className="font-display text-xl font-bold tracking-tight text-foreground">Ticker</span>
+            {(isRefreshing || ptrPullY > 0) && (
+              <Loader2
+                className={cn("h-4 w-4 text-muted-foreground", isRefreshing && "animate-spin")}
+                style={{
+                  opacity: isRefreshing ? 1 : ptrProgress,
+                  transform: ptrIsPulling ? `rotate(${ptrProgress * 270}deg)` : undefined,
+                  transition: ptrIsPulling ? undefined : "opacity 260ms cubic-bezier(0.22, 1, 0.36, 1)",
+                }}
+              />
+            )}
+          </div>
+
+          <button
+            type="button"
+            aria-label={lang === "th" ? "การดำเนินการโปรไฟล์" : "Profile actions"}
+            aria-haspopup="menu"
+            aria-expanded={showProfileActions}
+            onClick={() => setShowProfileActions(value => !value)}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-foreground transition-colors active:bg-secondary"
+          >
+            <MoreHorizontal className="h-6 w-6" />
+          </button>
+        </div>
+
+        {showProfileActions && (
+          <div className="px-4 pb-3">
+            <div role="menu" aria-label={lang === "th" ? "การดำเนินการโปรไฟล์" : "Profile actions"} className="ml-auto flex max-w-full items-center gap-1.5 overflow-x-auto rounded-2xl border border-border bg-background p-1.5 shadow-sm scrollbar-hide">
+              <button
+                type="button"
+                role="menuitem"
+                onClick={handleShareProfile}
+                className="flex shrink-0 items-center gap-2 rounded-xl bg-secondary px-3 py-2 text-xs font-semibold text-foreground transition-transform active:scale-95"
+              >
+                <Share2 className="h-4 w-4" />
+                {lang === "th" ? "แชร์โปรไฟล์" : "Share profile"}
+              </button>
+              {showBell && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => { setShowProfileActions(false); void handleBellToggle(); }}
+                  disabled={bellLoading}
+                  className="flex shrink-0 items-center gap-2 rounded-xl bg-secondary px-3 py-2 text-xs font-semibold text-foreground transition-transform active:scale-95 disabled:opacity-50"
+                >
+                  {bellSubscribed ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
+                  {bellSubscribed ? t.bellUnsubscribeLabel : t.bellSubscribeLabel}
+                </button>
+              )}
+              {!isOwn && !!me && !isVerified(profile.username) && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => { setShowProfileActions(false); setReportUserOpen(true); }}
+                  className="flex shrink-0 items-center gap-2 rounded-xl bg-secondary px-3 py-2 text-xs font-semibold text-foreground transition-transform active:scale-95"
+                >
+                  <Flag className="h-4 w-4" />
+                  {lang === "th" ? "รายงาน" : "Report"}
+                </button>
+              )}
+              {isOwn && (
+                <Link href="/settings" onClick={() => setShowProfileActions(false)}>
+                  <span role="menuitem" className="flex shrink-0 items-center gap-2 rounded-xl bg-secondary px-3 py-2 text-xs font-semibold text-foreground transition-transform active:scale-95">
+                    <Settings className="h-4 w-4" />
+                    {lang === "th" ? "ตั้งค่า" : "Settings"}
+                  </span>
+                </Link>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Mosaic cover — clear of navigation and action controls. */}
       <div
         className="relative w-full overflow-hidden bg-secondary"
-        style={{ height: "calc(200px + var(--sai-top))" }}
+        style={{ height: "clamp(150px, 48vw, 210px)" }}
       >
         {coverPosters.length > 0 ? (
           // 1 row × 3 columns, left-aligned. One image per pinned post — no
@@ -2559,121 +2650,13 @@ export default function Profile() {
           <div className="absolute inset-0 bg-gradient-to-br from-secondary to-accent" />
         )}
         <div className="absolute inset-0 bg-gradient-to-b from-black/20 to-black/60" />
-        <div
-          className="absolute top-0 inset-x-0 flex items-center px-4"
-          style={{ paddingTop: "calc(var(--sai-top) + 16px)" }}
-        >
-          {/* Left — fixed width matches right, keeps Ticker truly centred */}
-          <div className="w-9 h-9 flex items-center justify-start flex-shrink-0">
-            {isOwn ? (
-              <Link href="/bookmarks"><button className="w-9 h-9 flex items-center justify-center"><Bookmark className="w-6 h-6 text-white" /></button></Link>
-            ) : (
-              <button onClick={() => navBack(navigate)} className="w-9 h-9 flex items-center justify-center">
-                <ChevronLeft className="w-7 h-7 text-white" />
-              </button>
-            )}
-          </div>
-          <span className="flex-1 text-center font-display font-bold text-white text-xl tracking-tight">
-            Ticker
-          </span>
-          {/* Refresh spinner — shown during nav-tap refresh and pull-to-refresh */}
-          {(isRefreshing || ptrPullY > 0) && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ top: "calc(var(--sai-top) + 56px)", height: 36 }}>
-              <Loader2
-                className={cn("w-5 h-5 text-white/70", isRefreshing && "animate-spin")}
-                style={{
-                  opacity: isRefreshing ? 1 : ptrProgress,
-                  transform: ptrIsPulling ? `rotate(${ptrProgress * 270}deg)` : undefined,
-                  transition: ptrIsPulling ? undefined : "opacity 260ms cubic-bezier(0.22, 1, 0.36, 1)",
-                }}
-              />
-            </div>
-          )}
-          {/* Right — Bell (logged-in other), Share (own or guest), nothing otherwise */}
-          <div className="w-9 h-9 flex items-center justify-end flex-shrink-0">
-            {showBell ? (
-              <button
-                className="w-9 h-9 flex items-center justify-center active:opacity-70"
-                title={bellSubscribed ? t.bellUnsubscribeLabel : t.bellSubscribeLabel}
-                onClick={handleBellToggle}
-                disabled={bellLoading}
-              >
-                {bellSubscribed
-                  ? <Bell className="w-6 h-6 text-white" fill="currentColor" />
-                  : <Bell className="w-6 h-6 text-white/70" />}
-              </button>
-            ) : (isOwn || !me) ? (
-              <button
-                className="w-9 h-9 flex items-center justify-center active:opacity-70"
-                onClick={async () => {
-                  const url = `${window.location.origin}/@${profile.username}`;
-                  try { await navigator.clipboard.writeText(url); }
-                  catch {
-                    const el = document.createElement("textarea");
-                    el.value = url; el.style.cssText = "position:fixed;top:-9999px;left:-9999px;";
-                    document.body.appendChild(el); el.select(); document.execCommand("copy"); document.body.removeChild(el);
-                  }
-                  toast({ title: t.copiedLabel, duration: 1500 });
-                }}
-              >
-                <Share2 className="w-6 h-6 text-white" />
-              </button>
-            ) : null}
-          </div>
-        </div>
-
-        {/* Share — absolute, right-aligned just below Bell/top area — only for logged-in users on other profiles */}
-        {!isOwn && !!me && (
-          <button
-            className="absolute w-9 h-9 flex items-center justify-center right-4 active:opacity-70"
-            style={{ top: showBell
-              ? "calc(var(--sai-top) + 16px + 36px + 8px)"
-              : "calc(var(--sai-top) + 16px)" }}
-            onClick={async () => {
-              const url = `${window.location.origin}/@${profile.username}`;
-              try { await navigator.clipboard.writeText(url); }
-              catch {
-                const el = document.createElement("textarea");
-                el.value = url; el.style.cssText = "position:fixed;top:-9999px;left:-9999px;";
-                document.body.appendChild(el); el.select(); document.execCommand("copy"); document.body.removeChild(el);
-              }
-              toast({ title: t.copiedLabel, duration: 1500 });
-            }}
-          >
-            <Share2 className="w-6 h-6 text-white" />
-          </button>
-        )}
-
-        {/* Gear (own profile) — absolute right, below Share-in-slot */}
-        {isOwn && (
-          <Link href="/settings">
-            <button
-              className="absolute w-9 h-9 flex items-center justify-center right-4"
-              style={{ top: "calc(var(--sai-top) + 16px + 36px + 8px)" }}
-            >
-              <Settings className="w-6 h-6 text-white" />
-            </button>
-          </Link>
-        )}
-        {/* Flag (other user profiles) — absolute right, below Share */}
-        {!isOwn && me && !isVerified(profile.username) && (
-          <button
-            onClick={() => setReportUserOpen(true)}
-            className="absolute w-9 h-9 flex items-center justify-center right-4"
-            style={{ top: showBell
-              ? "calc(var(--sai-top) + 16px + 36px + 8px + 36px + 8px)"
-              : "calc(var(--sai-top) + 16px + 36px + 8px)" }}
-          >
-            <Flag className="w-6 h-6 text-white/70" />
-          </button>
-        )}
       </div>
 
       {/* Profile info */}
-      <div className="px-4 pt-4 pb-3">
-        <div className="flex items-start gap-4 mb-3">
+      <div className="px-4 pb-3">
+        <div className="mb-3 flex flex-col items-center text-center">
           <div
-            className="w-20 h-20 rounded-2xl overflow-hidden bg-foreground border-4 border-background shadow-lg flex-shrink-0 -mt-8 relative z-10"
+            className="relative z-10 -mt-14 h-28 w-28 flex-shrink-0 overflow-hidden rounded-full border-4 border-background bg-foreground shadow-lg"
             onPointerDown={profile.avatarUrl ? avatarLongPress.start : undefined}
             onPointerUp={profile.avatarUrl ? avatarLongPress.cancel : undefined}
             onPointerCancel={profile.avatarUrl ? avatarLongPress.cancel : undefined}
@@ -2684,9 +2667,9 @@ export default function Profile() {
               ? <img src={profile.avatarUrl ?? undefined} alt={profile.displayName ?? undefined} className="w-full h-full object-cover" draggable={false} />
               : <div className="w-full h-full flex items-center justify-center text-xl font-bold text-background">{profile.displayName?.[0]?.toUpperCase() ?? "?"}</div>}
           </div>
-          <div className="flex-1 min-w-0 flex flex-col justify-center" style={{ minHeight: 32, marginTop: "-10px" }}>
-            <div className="flex items-center gap-1">
-              <h2 className="font-display font-bold text-lg text-foreground leading-tight break-all">{profile.displayName}</h2>
+          <div className="mt-3 flex min-w-0 max-w-full flex-col items-center">
+            <div className="flex max-w-full items-center justify-center gap-1">
+              <h2 className="max-w-full break-words text-center font-display text-xl font-bold leading-tight text-foreground">{profile.displayName}</h2>
               {isVerified(profile.username) && <VerifiedBadge className="w-[18px] h-[18px]" />}
               {profile.id && <BadgeIcon userId={profile.id} size={18} nudge={1.2} />}
             </div>
@@ -2694,12 +2677,12 @@ export default function Profile() {
           </div>
         </div>
 
-        {profile.bio && <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap break-words">{renderBioMentions(profile.bio)}</p>}
+        {profile.bio && <p className="text-center text-sm leading-relaxed text-muted-foreground whitespace-pre-wrap break-words">{renderBioMentions(profile.bio)}</p>}
         {bioLinks.length > 0 && (
           <SocialLinkRow
             links={bioLinks}
             showHidden={isMyProfile}
-            className="mt-2 justify-start"
+            className="mt-2 justify-center"
           />
         )}
 
@@ -2791,7 +2774,7 @@ export default function Profile() {
       ) : (
         <>
           {/* Tabs — centered pills. For other users, hide Chains pill if they have no chains at all. */}
-          <div className="px-4 pb-1">
+          <div className="px-4 pb-2">
             <div className="flex justify-center gap-2">
               <button onClick={() => handleTabChange("films")} className={`filter-pill flex items-center gap-1.5 ${activeTab === "films" ? "active" : ""}`}>
                 <TicketIcon className="w-3 h-3" /> Tickets
@@ -2854,7 +2837,7 @@ export default function Profile() {
               // orderedAlbums is memoised at component level — no local redeclaration needed
               return (
                 <>
-                  <div className="flex justify-center px-3 pt-0.5 pb-1">
+                  <div className="flex justify-center px-3 pt-1 pb-2">
                     <button
                       type="button"
                       aria-haspopup="dialog"
@@ -2862,9 +2845,9 @@ export default function Profile() {
                       onClick={() => setShowAlbumPicker(true)}
                       className="inline-flex min-w-0 max-w-[calc(100vw-2rem)] items-center gap-2 rounded-xl bg-secondary px-4 py-2 text-sm font-semibold text-foreground transition-colors active:bg-secondary/70"
                     >
-                      <FolderOpen className="h-4 w-4 shrink-0 opacity-70" />
+                      <Images className="h-4 w-4 shrink-0" />
                       <span className="min-w-0 truncate">{albumPillLabel}</span>
-                      <ChevronDown className="h-4 w-4 shrink-0 opacity-60" />
+                      <ChevronDown className="h-4 w-4 shrink-0" />
                     </button>
                   </div>
                   <FilmsGrid tickets={filteredTickets} isOwn={isOwn} username={username} isReorderMode={isReorderMode} onToggleReorderMode={() => setIsReorderMode(p => !p)} isLoading={ticketsLoading} />
@@ -2963,18 +2946,17 @@ export default function Profile() {
       {/* Album picker — one centered pill opens the full, ordered album list. */}
       {showAlbumPicker && createPortal(
         <div
-          className="fixed inset-0 z-[9998] flex items-end justify-center bg-black/50"
+          className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
           onClick={() => setShowAlbumPicker(false)}
         >
           <section
             role="dialog"
             aria-modal="true"
             aria-label={lang === "th" ? "เลือกอัลบั้ม" : "Choose an album"}
-            className="flex max-h-[82dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border-t border-border bg-background"
+            className="flex max-h-[82dvh] w-full max-w-[398px] flex-col overflow-hidden rounded-3xl border border-border bg-background shadow-2xl"
             onClick={e => e.stopPropagation()}
           >
             <div className="shrink-0 px-5 pt-3 pb-3">
-              <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-border" />
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <h3 className="font-display text-base font-bold">
