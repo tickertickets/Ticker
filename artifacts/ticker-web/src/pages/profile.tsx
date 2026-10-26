@@ -874,7 +874,7 @@ function FilmsGrid({ tickets, isOwn, username, isReorderMode = false, onToggleRe
   if (!isOwn) {
     return (
       <>
-        <div className="flex justify-end px-3 pt-3 pb-1">
+        <div className="flex justify-end px-3 pt-2 pb-1">
           <button
             onClick={() => setShowDetails(d => !d)}
             className={cn(
@@ -898,7 +898,7 @@ function FilmsGrid({ tickets, isOwn, username, isReorderMode = false, onToggleRe
 
   return (
     <>
-      <div className="flex justify-end items-center gap-2 px-3 pt-3 pb-1">
+      <div className="flex justify-end items-center gap-2 px-3 pt-2 pb-1">
         <button
           onClick={() => setShowDetails(d => !d)}
           className={cn(
@@ -2541,35 +2541,33 @@ export default function Profile() {
   return (
     <div ref={scrollRef} className="h-full overflow-y-auto overscroll-y-none">
       {/* Profile navigation stays above the cover so its controls never cover profile art. */}
-      <div className="relative z-20 border-b border-border/60 bg-background" style={{ paddingTop: "var(--sai-top)" }}>
-        <div className="flex h-14 items-center justify-between px-4">
-          <div className="w-9 shrink-0">
+      <div className="relative z-30 border-b border-border bg-background">
+        <div className="relative flex flex-shrink-0 items-center gap-3 px-4 py-4">
+          <div className="w-9 h-9 flex-shrink-0">
             {isOwn ? (
               <Link href="/bookmarks">
-                <button aria-label={lang === "th" ? "บันทึกไว้" : "Bookmarks"} className="flex h-9 w-9 items-center justify-center">
+                <button aria-label={lang === "th" ? "บันทึกไว้" : "Bookmarks"} className="flex w-9 h-9 items-center justify-center">
                   <Bookmark className="h-5 w-5 text-foreground" />
                 </button>
               </Link>
             ) : (
-              <button aria-label={lang === "th" ? "ย้อนกลับ" : "Go back"} onClick={() => navBack(navigate)} className="flex h-9 w-9 items-center justify-center">
-                <ChevronLeft className="h-6 w-6 text-foreground" />
+              <button aria-label={lang === "th" ? "ย้อนกลับ" : "Go back"} onClick={() => navBack(navigate)} className="flex w-9 h-9 items-center justify-center rounded-full bg-secondary">
+                <ChevronLeft className="h-5 w-5 text-foreground" />
               </button>
             )}
           </div>
 
-          <div className="flex min-w-0 flex-1 items-center justify-center gap-2">
-            <span className="font-display text-xl font-bold tracking-tight text-foreground">Ticker</span>
-            {(isRefreshing || ptrPullY > 0) && (
-              <Loader2
-                className={cn("h-4 w-4 text-muted-foreground", isRefreshing && "animate-spin")}
-                style={{
-                  opacity: isRefreshing ? 1 : ptrProgress,
-                  transform: ptrIsPulling ? `rotate(${ptrProgress * 270}deg)` : undefined,
-                  transition: ptrIsPulling ? undefined : "opacity 260ms cubic-bezier(0.22, 1, 0.36, 1)",
-                }}
-              />
-            )}
-          </div>
+          <h1 className="pointer-events-none absolute left-0 right-0 text-center font-display text-xl font-bold tracking-tight text-foreground">Ticker</h1>
+          {(isRefreshing || ptrPullY > 0) && (
+            <Loader2
+              className={cn("pointer-events-none absolute left-1/2 top-full z-10 mt-1 h-4 w-4 -translate-x-1/2 text-muted-foreground", isRefreshing && "animate-spin")}
+              style={{
+                opacity: isRefreshing ? 1 : ptrProgress,
+                transform: ptrIsPulling ? `translateX(-50%) rotate(${ptrProgress * 270}deg)` : undefined,
+                transition: ptrIsPulling ? undefined : "opacity 260ms cubic-bezier(0.22, 1, 0.36, 1)",
+              }}
+            />
+          )}
 
           <button
             type="button"
@@ -2577,9 +2575,9 @@ export default function Profile() {
             aria-haspopup="menu"
             aria-expanded={showProfileActions}
             onClick={() => setShowProfileActions(value => !value)}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-foreground transition-colors active:bg-secondary"
+            className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center text-foreground"
           >
-            <MoreHorizontal className="h-6 w-6" />
+            <MoreHorizontal className="h-6 w-6 text-foreground" />
           </button>
         </div>
 
@@ -2656,7 +2654,7 @@ export default function Profile() {
       <div className="px-4 pb-3">
         <div className="mb-3 flex flex-col items-center text-center">
           <div
-            className="relative z-10 -mt-14 h-28 w-28 flex-shrink-0 overflow-hidden rounded-full border-4 border-background bg-foreground shadow-lg"
+            className="relative z-10 -mt-14 h-28 w-28 flex-shrink-0 overflow-hidden rounded-2xl border-4 border-background bg-foreground shadow-lg"
             onPointerDown={profile.avatarUrl ? avatarLongPress.start : undefined}
             onPointerUp={profile.avatarUrl ? avatarLongPress.cancel : undefined}
             onPointerCancel={profile.avatarUrl ? avatarLongPress.cancel : undefined}
@@ -2837,7 +2835,7 @@ export default function Profile() {
               // orderedAlbums is memoised at component level — no local redeclaration needed
               return (
                 <>
-                  <div className="flex justify-center px-3 pt-1 pb-2">
+                  <div className="flex justify-center px-3 pt-1 pb-1">
                     <button
                       type="button"
                       aria-haspopup="dialog"

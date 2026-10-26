@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { type SocialLink, MAX_LINKS } from "@/lib/socialLinks";
+import { type SocialLink, MAX_LINKS, getPlatformName } from "@/lib/socialLinks";
 import { SocialLinkPlatformIcon } from "./SocialLinkPlatformIcon";
 import { Globe } from "lucide-react";
 import { useLang } from "@/lib/i18n";
@@ -15,6 +16,7 @@ interface Props {
 
 export function SocialLinkRow({ links, isOwner, showHidden, onManage, className, size = "sm" }: Props) {
   const { t } = useLang();
+  const [expandedLinkId, setExpandedLinkId] = useState<string | null>(null);
   const visible = links.filter(l => showHidden || !l.hidden);
 
   if (visible.length === 0 && !isOwner) return null;
@@ -26,30 +28,51 @@ export function SocialLinkRow({ links, isOwner, showHidden, onManage, className,
     <div className={cn("flex flex-wrap items-center justify-center gap-x-3 gap-y-2 w-full", className)}>
       {visible.map(link => {
         const isHidden = !!link.hidden;
+        const isExpanded = expandedLinkId === link.id;
+        const label = link.label?.trim() || getPlatformName(link.platform);
         return (
-          <a
+          <div
             key={link.id}
-            href={link.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={e => e.stopPropagation()}
             className={cn(
-              "inline-flex items-center gap-1.5 transition-opacity active:scale-95 select-none text-foreground",
+              "inline-flex shrink-0 items-center overflow-hidden rounded-full bg-secondary transition-opacity",
               isHidden && "opacity-40",
             )}
-            title={link.label ? `${link.label}` : link.platform}
+            style={{
+              width: "max-content",
+              maxWidth: isExpanded ? "min(184px, calc(100vw - 48px))" : 36,
+              transition: "max-width 260ms cubic-bezier(0.22, 1, 0.36, 1), opacity 160ms ease",
+            }}
           >
-            <SocialLinkPlatformIcon
-              platform={link.platform as any}
-              size={iconSize}
-              className="text-foreground flex-shrink-0"
-            />
-            {link.label && (
-              <span className={cn("font-semibold leading-none text-foreground whitespace-nowrap", labelCls)}>
-                {link.label}
-              </span>
-            )}
-          </a>
+            <button
+              type="button"
+              aria-label={label}
+              aria-expanded={isExpanded}
+              title={label}
+              onClick={() => setExpandedLinkId(current => current === link.id ? null : link.id)}
+              className="relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-foreground transition-transform active:scale-95"
+            >
+              <SocialLinkPlatformIcon
+                platform={link.platform as any}
+                size={iconSize}
+                className="flex-shrink-0 text-foreground"
+              />
+            </button>
+            <a
+              href={link.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-hidden={!isExpanded}
+              tabIndex={isExpanded ? 0 : -1}
+              onClick={e => e.stopPropagation()}
+              className={cn(
+                "shrink-0 overflow-hidden pr-3 font-semibold leading-none text-foreground whitespace-nowrap transition-opacity duration-200",
+                labelCls,
+                isExpanded ? "opacity-100" : "pointer-events-none opacity-0",
+              )}
+            >
+              <span className="block max-w-[132px] truncate">{label}</span>
+            </a>
+          </div>
         );
       })}
 
