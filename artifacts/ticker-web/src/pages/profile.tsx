@@ -32,7 +32,7 @@ import {
   Loader2, Settings, Link2, Users, X, User as UserIcon,
   Camera, MessageCircle, Lock, Unlock, Flag, MoreHorizontal, ChevronLeft, ChevronDown, Bookmark, Share2,
   Heart, Send, Pencil, Trash2, Ticket as TicketIcon, AtSign, Check, Search, EyeOff, Eye, Plus, Globe, GripVertical,
-  Bell, BellOff, Images, Archive, ArchiveRestore,
+  Bell, BellOff, Images, Sticker, Archive, ArchiveRestore,
 } from "lucide-react";
 import { cn, fmtCount } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
@@ -874,7 +874,7 @@ function FilmsGrid({ tickets, isOwn, username, isReorderMode = false, onToggleRe
   if (!isOwn) {
     return (
       <>
-        <div className="flex justify-end px-3 pt-2 pb-1">
+        <div className="flex justify-end px-3 pt-1 pb-1">
           <button
             onClick={() => setShowDetails(d => !d)}
             className={cn(
@@ -898,7 +898,7 @@ function FilmsGrid({ tickets, isOwn, username, isReorderMode = false, onToggleRe
 
   return (
     <>
-      <div className="flex justify-end items-center gap-2 px-3 pt-2 pb-1">
+      <div className="flex justify-end items-center gap-2 px-3 pt-1 pb-1">
         <button
           onClick={() => setShowDetails(d => !d)}
           className={cn(
@@ -2547,7 +2547,7 @@ export default function Profile() {
             {isOwn ? (
               <Link href="/bookmarks">
                 <button aria-label={lang === "th" ? "บันทึกไว้" : "Bookmarks"} className="flex w-9 h-9 items-center justify-center">
-                  <Bookmark className="h-5 w-5 text-foreground" />
+                  <Bookmark className="h-6 w-6 text-foreground" />
                 </button>
               </Link>
             ) : (
@@ -2669,7 +2669,7 @@ export default function Profile() {
             <div className="flex max-w-full items-center justify-center gap-1">
               <h2 className="max-w-full break-words text-center font-display text-xl font-bold leading-tight text-foreground">{profile.displayName}</h2>
               {isVerified(profile.username) && <VerifiedBadge className="w-[18px] h-[18px]" />}
-              {profile.id && <BadgeIcon userId={profile.id} size={18} nudge={1.2} />}
+              {profile.id && <BadgeIcon userId={profile.id} size={18} nudge={0} />}
             </div>
             <p className="text-xs text-muted-foreground">@{profile.username}</p>
           </div>
@@ -2835,17 +2835,17 @@ export default function Profile() {
               // orderedAlbums is memoised at component level — no local redeclaration needed
               return (
                 <>
-                  <div className="flex justify-center px-3 pt-1 pb-1">
+                  <div className="flex justify-center px-3 pt-1 pb-0">
                     <button
                       type="button"
                       aria-haspopup="dialog"
                       aria-expanded={showAlbumPicker}
                       onClick={() => setShowAlbumPicker(true)}
-                      className="inline-flex min-w-0 max-w-[calc(100vw-2rem)] items-center gap-2 rounded-xl bg-secondary px-4 py-2 text-sm font-semibold text-foreground transition-colors active:bg-secondary/70"
+                      className="filter-pill max-w-[calc(100vw-2rem)]"
                     >
-                      <Images className="h-4 w-4 shrink-0" />
+                      <Sticker className="h-3 w-3 shrink-0" />
                       <span className="min-w-0 truncate">{albumPillLabel}</span>
-                      <ChevronDown className="h-4 w-4 shrink-0" />
+                      <ChevronDown className="h-3 w-3 shrink-0" />
                     </button>
                   </div>
                   <FilmsGrid tickets={filteredTickets} isOwn={isOwn} username={username} isReorderMode={isReorderMode} onToggleReorderMode={() => setIsReorderMode(p => !p)} isLoading={ticketsLoading} />
