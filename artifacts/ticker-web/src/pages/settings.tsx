@@ -1404,14 +1404,14 @@ export default function Settings() {
   return (
     <div ref={scrollRef} className="h-full overflow-y-auto overscroll-y-none">
       {/* Header */}
-      <div className="sticky top-0 z-30 bg-background border-b border-border">
-        <div className="flex items-center gap-3 px-4 pt-5 pb-4">
+      <div className="sticky top-0 z-30 app-page-header">
+        <div className="app-page-header-row">
           <button
             onClick={() => {
               if (activeSection !== "main") setActiveSection("main");
               else navBack(navigate);
             }}
-            className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center"
+            className="app-page-header-action"
           >
             <ChevronLeft className="w-5 h-5 text-foreground" />
           </button>

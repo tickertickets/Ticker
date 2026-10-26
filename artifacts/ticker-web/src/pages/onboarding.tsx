@@ -306,13 +306,12 @@ export default function Onboarding() {
       >
         {/* Top bar */}
         <div
-          className="relative z-20 flex items-center gap-3 px-5 pb-4 flex-shrink-0"
-          style={{ paddingTop: "calc(var(--sai-top) + 1.75rem)" }}
+          className="app-page-header-row relative z-20"
+          style={{ paddingTop: "max(16px, var(--sai-top))" }}
         >
           <button
             onClick={handleBack}
-            className="relative z-20 w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
-            style={{ background: "#f2f2f7" }}
+            className="app-page-header-action relative z-20"
           >
             <ChevronLeft className="w-5 h-5 text-[#111]" />
           </button>

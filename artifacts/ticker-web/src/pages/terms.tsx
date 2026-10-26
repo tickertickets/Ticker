@@ -11,13 +11,12 @@ export default function TermsPage() {
     <div className="flex justify-center" style={{ minHeight: "100dvh", background: "var(--app-chrome)" }}>
       <div className="relative w-full max-w-[430px] bg-background flex flex-col" style={{ minHeight: "100dvh" }}>
         {/* Header */}
-        <div className="flex items-center gap-3 px-5 pb-4 border-b border-[#f0f0f0] flex-shrink-0" style={{ paddingTop: "max(var(--sai-top), 12px)" }}>
+        <div className="app-page-header app-page-header-row">
           <button
             onClick={() => navigate("/")}
-            className="w-9 h-9 rounded-full flex items-center justify-center active:opacity-60"
-            style={{ background: "#f2f2f7" }}
+            className="app-page-header-action"
           >
-            <ArrowLeft className="w-4 h-4 text-[#111]" />
+            <ArrowLeft className="w-5 h-5 text-[#111]" />
           </button>
           <h1 className="font-black text-[17px] text-[#111]">{tr("ข้อกำหนดการให้บริการ", "Terms of Service")}</h1>
         </div>

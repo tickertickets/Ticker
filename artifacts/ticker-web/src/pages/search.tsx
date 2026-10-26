@@ -849,9 +849,8 @@ export default function Search({ isActive = true }: { isActive?: boolean } = {})
           constant so there is no layout jump when the bar hides/shows. ── */}
       <div
         ref={headerWrapRef}
-        className="absolute top-0 left-0 right-0 z-30 bg-background border-b border-border transition-transform duration-300 ease-in-out will-change-transform"
+        className="absolute top-0 left-0 right-0 z-30 app-page-header transition-transform duration-300 ease-in-out will-change-transform"
         style={{
-          paddingTop: "max(1rem, var(--sai-top))",
           transform: headerHidden ? "translateY(-100%)" : "translateY(0)",
         }}
       >

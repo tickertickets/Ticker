@@ -584,10 +584,11 @@ export default function ChainDetail() {
     <div className="flex flex-col overflow-hidden h-full">
 
       {/* ── Header ── */}
-      <div className="flex-shrink-0 bg-background border-b border-border relative flex items-center justify-center px-4" style={{ paddingTop: "max(1.25rem, var(--sai-top))", paddingBottom: "1.25rem" }}>
+      <div className="app-page-header">
+        <div className="app-page-header-row justify-center">
           <button
             onClick={() => navBack(navigate)}
-            className="absolute left-4 w-9 h-9 rounded-full bg-secondary flex items-center justify-center"
+            className="app-page-header-action absolute left-4 top-0"
           >
             <ChevronLeft className="w-5 h-5 text-foreground" />
           </button>
@@ -595,12 +596,13 @@ export default function ChainDetail() {
           {user && !isOwner && (
             <button
               onClick={() => setReportChainOpen(true)}
-              className="absolute right-4 w-9 h-9 rounded-full bg-secondary flex items-center justify-center"
+              className="app-page-header-action absolute right-4 top-0"
               aria-label="Report chain"
             >
               <Flag className="w-4 h-4 text-muted-foreground" />
             </button>
           )}
+        </div>
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto overscroll-y-none">

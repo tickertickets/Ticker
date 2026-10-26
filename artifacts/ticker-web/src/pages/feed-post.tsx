@@ -65,12 +65,11 @@ export default function FeedPost() {
     <div className="h-full flex flex-col bg-background">
       {/* Header */}
       <div
-        className="flex items-center gap-2 px-4 bg-background/95 backdrop-blur-xl border-b border-border flex-shrink-0"
-        style={{ paddingTop: "max(16px, var(--sai-top))", paddingBottom: "12px" }}
+        className="app-page-header app-page-header-row backdrop-blur-xl"
       >
         <button
           onClick={() => navBack(navigate)}
-          className="w-9 h-9 rounded-xl flex items-center justify-center bg-secondary active:opacity-70 transition-opacity flex-shrink-0"
+          className="app-page-header-action"
         >
           <ChevronLeft className="w-5 h-5 text-foreground" />
         </button>

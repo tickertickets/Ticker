@@ -348,6 +348,19 @@ html.theme-transitioning *::after {
     @apply bg-foreground text-background;
   }
 
+  /* ── Shared white page header ── */
+  .app-page-header {
+    @apply flex-shrink-0 bg-background border-b border-border;
+    padding-top: max(16px, var(--sai-top));
+  }
+  .app-page-header-row {
+    @apply relative flex min-h-12 items-center gap-3 px-4 pb-3;
+  }
+  .app-page-header-action {
+    @apply relative flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-foreground transition-opacity active:opacity-60;
+    background-color: transparent !important;
+  }
+
   /* ── Search Bar ── */
   .search-bar {
     @apply w-full bg-secondary rounded-2xl px-4 h-12 text-sm font-medium text-foreground placeholder:text-muted-foreground border-none outline-none;

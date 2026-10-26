@@ -444,11 +444,11 @@ export default function EditTicket() {
   return (
     <div className="h-full flex flex-col bg-background">
       {/* Header */}
-      <div className="shrink-0 z-30 bg-background border-b border-border">
-        <div className="flex items-center gap-3 px-4 pt-4 pb-3">
+      <div className="app-page-header z-30">
+        <div className="app-page-header-row">
           <button
             onClick={() => goBack()}
-            className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center shrink-0"
+            className="app-page-header-action"
           >
             <ChevronLeft className="w-5 h-5 text-foreground" />
           </button>

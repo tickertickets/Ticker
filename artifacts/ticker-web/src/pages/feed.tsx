@@ -435,16 +435,15 @@ export default function Feed({ isActive = true }: { isActive?: boolean } = {}) {
         ref={headerRef}
         className={cn(
           "absolute top-0 left-0 right-0 z-30",
-          "bg-background border-b border-border",
+          "app-page-header",
           "transition-transform duration-300 ease-in-out",
           headerHidden && "-translate-y-full"
         )}
-        style={{ paddingTop: "max(16px, var(--sai-top))" }}
       >
         <div className="flex items-center px-4 pb-3">
           {user ? (
             <Link href="/chat">
-              <button className="relative flex items-center justify-center w-9 h-9">
+              <button className="app-page-header-action">
                 <MessageCircle className="w-6 h-6 text-foreground" />
                 {chatUnread > 0 && (
                   <span className="absolute top-0.5 right-0.5 min-w-[16px] h-4 bg-foreground rounded-full flex items-center justify-center px-1">
@@ -468,7 +467,7 @@ export default function Feed({ isActive = true }: { isActive?: boolean } = {}) {
           </div>
           {user ? (
             <Link href="/notifications">
-              <button className="relative flex items-center justify-center w-9 h-9">
+              <button className="app-page-header-action">
                 <Bell className="w-6 h-6 text-foreground" />
                 {unreadCount > 0 && (
                   <span className="absolute top-0.5 right-0.5 min-w-[16px] h-4 bg-foreground rounded-full flex items-center justify-center px-1">

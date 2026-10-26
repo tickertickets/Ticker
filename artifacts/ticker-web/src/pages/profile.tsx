@@ -2541,17 +2541,17 @@ export default function Profile() {
   return (
     <div ref={scrollRef} className="h-full overflow-y-auto overscroll-y-none">
       {/* Profile navigation stays above the cover so its controls never cover profile art. */}
-      <div className="relative z-30 border-b border-border bg-background">
-        <div className="relative flex flex-shrink-0 items-center gap-3 px-4 py-4">
+      <div className="app-page-header relative z-30">
+        <div className="app-page-header-row flex-shrink-0">
           <div className="w-9 h-9 flex-shrink-0">
             {isOwn ? (
               <Link href="/bookmarks">
-                <button aria-label={lang === "th" ? "บันทึกไว้" : "Bookmarks"} className="flex w-9 h-9 items-center justify-center">
+                <button aria-label={lang === "th" ? "บันทึกไว้" : "Bookmarks"} className="app-page-header-action">
                   <Bookmark className="h-6 w-6 text-foreground" />
                 </button>
               </Link>
             ) : (
-              <button aria-label={lang === "th" ? "ย้อนกลับ" : "Go back"} onClick={() => navBack(navigate)} className="flex w-9 h-9 items-center justify-center rounded-full bg-secondary">
+              <button aria-label={lang === "th" ? "ย้อนกลับ" : "Go back"} onClick={() => navBack(navigate)} className="app-page-header-action">
                 <ChevronLeft className="h-5 w-5 text-foreground" />
               </button>
             )}
@@ -2575,7 +2575,7 @@ export default function Profile() {
             aria-haspopup="menu"
             aria-expanded={showProfileActions}
             onClick={() => setShowProfileActions(value => !value)}
-            className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center text-foreground"
+            className="app-page-header-action ml-auto"
           >
             <MoreHorizontal className="h-6 w-6 text-foreground" />
           </button>

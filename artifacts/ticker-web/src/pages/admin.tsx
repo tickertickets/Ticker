@@ -509,9 +509,10 @@ export default function AdminPanel() {
   return (
     <div className="h-full bg-background flex flex-col">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 pt-safe-top pt-4 pb-3 border-b border-border">
-        <button onClick={() => navBack(navigate, "/settings")} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-secondary transition-colors">
-          <ArrowLeft className="w-4 h-4" />
+      <div className="app-page-header">
+        <div className="app-page-header-row">
+        <button onClick={() => navBack(navigate, "/settings")} className="app-page-header-action">
+          <ArrowLeft className="w-5 h-5" />
         </button>
         <div className="flex-1 min-w-0">
           <h1 className="font-black text-base leading-tight">Admin</h1>
@@ -521,6 +522,7 @@ export default function AdminPanel() {
             {tab === "broadcast" && "ส่งประกาศถึงผู้ใช้"}
             {tab === "reports" && "รายงานจากผู้ใช้"}
           </p>
+        </div>
         </div>
       </div>
 

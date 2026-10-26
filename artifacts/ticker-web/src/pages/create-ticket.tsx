@@ -921,11 +921,11 @@ export default function CreateTicket() {
   return (
     <div ref={scrollRef} className="h-full overflow-y-auto overscroll-y-none">
       {/* Header */}
-      <div className="sticky top-0 z-30 bg-background border-b border-border">
-        <div className="flex items-center gap-3 px-4 pt-4 pb-3">
+      <div className="sticky top-0 z-30 app-page-header">
+        <div className="app-page-header-row">
           <button
             onClick={handleBack}
-            className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center shrink-0"
+            className="app-page-header-action"
           >
             <ChevronLeft className="w-5 h-5 text-foreground" />
           </button>

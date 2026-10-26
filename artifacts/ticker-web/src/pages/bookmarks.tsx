@@ -287,13 +287,12 @@ export default function Bookmarks() {
     <div ref={scrollRef} className="h-full overflow-y-auto overscroll-y-none">
       {/* Header */}
       <div
-        className="sticky top-0 z-30 bg-background border-b border-border"
-        style={{ paddingTop: "var(--sai-top)" }}
+        className="sticky top-0 z-30 app-page-header"
       >
-        <div className="px-4 py-4 flex items-center gap-2">
+        <div className="app-page-header-row">
           <button
             onClick={() => navBack(navigate)}
-            className="w-9 h-9 flex items-center justify-center rounded-full bg-secondary active:bg-secondary/70 transition-colors flex-shrink-0"
+            className="app-page-header-action"
           >
             <ChevronLeft className="w-5 h-5 text-foreground" />
           </button>

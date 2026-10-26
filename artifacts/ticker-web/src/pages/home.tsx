@@ -814,11 +814,10 @@ export default function Home({ isActive = true }: { isActive?: boolean }) {
         ref={headerRef}
         className={cn(
           "absolute top-0 left-0 right-0 z-30",
-          "bg-background border-b border-border",
+          "app-page-header",
           "transition-transform duration-300 ease-in-out",
           headerHidden && "-translate-y-full"
         )}
-        style={{ paddingTop: "max(16px, var(--sai-top))" }}
       >
         {/* Title row */}
         <div className="flex items-center px-4 pb-3">

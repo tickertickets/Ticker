@@ -100,16 +100,18 @@ export default function PageVerificationRequest() {
   return (
     <div className="h-full bg-background flex flex-col">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 pt-safe-top pt-4 pb-3 border-b border-border">
+      <div className="app-page-header">
+        <div className="app-page-header-row">
         <button
           onClick={goBack}
-          className="w-8 h-8 flex items-center justify-center rounded-full bg-secondary hover:bg-secondary/70 transition-colors"
+          className="app-page-header-action"
         >
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowLeft className="w-5 h-5" />
         </button>
         <div>
           <h1 className="font-black text-base leading-tight">{t.popcornPageTitle}</h1>
           <p className="text-[11px] text-muted-foreground leading-tight">{t.popcornPageSubtitle}</p>
+        </div>
         </div>
       </div>
 

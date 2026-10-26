@@ -459,9 +459,9 @@ export default function TicketDetail() {
   return (
     <div className="flex flex-col overflow-hidden h-full">
       {/* Header */}
-      <div className="z-30 bg-background border-b border-border px-4 py-4 flex items-center gap-3 flex-shrink-0 relative">
+      <div className="app-page-header app-page-header-row relative z-30">
         <button
-          className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center flex-shrink-0"
+          className="app-page-header-action"
           onClick={() => navBack(navigate, `/profile/${ticket.user?.username}`)}
         >
           <ChevronLeft className="w-5 h-5 text-foreground" />
@@ -473,7 +473,7 @@ export default function TicketDetail() {
               if (!user) { toast({ title: t.signInToLike, duration: 1500 }); return; }
               setStoryShareOpen(true);
             }}
-            className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+            className="app-page-header-action text-muted-foreground hover:text-foreground"
           >
             <Share2 className="w-4 h-4" />
           </button>
@@ -481,7 +481,7 @@ export default function TicketDetail() {
             <button
               onClick={handleDeleteTicket}
               disabled={deleteTicket.isPending}
-              className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+              className="app-page-header-action text-muted-foreground hover:text-foreground"
             >
               {deleteTicket.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
             </button>
@@ -491,7 +491,7 @@ export default function TicketDetail() {
             // badge shown next to the name, not moderation access.
             <button
               onClick={() => setReportTicketOpen(true)}
-              className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+              className="app-page-header-action text-muted-foreground hover:text-foreground"
             >
               <Flag className="w-4 h-4" />
             </button>

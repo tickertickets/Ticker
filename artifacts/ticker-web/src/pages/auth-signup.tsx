@@ -82,13 +82,10 @@ export default function AuthSignup() {
         style={{ height: "100%", overflow: "hidden", background: "#fff" }}
       >
         {/* Top bar */}
-        <div
-          className="flex items-center gap-3 px-5 pt-5 pb-4 flex-shrink-0"
-        >
+        <div className="app-page-header-row" style={{ paddingTop: "max(16px, var(--sai-top))" }}>
           <button
             onClick={() => navigate("/")}
-            className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
-            style={{ background: "#f2f2f7" }}
+            className="app-page-header-action"
           >
             <ChevronLeft className="w-5 h-5 text-[#111]" />
           </button>

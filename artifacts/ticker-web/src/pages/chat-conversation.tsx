@@ -551,9 +551,9 @@ export default function ChatConversation() {
       )}
 
       {/* Header */}
-      <div className="bg-background border-b border-border flex-shrink-0">
-        <div className="flex items-center gap-3 px-4 pt-5 pb-4">
-          <button onClick={() => navigate("/chat")} className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center">
+      <div className="app-page-header">
+        <div className="app-page-header-row">
+          <button onClick={() => navigate("/chat")} className="app-page-header-action">
             <ArrowLeft className="w-5 h-5 text-foreground" />
           </button>
           {other && (
