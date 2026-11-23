@@ -1,0 +1,1293 @@
+openapi: 3.1.0
+info:
+  title: Api
+  version: 0.1.0
+  description: Ticker Movie Social Platform API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: auth
+    description: Authentication operations
+  - name: users
+    description: User profile operations
+  - name: tickets
+    description: Movie ticket operations
+  - name: social
+    description: Social interaction operations
+  - name: chat
+    description: Direct messaging operations
+  - name: notifications
+    description: Notification operations
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current user session
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserSession"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Logout current user
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /users/{username}:
+    get:
+      operationId: getUserProfile
+      tags: [users]
+      summary: Get user public profile
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /users/me/profile:
+    put:
+      operationId: updateMyProfile
+      tags: [users]
+      summary: Update current user profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProfileRequest"
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+
+  /users/check-username:
+    get:
+      operationId: checkUsername
+      tags: [users]
+      summary: Check if username is available
+      parameters:
+        - name: username
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Username availability
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UsernameCheckResponse"
+
+  /onboarding:
+    post:
+      operationId: completeOnboarding
+      tags: [users]
+      summary: Complete user onboarding
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OnboardingRequest"
+      responses:
+        "200":
+          description: Onboarding completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+
+  /tickets:
+    get:
+      operationId: listTickets
+      tags: [tickets]
+      summary: List tickets (feed)
+      parameters:
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: feed
+          in: query
+          schema:
+            type: string
+            enum: [home, discovery, following]
+            default: discovery
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [all, ticket, reel]
+            default: all
+      responses:
+        "200":
+          description: Ticket list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TicketListResponse"
+    post:
+      operationId: createTicket
+      tags: [tickets]
+      summary: Create a new movie ticket
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTicketRequest"
+      responses:
+        "201":
+          description: Created ticket
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ticket"
+
+  /tickets/{ticketId}:
+    get:
+      operationId: getTicket
+      tags: [tickets]
+      summary: Get ticket by ID
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Ticket
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ticket"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: updateTicket
+      tags: [tickets]
+      summary: Update a ticket
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTicketRequest"
+      responses:
+        "200":
+          description: Updated ticket
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ticket"
+    delete:
+      operationId: deleteTicket
+      tags: [tickets]
+      summary: Delete a ticket
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /tickets/{ticketId}/like:
+    post:
+      operationId: likeTicket
+      tags: [social]
+      summary: Like a ticket
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Like status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LikeResponse"
+    delete:
+      operationId: unlikeTicket
+      tags: [social]
+      summary: Unlike a ticket
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Unlike status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LikeResponse"
+
+  /tickets/{ticketId}/comments:
+    get:
+      operationId: getTicketComments
+      tags: [social]
+      summary: Get comments on a ticket
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Comments list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommentListResponse"
+    post:
+      operationId: createComment
+      tags: [social]
+      summary: Comment on a ticket
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCommentRequest"
+      responses:
+        "201":
+          description: Created comment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Comment"
+
+  /tickets/{ticketId}/bookmark:
+    post:
+      operationId: bookmarkTicket
+      tags: [social]
+      summary: Bookmark a ticket
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Bookmark status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+    delete:
+      operationId: unbookmarkTicket
+      tags: [social]
+      summary: Remove bookmark
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Unbookmark status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /tickets/{ticketId}/report:
+    post:
+      operationId: reportTicket
+      tags: [social]
+      summary: Report a ticket
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportRequest"
+      responses:
+        "200":
+          description: Reported
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /users/{username}/follow:
+    post:
+      operationId: followUser
+      tags: [social]
+      summary: Follow a user
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Follow status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FollowResponse"
+    delete:
+      operationId: unfollowUser
+      tags: [social]
+      summary: Unfollow a user
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Unfollow status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FollowResponse"
+
+  /users/{username}/tickets:
+    get:
+      operationId: getUserTickets
+      tags: [tickets]
+      summary: Get tickets by user
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: User tickets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TicketListResponse"
+
+  /users/{username}/followers:
+    get:
+      operationId: getUserFollowers
+      tags: [social]
+      summary: Get user followers
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Followers list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserListResponse"
+
+  /users/{username}/following:
+    get:
+      operationId: getUserFollowing
+      tags: [social]
+      summary: Get who user follows
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Following list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserListResponse"
+
+  /bookmarks:
+    get:
+      operationId: getMyBookmarks
+      tags: [social]
+      summary: Get my bookmarked tickets
+      parameters:
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Bookmarks
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TicketListResponse"
+
+  /movies/search:
+    get:
+      operationId: searchMovies
+      tags: [tickets]
+      summary: Search movies from OMDB API
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+      responses:
+        "200":
+          description: Movie search results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MovieSearchResponse"
+
+  /movies/{imdbId}:
+    get:
+      operationId: getMovieDetails
+      tags: [tickets]
+      summary: Get movie details from OMDB
+      parameters:
+        - name: imdbId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Movie details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MovieDetails"
+
+  /notifications:
+    get:
+      operationId: getNotifications
+      tags: [notifications]
+      summary: Get user notifications
+      parameters:
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Notifications
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationListResponse"
+
+  /notifications/read-all:
+    post:
+      operationId: markAllNotificationsRead
+      tags: [notifications]
+      summary: Mark all notifications as read
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /chat/conversations:
+    get:
+      operationId: getConversations
+      tags: [chat]
+      summary: Get all DM conversations
+      responses:
+        "200":
+          description: Conversations
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationListResponse"
+
+  /chat/conversations/{conversationId}/messages:
+    get:
+      operationId: getMessages
+      tags: [chat]
+      summary: Get messages in a conversation
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 30
+      responses:
+        "200":
+          description: Messages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageListResponse"
+    post:
+      operationId: sendMessage
+      tags: [chat]
+      summary: Send a message
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendMessageRequest"
+      responses:
+        "201":
+          description: Sent message
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatMessage"
+
+  /chat/start:
+    post:
+      operationId: startConversation
+      tags: [chat]
+      summary: Start a conversation with a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartConversationRequest"
+      responses:
+        "200":
+          description: Conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversation"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required: [status]
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+      required: [error]
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+      required: [success]
+
+    UserSession:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        username:
+          type: string
+          nullable: true
+        displayName:
+          type: string
+          nullable: true
+        avatarUrl:
+          type: string
+          nullable: true
+        isOnboarded:
+          type: boolean
+        isPrivate:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, email, isOnboarded, isPrivate, createdAt]
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        displayName:
+          type: string
+          nullable: true
+        bio:
+          type: string
+          nullable: true
+        avatarUrl:
+          type: string
+          nullable: true
+        isPrivate:
+          type: boolean
+        ticketCount:
+          type: integer
+        followerCount:
+          type: integer
+        followingCount:
+          type: integer
+        isFollowing:
+          type: boolean
+        isFollowedBy:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, username, isPrivate, ticketCount, followerCount, followingCount, isFollowing, isFollowedBy, createdAt]
+
+    UpdateProfileRequest:
+      type: object
+      properties:
+        displayName:
+          type: string
+          nullable: true
+        bio:
+          type: string
+          nullable: true
+        avatarUrl:
+          type: string
+          nullable: true
+        isPrivate:
+          type: boolean
+
+    UsernameCheckResponse:
+      type: object
+      properties:
+        available:
+          type: boolean
+        username:
+          type: string
+      required: [available, username]
+
+    OnboardingRequest:
+      type: object
+      properties:
+        username:
+          type: string
+        displayName:
+          type: string
+          nullable: true
+        birthdate:
+          type: string
+          format: date
+        agreedToTerms:
+          type: boolean
+      required: [username, birthdate, agreedToTerms]
+
+    Ticket:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        user:
+          $ref: "#/components/schemas/TicketAuthor"
+        imdbId:
+          type: string
+        movieTitle:
+          type: string
+        movieYear:
+          type: string
+          nullable: true
+        posterUrl:
+          type: string
+          nullable: true
+        genre:
+          type: string
+          nullable: true
+        template:
+          type: string
+          enum: [classic, holographic, retro]
+        memoryNote:
+          type: string
+          nullable: true
+        watchedAt:
+          type: string
+          format: date
+          nullable: true
+        location:
+          type: string
+          nullable: true
+        isPrivate:
+          type: boolean
+        hideWatchedAt:
+          type: boolean
+        hideLocation:
+          type: boolean
+        isSpoiler:
+          type: boolean
+        rating:
+          type: number
+          nullable: true
+        likeCount:
+          type: integer
+        commentCount:
+          type: integer
+        isLiked:
+          type: boolean
+        isBookmarked:
+          type: boolean
+        taggedUsers:
+          type: array
+          items:
+            $ref: "#/components/schemas/TicketAuthor"
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, userId, user, imdbId, movieTitle, template, isPrivate, hideWatchedAt, hideLocation, likeCount, commentCount, isLiked, isBookmarked, taggedUsers, createdAt]
+
+    TicketAuthor:
+      type: object
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        displayName:
+          type: string
+          nullable: true
+        avatarUrl:
+          type: string
+          nullable: true
+      required: [id, username]
+
+    CreateTicketRequest:
+      type: object
+      properties:
+        imdbId:
+          type: string
+        movieTitle:
+          type: string
+        movieYear:
+          type: string
+          nullable: true
+        posterUrl:
+          type: string
+          nullable: true
+        genre:
+          type: string
+          nullable: true
+        template:
+          type: string
+          enum: [classic, holographic, retro]
+          default: classic
+        memoryNote:
+          type: string
+          nullable: true
+        watchedAt:
+          type: string
+          format: date
+          nullable: true
+        location:
+          type: string
+          nullable: true
+        isPrivate:
+          type: boolean
+          default: false
+        hideWatchedAt:
+          type: boolean
+          default: false
+        hideLocation:
+          type: boolean
+          default: false
+        isSpoiler:
+          type: boolean
+          default: false
+        rating:
+          type: number
+          nullable: true
+        taggedUserIds:
+          type: array
+          items:
+            type: string
+      required: [imdbId, movieTitle, template]
+
+    UpdateTicketRequest:
+      type: object
+      properties:
+        template:
+          type: string
+          enum: [classic, holographic, retro]
+        memoryNote:
+          type: string
+          nullable: true
+        watchedAt:
+          type: string
+          format: date
+          nullable: true
+        location:
+          type: string
+          nullable: true
+        isPrivate:
+          type: boolean
+        hideWatchedAt:
+          type: boolean
+        hideLocation:
+          type: boolean
+        isSpoiler:
+          type: boolean
+        rating:
+          type: number
+          nullable: true
+        taggedUserIds:
+          type: array
+          items:
+            type: string
+
+    TicketListResponse:
+      type: object
+      properties:
+        tickets:
+          type: array
+          items:
+            $ref: "#/components/schemas/Ticket"
+        nextCursor:
+          type: string
+          nullable: true
+        hasMore:
+          type: boolean
+      required: [tickets, hasMore]
+
+    Comment:
+      type: object
+      properties:
+        id:
+          type: string
+        ticketId:
+          type: string
+        userId:
+          type: string
+        user:
+          $ref: "#/components/schemas/TicketAuthor"
+        content:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, ticketId, userId, user, content, createdAt]
+
+    CreateCommentRequest:
+      type: object
+      properties:
+        content:
+          type: string
+      required: [content]
+
+    CommentListResponse:
+      type: object
+      properties:
+        comments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Comment"
+        nextCursor:
+          type: string
+          nullable: true
+        hasMore:
+          type: boolean
+      required: [comments, hasMore]
+
+    LikeResponse:
+      type: object
+      properties:
+        liked:
+          type: boolean
+        likeCount:
+          type: integer
+      required: [liked, likeCount]
+
+    FollowResponse:
+      type: object
+      properties:
+        following:
+          type: boolean
+        followerCount:
+          type: integer
+      required: [following, followerCount]
+
+    ReportRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          enum: [spam, inappropriate, harassment, other]
+        details:
+          type: string
+          nullable: true
+      required: [reason]
+
+    UserListResponse:
+      type: object
+      properties:
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserProfile"
+        nextCursor:
+          type: string
+          nullable: true
+        hasMore:
+          type: boolean
+      required: [users, hasMore]
+
+    MovieSearchResponse:
+      type: object
+      properties:
+        movies:
+          type: array
+          items:
+            $ref: "#/components/schemas/MovieSearchResult"
+        totalResults:
+          type: integer
+        page:
+          type: integer
+      required: [movies, totalResults, page]
+
+    MovieSearchResult:
+      type: object
+      properties:
+        imdbId:
+          type: string
+        title:
+          type: string
+        year:
+          type: string
+          nullable: true
+        posterUrl:
+          type: string
+          nullable: true
+        type:
+          type: string
+      required: [imdbId, title, type]
+
+    MovieDetails:
+      type: object
+      properties:
+        imdbId:
+          type: string
+        title:
+          type: string
+        year:
+          type: string
+          nullable: true
+        genre:
+          type: string
+          nullable: true
+        plot:
+          type: string
+          nullable: true
+        director:
+          type: string
+          nullable: true
+        actors:
+          type: string
+          nullable: true
+        imdbRating:
+          type: string
+          nullable: true
+        runtime:
+          type: string
+          nullable: true
+        posterUrl:
+          type: string
+          nullable: true
+        language:
+          type: string
+          nullable: true
+        country:
+          type: string
+          nullable: true
+      required: [imdbId, title]
+
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [like, comment, follow, tag, ticket_share]
+        fromUser:
+          $ref: "#/components/schemas/TicketAuthor"
+        ticketId:
+          type: string
+          nullable: true
+        message:
+          type: string
+        isRead:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, type, fromUser, message, isRead, createdAt]
+
+    NotificationListResponse:
+      type: object
+      properties:
+        notifications:
+          type: array
+          items:
+            $ref: "#/components/schemas/Notification"
+        unreadCount:
+          type: integer
+        nextCursor:
+          type: string
+          nullable: true
+        hasMore:
+          type: boolean
+      required: [notifications, unreadCount, hasMore]
+
+    ChatMessage:
+      type: object
+      properties:
+        id:
+          type: string
+        conversationId:
+          type: string
+        senderId:
+          type: string
+        sender:
+          $ref: "#/components/schemas/TicketAuthor"
+        content:
+          type: string
+          nullable: true
+        sharedTicketId:
+          type: string
+          nullable: true
+        sharedTicket:
+          $ref: "#/components/schemas/Ticket"
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, conversationId, senderId, sender, createdAt]
+
+    SendMessageRequest:
+      type: object
+      properties:
+        content:
+          type: string
+          nullable: true
+        sharedTicketId:
+          type: string
+          nullable: true
+
+    Conversation:
+      type: object
+      properties:
+        id:
+          type: string
+        participants:
+          type: array
+          items:
+            $ref: "#/components/schemas/TicketAuthor"
+        lastMessage:
+          $ref: "#/components/schemas/ChatMessage"
+          nullable: true
+        unreadCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, participants, unreadCount, createdAt]
+
+    ConversationListResponse:
+      type: object
+      properties:
+        conversations:
+          type: array
+          items:
+            $ref: "#/components/schemas/Conversation"
+      required: [conversations]
+
+    MessageListResponse:
+      type: object
+      properties:
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatMessage"
+        nextCursor:
+          type: string
+          nullable: true
+        hasMore:
+          type: boolean
+      required: [messages, hasMore]
+
+    StartConversationRequest:
+      type: object
+      properties:
+        targetUserId:
+          type: string
+      required: [targetUserId]
